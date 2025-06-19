@@ -59,60 +59,60 @@ def table_by_name(request, table_name):
         "selected_filter_values": selected_filter.values if selected_filter else {},
     })
 
+
+@login_required
 def table_data_by_name(request, table_name):
+    # 1) Resolve the table & model
     config = get_object_or_404(TableViewConfig, table_name=table_name)
-    model = apps.get_model(*config.model_label.split('.'))
-    queryset = model.objects.all()
+    app_label, model_name = config.model_label.split('.')
+    model = apps.get_model(app_label, model_name)
 
-    # -------------------------------
-    # Apply filter
-    filter_id = request.GET.get("filter")
-    filter_obj = None
-    if request.user.is_authenticated:
-        filters_qs = UserFilterConfig.objects.filter(user=request.user, table_config=config)
-        if filter_id:
-            try:
-                filter_obj = filters_qs.get(id=filter_id)
-            except UserFilterConfig.DoesNotExist:
-                filter_obj = None
-        if not filter_obj:
-            filter_obj = filters_qs.filter(is_default=True).first()
+    # Start with full queryset
+    qs = model.objects.all()
 
-        if filter_obj:
-            schema = get_filter_schema(table_name)
-            for key, value in filter_obj.values.items():
-                if key in schema and callable(schema[key].get("handler")):
-                    queryset = schema[key]["handler"](queryset, value)
-
-    # -------------------------------
-    # Pick fields to return
-    selected_config_id = request.GET.get("config")
-    if selected_config_id:
-        user_config = UserColumnConfig.objects.filter(
+    # 2) Load saved filter values (if any)
+    filters = {}
+    if (fid := request.GET.get("filter")) and request.user.is_authenticated:
+        ufc = get_object_or_404(
+            UserFilterConfig,
+            id=fid,
             user=request.user,
-            table_config=config,
-            id=selected_config_id
-        ).first()
-    else:
-        user_config = UserColumnConfig.objects.filter(
-            user=request.user,
-            table_config=config,
-            is_default=True
-        ).first()
+            table_config=config
+        )
+        filters.update(ufc.values)
 
-    if user_config:
-        field_names = user_config.fields
-        print(field_names)
+    # 3) Merge dynamic filters from the query string
+    for key, val in request.GET.items():
+        if key in ("filter", "config") or not val:
+            continue
+        filters[key] = val
+
+    # 4) Apply each registered filter handler
+    schema = get_filter_schema(table_name)
+    for key, val in filters.items():
+        entry = schema.get(key)
+        if entry and callable(entry.get("handler")):
+            qs = entry["handler"](qs, val)
+
+    # 5) Determine which fields to return (column config)
+    if (cid := request.GET.get("config")) and request.user.is_authenticated:
+        ucc = get_object_or_404(
+            UserColumnConfig,
+            id=cid,
+            user=request.user,
+            table_config=config
+        )
+        field_names = ucc.fields
     else:
+        # fallback: include all fields (except excluded) + id
+        from apps.layout.views import get_flat_fields  # or import at top
         field_names = [f["name"] for f in get_flat_fields(model)]
-
-    field_names = [f.replace(".", "__") for f in field_names]
+    # ensure “id” is always first
     if "id" not in field_names:
         field_names.insert(0, "id")
 
-    # DO NOT RESET queryset here — this was your issue
-    data = list(queryset.values(*field_names))
-
+    # 6) Return JSON
+    data = list(qs.values(*field_names))
     return JsonResponse(data, safe=False)
 
 
@@ -214,3 +214,112 @@ def delete_column_config(request, table_name, config_id):
     config = get_object_or_404(UserColumnConfig, id=config_id, user=request.user)
     config.delete()
     return redirect("layout_column_config", table_name=table_name)
+
+
+@login_required
+@require_POST
+def save_filter_by_name(request, table_name):
+    """
+    Expects JSON body { name: str, values: dict }.
+    Creates a new UserFilterConfig for the current user/table.
+    Returns { id, name } on success or { error } on failure.
+    """
+    # 1) Parse JSON
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    name   = payload.get("name", "").strip()
+    values = payload.get("values")
+    if not name or not isinstance(values, dict):
+        return JsonResponse({"error": "Must include non-empty 'name' and 'values' dict"}, status=400)
+
+    # 2) Lookup table config
+    config = get_object_or_404(TableViewConfig, table_name=table_name)
+
+    # 3) Create (or you could update if name exists)
+    ufc = UserFilterConfig.objects.create(
+        user=request.user,
+        table_config=config,
+        name=name,
+        values=values,
+        is_default=False,
+    )
+
+    # 4) Return the new ID & name
+    return JsonResponse({"id": ufc.id, "name": ufc.name})
+
+@login_required
+def filter_config_view(request, table_name):
+    """
+    List + create / edit one UserFilterConfig for this user + table.
+    """
+    # 1) Lookup the table config & filter‐schema metadata
+    table_conf    = get_object_or_404(TableViewConfig, table_name=table_name)
+    schema        = get_filter_schema(table_name)
+    user_filters  = UserFilterConfig.objects.filter(
+        user=request.user,
+        table_config=table_conf
+    )
+
+    # 2) Are we editing an existing one?
+    editing_id = request.GET.get("id") or request.POST.get("id")
+    editing = user_filters.filter(id=editing_id).first() if editing_id else None
+
+    if request.method == "POST":
+        # 3) Parse POSTed form
+        name       = request.POST.get("name","").strip()
+        is_default = bool(request.POST.get("is_default"))
+        # Gather only schema keys:
+        values = {
+            k: request.POST[k]
+            for k in schema.keys()
+            if request.POST.get(k)
+        }
+
+        # 4) If marking default, clear prior defaults
+        if is_default:
+            user_filters.update(is_default=False)
+
+        if editing:
+            editing.name       = name
+            editing.values     = values
+            editing.is_default = is_default
+            editing.save()
+        else:
+            editing = UserFilterConfig.objects.create(
+                user=request.user,
+                table_config=table_conf,
+                name=name,
+                values=values,
+                is_default=is_default,
+            )
+
+        return redirect("layout_filter_config", table_name=table_name)
+
+    # 5) Prepare initial values for the form
+    initial = editing.values if editing else {}
+    return render(request, "table_view/filter_config.html", {
+        "table_name":        table_name,
+        "filter_schema":     schema,
+        "user_filters":      user_filters,
+        "editing":           editing,
+        "initial_values":    initial,
+    })
+
+
+@login_required
+@require_POST
+def delete_filter_config(request, table_name, config_id):
+    """
+    Deletes one saved filter and redirects back to the config list.
+    """
+    ufc = get_object_or_404(
+        UserFilterConfig,
+        id=config_id,
+        user=request.user,
+        table_config__table_name=table_name
+    )
+    ufc.delete()
+    return redirect("layout_filter_config", table_name=table_name)

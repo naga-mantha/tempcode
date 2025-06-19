@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load dict_extras %}
+
+{% block content %}
+  <h1>Manage Filters for “{{ table_name }}”</h1>
+
+  <h2>Saved Filter Sets</h2>
+  <ul>
+    {% for f in user_filters %}
+      <li>
+        <strong>{{ f.name }}</strong>
+        {% if f.is_default %}(default){% endif %}
+        — <a href="?id={{ f.id }}">Edit</a>
+<form action="{% url 'layout_filter_delete' table_name f.id %}" method="post" style="display:inline">
+            {% csrf_token %}
+            <button type="submit">Delete</button>
+          </form>
+      </li>
+    {% empty %}
+      <li>No saved filters yet.</li>
+    {% endfor %}
+  </ul>
+
+  <h2>{% if editing %}Edit{% else %}New{% endif %} Filter</h2>
+  <form method="post">
+    {% csrf_token %}
+    {% if editing %}
+      <input type="hidden" name="id" value="{{ editing.id }}">
+    {% endif %}
+
+    <div>
+      <label>Name:</label>
+      <input type="text" name="name" value="{{ editing.name|default:'' }}" required>
+    </div>
+    <div>
+      <label>Make Default:</label>
+      <input type="checkbox" name="is_default" {% if editing.is_default %}checked{% endif %}>
+    </div>
+
+    <fieldset>
+      <legend>Conditions</legend>
+      {% for key, cfg in filter_schema.items %}
+        <div class="filter-field">
+          <label>{{ cfg.label }}</label>
+          {% if cfg.input_type == 'text' %}
+            <input
+              type="text"
+              name="{{ key }}"
+              value="{{ initial_values|get_item:key|default:'' }}"
+            />
+          {% elif cfg.input_type == 'select' %}
+            <select name="{{ key }}">
+              <option value="">— any —</option>
+              {% for val,label in cfg.options %}
+                <option value="{{ val }}"
+                  {% if initial_values|get_item:key == val %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          {% elif cfg.input_type == 'date' %}
+            <input
+              type="date"
+              name="{{ key }}"
+              value="{{ initial_values|get_item:key|default:'' }}"
+            />
+          {% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <button type="submit">
+      {% if editing %}Save Changes{% else %}Create Filter{% endif %}
+    </button>
+    <a href="{% url 'layout_filter_config' table_name %}">Cancel</a>
+  </form>
+{% endblock %}

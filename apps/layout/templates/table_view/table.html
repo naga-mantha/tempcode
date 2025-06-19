@@ -1,82 +1,139 @@
 {% extends "base.html" %}
+{% load dict_extras %}
 
 {% block content %}
   <div class="main-container">
     <h1 class="page-title">{{ title }}</h1>
 
     <form method="get" id="configForm">
-  <label for="config">View:</label>
-  <select name="config" id="config" onchange="document.getElementById('configForm').submit()">
-    {% for config in user_configs %}
-      <option value="{{ config.id }}" {% if config.id == active_config_id %}selected{% endif %}>
-        {{ config.name }}
-      </option>
-    {% endfor %}
-  </select>
-</form>
+      <label for="config">View:</label>
+      <select name="config" id="config" onchange="document.getElementById('configForm').submit()">
+        {% for config in user_configs %}
+          <option value="{{ config.id }}" {% if config.id == active_config_id %}selected{% endif %}>
+            {{ config.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
 
-    <form method="get" id="filter-form">
-  <label>Saved Filters:</label>
-  <select name="filter" onchange="document.getElementById('filter-form').submit();">
-    <option value="">-- None --</option>
-    {% for f in filter_configs %}
-      <option value="{{ f.id }}" {% if f.id == active_filter_id %}selected{% endif %}>
-        {{ f.name }}
-      </option>
-    {% endfor %}
-  </select>
+    {# Saved and Dynamic Filters #}
+    <div class="filters-container">
+      {# Saved Filters Form #}
+      <form method="get" id="filter-form">
+        <label>Saved Filters:</label>
+        <select name="filter" id="filter" onchange="document.getElementById('filter-form').submit();">
+          <option value="">-- None --</option>
+          {% for f in filter_configs %}
+            <option value="{{ f.id }}" {% if f.id == active_filter_id %}selected{% endif %}>
+              {{ f.name }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if active_config_id %}
+          <input type="hidden" name="config" value="{{ active_config_id }}">
+        {% endif %}
+      </form>
 
-  {% if active_config_id %}
-    <input type="hidden" name="config" value="{{ active_config_id }}">
-  {% endif %}
-</form>
+      {# Dynamic Filter Inputs #}
+      <form id="dynamicFiltersForm" class="dynamic-filters">
+        {% for name, cfg in filter_schema.items %}
+          <div class="filter-field">
+            <label for="filter_{{ name }}">{{ cfg.label }}</label>
+            {% if cfg.input_type == "text" %}
+              <input
+                type="text"
+                id="filter_{{ name }}"
+                name="{{ name }}"
+                value="{{ selected_filter_values|get_item:name|default:'' }}"
+              />
+            {% elif cfg.input_type == "select" %}
+              <select id="filter_{{ name }}" name="{{ name }}">
+                <option value="">All</option>
+                {% for opt_value, opt_label in cfg.options %}
+                  <option value="{{ opt_value }}" {% if selected_filter_values|get_item:name == opt_value %}selected{% endif %}>
+                    {{ opt_label }}
+                  </option>
+                {% endfor %}
+              </select>
+            {% elif cfg.input_type == "date" %}
+              <input
+                type="date"
+                id="filter_{{ name }}"
+                name="{{ name }}"
+                value="{{ selected_filter_values|get_item:name|default:'' }}"
+              />
+            {% endif %}
+          </div>
+        {% endfor %}
+        <button type="button" id="applyFilters">Apply Filters</button>
+        <button type="button" id="saveFilters">Save Filters</button>
+      </form>
+    </div>
 
     <div id="table"></div>
   </div>
 {% endblock %}
 
 {% block scripts %}
-  <script>
-    const tableContainer = document.getElementById("table");
-
-    const columnDefs = [
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const table = new Tabulator("#table", {
+    layout: "fitColumns",
+    ajaxURL: "/layout/table/{{ table_name }}/data/",
+    ajaxParams: {
+      filter: "{{ active_filter_id|default:'' }}",
+      config: "{{ active_config_id|default:'' }}"
+    },
+    columns: [
       {% for f in fields %}
-        {
-          title: "{{ f.label }}",
-          field: "{{ f.name }}",
-          {% if f.editable %}
-            editor: "input"
-          {% else %}
-            editor: false
-          {% endif %}
-        },
+      {
+        title: "{{ f.label }}",
+        field: "{{ f.name }}",
+        {% if f.editable %}editor: "input"{% endif %}
+      },
       {% endfor %}
-    ];
+    ],
+    ...{{ tabulator_options|safe }}
+  });
 
-    // Destroy if exists
-    if (tableContainer._tabulator) {
-      tableContainer._tabulator.destroy();
-    }
+  const applyBtn = document.getElementById("applyFilters");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      const fd = new FormData(document.getElementById("dynamicFiltersForm"));
+      const params = { filter: "{{ active_filter_id|default:'' }}", config: "{{ active_config_id|default:'' }}" };
+      fd.forEach((v, k) => { if (v) params[k] = v; });
+      console.log("🏷️ APPLY FILTERS →", params);
+      table.setData(table.options.ajaxURL, params);
+    });
+  }
 
-    const table = new Tabulator(tableContainer, Object.assign({
-      layout: "fitColumns",
-      columns: columnDefs,
-      ajaxURL: "/layout/table/{{ table_name }}/data/?filter={{ active_filter_id|default:'' }}&config={{ active_config_id|default:'' }}",
-
-      cellEdited: function(cell) {
-        fetch(`/layout/table/{{ table_name }}/update/${cell.getRow().getData().id}/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-          },
-          body: JSON.stringify({ [cell.getField()]: cell.getValue() })
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.error) alert("Save failed: " + data.error);
-        });
+  const saveBtn = document.getElementById("saveFilters");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      const fd = new FormData(document.getElementById("dynamicFiltersForm"));
+      const filters = {};
+      fd.forEach((v, k) => { if (v) filters[k] = v; });
+      const name = prompt("Enter a name for this filter set:");
+      if (!name) return;
+      const response = await fetch(`/layout/table/${encodeURIComponent("{{ table_name }}")}/save_filter/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token }}"
+        },
+        body: JSON.stringify({ name, values: filters })
+      });
+      const data = await response.json();
+      if (data.id) {
+        const select = document.getElementById("filter");
+        const option = new Option(data.name, data.id, true, true);
+        select.add(option);
+        table.setData(table.options.ajaxURL, { filter: data.id, config: "{{ active_config_id|default:'' }}" });
+      } else {
+        alert("Failed to save filter: " + (data.error || "Unknown error"));
       }
-    }, {{ tabulator_options|safe }}));
-  </script>
+    });
+  }
+});
+</script>
 {% endblock %}

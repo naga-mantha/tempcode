@@ -11,5 +11,5 @@ class FrmsConfig(AppConfig):
 
         from apps.frms.filters import get_filter_schema
         from apps.layout import filter_registry
-        filter_registry.register("newemployee", get_filter_schema)
+        filter_registry.register("newemployee")
 
