@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {% block title %}<title>MAI</title>{% endblock %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Roboto:wght@100&family=Raleway" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet">
+
+    {% load static %}
+    <script src="{% static 'vendor.min.js' %}"></script>
+    <script src="{% static 'script.min.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor.min.css' %}">
+    <link rel="stylesheet" href="{% static 'style.min.css' %}">
+  </head>
+
+  <body>
+    <header class="d-flex justify-content-center bg-dark px-3 py-1 justify-content-between">
+      <a href="/" class="align-self-center">
+        <img src="{% static 'images/logo.png' %}" alt="logo" class="logo">
+      </a>
+
+      <h1></h1>
+    </header>
+
+    {% block content %}{% endblock %}
+
+    {%block scripts%}{%endblock scripts%}
+
+    <footer class="bg-dark p-4">
+      <p class="text-center">
+        <small class="text-white">Mecaer America Inc.</small>
+      </p>
+    </footer>
+  </body>
+</html>

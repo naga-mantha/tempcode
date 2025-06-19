@@ -1,0 +1,11 @@
+.idea
+venv
+__pycache__
+node_modules
+mag360/.env
+apps/common/dist/
+apps/common/src/vendor-css/
+apps/common/src/vendor-js/
+debug.log
+db.json
+db.sqlite3

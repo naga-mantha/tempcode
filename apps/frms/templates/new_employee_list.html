@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="main-container">
+    <h1 class="page-title">New Employee Detail</h1>
+<ul>
+    {% for emp in employees %}
+      <li>
+        <a href="{% url 'new_employee_detail' emp.pk %}">
+          {{ emp.first_name }} {{ emp.last_name }}
+        </a>
+      </li>
+    {% empty %}
+      <li>No employees yet.</li>
+    {% endfor %}
+  </ul>
+
+
+
+  </div>
+{% endblock %}

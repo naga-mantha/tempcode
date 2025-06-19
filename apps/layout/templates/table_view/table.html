@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="main-container">
+    <h1 class="page-title">{{ title }}</h1>
+
+    <form method="get" id="configForm">
+  <label for="config">View:</label>
+  <select name="config" id="config" onchange="document.getElementById('configForm').submit()">
+    {% for config in user_configs %}
+      <option value="{{ config.id }}" {% if config.id == active_config_id %}selected{% endif %}>
+        {{ config.name }}
+      </option>
+    {% endfor %}
+  </select>
+</form>
+
+    <form method="get" id="filter-form">
+  <label>Saved Filters:</label>
+  <select name="filter" onchange="document.getElementById('filter-form').submit();">
+    <option value="">-- None --</option>
+    {% for f in filter_configs %}
+      <option value="{{ f.id }}" {% if f.id == active_filter_id %}selected{% endif %}>
+        {{ f.name }}
+      </option>
+    {% endfor %}
+  </select>
+
+  {% if active_config_id %}
+    <input type="hidden" name="config" value="{{ active_config_id }}">
+  {% endif %}
+</form>
+
+    <div id="table"></div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const tableContainer = document.getElementById("table");
+
+    const columnDefs = [
+      {% for f in fields %}
+        {
+          title: "{{ f.label }}",
+          field: "{{ f.name }}",
+          {% if f.editable %}
+            editor: "input"
+          {% else %}
+            editor: false
+          {% endif %}
+        },
+      {% endfor %}
+    ];
+
+    // Destroy if exists
+    if (tableContainer._tabulator) {
+      tableContainer._tabulator.destroy();
+    }
+
+    const table = new Tabulator(tableContainer, Object.assign({
+      layout: "fitColumns",
+      columns: columnDefs,
+      ajaxURL: "/layout/table/{{ table_name }}/data/?filter={{ active_filter_id|default:'' }}&config={{ active_config_id|default:'' }}",
+
+      cellEdited: function(cell) {
+        fetch(`/layout/table/{{ table_name }}/update/${cell.getRow().getData().id}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ [cell.getField()]: cell.getValue() })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) alert("Save failed: " + data.error);
+        });
+      }
+    }, {{ tabulator_options|safe }}));
+  </script>
+{% endblock %}

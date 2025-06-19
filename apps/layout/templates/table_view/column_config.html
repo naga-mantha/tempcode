@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Customize Columns</h2>
+
+<!-- Config Selector -->
+<form method="get">
+  <label>Select Saved View:</label>
+  <select name="config" onchange="this.form.submit()">
+    <option value="">-- New Configuration --</option>
+    {% for cfg in user_configs %}
+      <option value="{{ cfg.id }}" {% if cfg.id == selected_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<!-- Delete Button -->
+{% if selected_config_id %}
+  <form method="post" action="{% url 'delete_column_config' table_name=table_name config_id=selected_config_id %}" onsubmit="return confirm('Are you sure you want to delete this view?');" style="margin-top: 1rem;">
+    {% csrf_token %}
+    <button type="submit" style="color:red;">Delete This View</button>
+  </form>
+{% endif %}
+
+<!-- Save Form -->
+<form method="post" style="margin-top: 1.5rem;">
+  {% csrf_token %}
+  {% if selected_config_id %}
+    <input type="hidden" name="config_id" value="{{ selected_config_id }}">
+  {% endif %}
+
+  <label>Name:</label>
+  <input type="text" name="name" value="{% for cfg in user_configs %}{% if cfg.id == selected_config_id %}{{ cfg.name }}{% endif %}{% endfor %}">
+
+  <ul id="field-list">
+    {% for field in all_fields %}
+      {% if not field.mandatory %}
+        <li>
+          <input type="checkbox" name="field_order[]" value="{{ field.name }}"
+                 {% if field.name in selected_fields %}checked{% endif %}>
+          {{ field.label }}
+        </li>
+      {% else %}
+        <li>
+          <input type="checkbox" checked disabled>
+          {{ field.label }} <em>(mandatory)</em>
+          <input type="hidden" name="field_order[]" value="{{ field.name }}">
+        </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+
+  <label>
+    <input type="checkbox" name="is_default"
+           {% for cfg in user_configs %}{% if cfg.id == selected_config_id and cfg.is_default %}checked{% endif %}{% endfor %}>
+    Set as default
+  </label>
+
+  <br><br>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+  new Sortable(document.getElementById('field-list'), {
+    animation: 150
+  });
+</script>
+{% endblock %}

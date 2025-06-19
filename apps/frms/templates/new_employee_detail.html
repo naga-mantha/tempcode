@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load comments_xtd %}
+{% load comments %}
+{% load workflow_tags %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+  <div class="main-container">
+    <h1 class="page-title">New Employee Detail</h1>
+
+  {# display either static data or the edit form #}
+  {% if can_edit %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% crispy form %}
+    </form>
+  {% else %}
+    <ul>
+      {% if form.first_name %}
+        <li><strong>First name:</strong> {{ employee.first_name }}</li>
+      {% endif %}
+      {% if form.last_name %}
+        <li><strong>Last name:</strong>  {{ employee.last_name }}</li>
+      {% endif %}
+    </ul>
+  {% endif %}
+
+  <hr>
+
+  <p><strong>Status:</strong> {{ employee.state.name }}</p>
+
+  {# the transition form inclusion #}
+  {% render_transition_form employee "apply_transition" %}
+
+  <hr>
+
+  <h3>Comments</h3>
+  {% render_comment_form for employee %}
+  {% render_xtdcomment_tree for employee %}
+  </div>
+{% endblock %}
