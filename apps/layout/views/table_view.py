@@ -15,20 +15,23 @@ def table_by_name(request, table_name):
 
     # -----------------------------
     # COLUMN CONFIG
+    # Get the chosen column config
     user_configs = UserColumnConfig.objects.filter(user=request.user, table_config=config)
     selected_config_id = request.GET.get("config")
     selected_config = (
         user_configs.filter(id=selected_config_id).first() if selected_config_id
         else user_configs.filter(is_default=True).first()
     )
-    if not selected_config and user_configs.exists():
-        selected_config = user_configs.first()
+
+    if not selected_config:
+        selected_config = UserColumnConfig.objects.get(user=None, name="Basic")
+
+    print(selected_config)
 
     # Get field names and flatten
     all_fields = get_flat_fields(model)
-    selected_names = selected_config.fields if selected_config else [f["name"] for f in all_fields]
-    fields = [f for name in selected_names for f in all_fields if f["name"] == name]
-    fields.insert(0, {"name": "id", "label": "ID", "editable": False})
+    fields = [f for name in selected_config.fields for f in all_fields if f["name"] == name]
+    # fields.insert(0, {"name": "id", "label": "ID", "editable": False})
 
     # -----------------------------
     # FILTER CONFIG
@@ -95,6 +98,7 @@ def table_data_by_name(request, table_name):
             qs = entry["handler"](qs, val)
 
     # 5) Determine which fields to return (column config)
+    field_names = []
     if (cid := request.GET.get("config")) and request.user.is_authenticated:
         ucc = get_object_or_404(
             UserColumnConfig,
@@ -103,13 +107,13 @@ def table_data_by_name(request, table_name):
             table_config=config
         )
         field_names = ucc.fields
-    else:
-        # fallback: include all fields (except excluded) + id
-        from apps.layout.views import get_flat_fields  # or import at top
-        field_names = [f["name"] for f in get_flat_fields(model)]
-    # ensure “id” is always first
-    if "id" not in field_names:
-        field_names.insert(0, "id")
+    # else:
+    #     # fallback: include all fields (except excluded) + id
+    #     from apps.layout.views import get_flat_fields  # or import at top
+    #     field_names = [f["name"] for f in get_flat_fields(model)]
+    # # ensure “id” is always first
+    # if "id" not in field_names:
+    #     field_names.insert(0, "id")
 
     # 6) Return JSON
     data = list(qs.values(*field_names))
@@ -216,39 +220,40 @@ def delete_column_config(request, table_name, config_id):
     return redirect("layout_column_config", table_name=table_name)
 
 
-@login_required
-@require_POST
-def save_filter_by_name(request, table_name):
-    """
-    Expects JSON body { name: str, values: dict }.
-    Creates a new UserFilterConfig for the current user/table.
-    Returns { id, name } on success or { error } on failure.
-    """
-    # 1) Parse JSON
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    name   = payload.get("name", "").strip()
-    values = payload.get("values")
-    if not name or not isinstance(values, dict):
-        return JsonResponse({"error": "Must include non-empty 'name' and 'values' dict"}, status=400)
-
-    # 2) Lookup table config
-    config = get_object_or_404(TableViewConfig, table_name=table_name)
-
-    # 3) Create (or you could update if name exists)
-    ufc = UserFilterConfig.objects.create(
-        user=request.user,
-        table_config=config,
-        name=name,
-        values=values,
-        is_default=False,
-    )
-
-    # 4) Return the new ID & name
-    return JsonResponse({"id": ufc.id, "name": ufc.name})
+# @login_required
+# @require_POST
+# def save_filter_by_name(request, table_name):
+#     """
+#     Expects JSON body { name: str, values: dict }.
+#     Creates a new UserFilterConfig for the current user/table.
+#     Returns { id, name } on success or { error } on failure.
+#     """
+#     # 1) Parse JSON
+#     try:
+#         payload = json.loads(request.body)
+#     except json.JSONDecodeError:
+#         return JsonResponse({"error": "Invalid JSON"}, status=400)
+#
+#     name   = payload.get("name", "").strip()
+#     print(name)
+#     values = payload.get("values")
+#     if not name or not isinstance(values, dict):
+#         return JsonResponse({"error": "Must include non-empty 'name' and 'values' dict"}, status=400)
+#
+#     # 2) Lookup table config
+#     config = get_object_or_404(TableViewConfig, table_name=table_name)
+#
+#     # 3) Create (or you could update if name exists)
+#     ufc = UserFilterConfig.objects.create(
+#         user=request.user,
+#         table_config=config,
+#         name=name,
+#         values=values,
+#         is_default=False,
+#     )
+#
+#     # 4) Return the new ID & name
+#     return JsonResponse({"id": ufc.id, "name": ufc.name})
 
 @login_required
 def filter_config_view(request, table_name):

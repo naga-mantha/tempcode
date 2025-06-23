@@ -10,6 +10,8 @@ class UserColumnConfig(models.Model):
     fields = models.JSONField(default=list)  # list of field names in order
     is_default = models.BooleanField(default=False)
 
+    objects = models.Manager()
+
     def __str__(self):
         return f"{self.name} ({self.user})"
 

@@ -9,6 +9,8 @@ class UserFilterConfig(models.Model):
     values = models.JSONField(default=dict)  # e.g., {"status": "active", "months_back": 3}
     is_default = models.BooleanField(default=False)
 
+    objects = models.Manager()
+
     class Meta:
         unique_together = ('user', 'table_config', 'name')
 

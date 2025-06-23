@@ -1,4 +1,3 @@
-# models/field_display_rule.py
 from django.db import models
 
 class FieldDisplayRule(models.Model):
@@ -6,6 +5,8 @@ class FieldDisplayRule(models.Model):
     field_name = models.CharField(max_length=100)   # e.g. 'department'
     is_mandatory = models.BooleanField(default=False)
     is_excluded = models.BooleanField(default=False)
+
+    objects = models.Manager()
 
     class Meta:
         unique_together = ('model_label', 'field_name')
