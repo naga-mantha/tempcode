@@ -1,34 +1,12 @@
 from django.core.exceptions import PermissionDenied
-from django.contrib.contenttypes.models import ContentType
-
-from apps.workflow.views.permissions import has_model_permission, has_field_permission
+from apps.workflow.views.permissions import get_allowed_fields
 from apps.layout.filter_registry import get_filter_schema
 
-
-def get_allowed_fields(user, model, action):
-    """
-    Returns list of field names on the model the user is allowed to perform `action` on.
-    This excludes all fields the user has no access to, based on field-level permission.
-    """
-    instance = model()  # dummy instance just to pass to has_field_permission
-
-    allowed = []
-    for field in model._meta.get_fields():
-        if not hasattr(field, 'attname'):  # skip related or reverse relations
-            continue
-
-        field_name = field.name
-        if has_field_permission(user, instance, field_name, action):
-            allowed.append(field_name)
-
-    return allowed
-
-
-def apply_filter_registry(table_name, queryset, filters):
+def apply_filter_registry(table_name, queryset, filters, user):
     """
     Applies filters based on the registered filter schema for the table.
     """
-    schema = get_filter_schema(table_name)
+    schema = get_filter_schema(table_name, user=user)
     for key, config in schema.items():
         if key in filters and filters[key] is not None:
             queryset = config["handler"](queryset, filters[key])
@@ -38,18 +16,25 @@ def apply_filter_registry(table_name, queryset, filters):
 def get_filtered_queryset(user, model, table_name, filters):
     """
     Main utility:
-    - Checks model permission
+    - Checks Django model-level 'view' permission
     - Applies registry-based filters
     - Resolves and returns only allowed fields
+
     Returns: (filtered_queryset, allowed_field_list)
     """
-    if not has_model_permission(user, model, "view"):
+    # model-level permission
+    app_label   = model._meta.app_label
+    model_name  = model._meta.model_name
+    perm_string = f"{app_label}.view_{model_name}"
+    if not user.has_perm(perm_string):
         raise PermissionDenied(f"You cannot view {model.__name__}")
 
+    # apply filters
     qs = model.objects.all()
-    qs = apply_filter_registry(table_name, qs, filters)
+    qs = apply_filter_registry(table_name, qs, filters, user=user)
 
-    allowed_fields = get_allowed_fields(user, model, "view")
+    # determine allowed fields
+    allowed_fields = get_allowed_fields(user, model, 'view')
     if not allowed_fields:
         raise PermissionDenied("You cannot view any fields of this model.")
 

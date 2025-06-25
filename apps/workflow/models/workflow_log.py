@@ -6,12 +6,12 @@ from apps.accounts.models import CustomUser
 
 class WorkflowLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
-    transition = models.ForeignKey(Transition, on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True)
+    transition = models.ForeignKey(Transition, on_delete=models.PROTECT)
     comment = models.TextField(blank=True)
 
     # Generic relation to the “document” being transitioned:
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
     object_id = models.PositiveIntegerField()
     content_obj = GenericForeignKey("content_type", "object_id")
 

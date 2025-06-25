@@ -3,7 +3,7 @@ from apps.workflow.models import Workflow
 from django.contrib.auth.models import Group
 
 class State(models.Model):
-    workflow = models.ForeignKey(Workflow, on_delete=models.CASCADE, related_name="states")
+    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, related_name="states")
     name = models.CharField(max_length=100)
     is_start = models.BooleanField(default=False)
     is_end = models.BooleanField(default=False)

@@ -1,14 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.exceptions import PermissionDenied
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from apps.frms.models import NewEmployee
 from apps.frms.forms.new_employee import NewEmployeeForm
-from apps.workflow.views.permissions import has_model_permission
 
 @login_required
 def new_employee(request):
-    # static “add” check in your system
-    if not has_model_permission(request.user, NewEmployee, 'add'):
+    # static “add” check using Django's built-in permission
+    if not request.user.has_perm('frms.add_newemployee'):
         raise PermissionDenied
 
     if request.method == 'POST':
@@ -17,57 +16,54 @@ def new_employee(request):
             emp = form.save(commit=False)
             emp.submitted_by = request.user
             emp.save()
-
-            return redirect('new_employee_list')   # or wherever you like
+            return redirect('new_employee_list')
     else:
         form = NewEmployeeForm(user=request.user)
 
-    return render(request, 'new_employee.html', {
-        'form': form
-    })
+    return render(request, 'new_employee.html', {'form': form})
 
 @login_required
 def new_employee_list(request):
+    # Only show employees submitted by this user
     employees = NewEmployee.objects.filter(submitted_by=request.user)
-    context = {'employees': employees}
-
-    return render(request, 'new_employee_list.html', context)
+    return render(request, 'new_employee_list.html', {'employees': employees})
 
 @login_required
 def new_employee_detail(request, pk):
     employee = get_object_or_404(NewEmployee, pk=pk)
 
-    if not has_model_permission(request.user, NewEmployee, 'view'):
+    # static “view” permission
+    if not request.user.has_perm('frms.view_newemployee'):
         raise PermissionDenied
 
-    # Handle an edit‐form submission
-    if request.method == "POST" and "update_new_employee" in request.POST:
-        # Enforce per‐status edit rights
+    # Handle form submission for updates
+    if request.method == 'POST' and 'update_new_employee' in request.POST:
+        # dynamic workflow‐state edit rights
         if not employee.can_edit(request.user):
             raise PermissionDenied("You may not edit this record in its current status.")
 
         form = NewEmployeeForm(
             request.POST,
-            instance = employee,
-            user = request.user,
-            exclude_workflow = True
+            instance=employee,
+            user=request.user,
+            exclude_workflow=True
         )
         if form.is_valid():
             form.save()
-            return redirect("new_employee_detail", pk=employee.pk)
+            return redirect('new_employee_detail', pk=employee.pk)
     else:
         form = NewEmployeeForm(
-            instance = employee,
-            user = request.user,
-            exclude_workflow = True
+            instance=employee,
+            user=request.user,
+            exclude_workflow=True
         )
 
-    # Always load transitions for the transition widget
+    # Always load available transitions for the workflow widget
     transitions = employee.get_available_transitions(request.user)
 
-    return render(request, "new_employee_detail.html", {
-        "employee":    employee,
-        "form":        form,
-        "can_edit":    employee.can_edit(request.user),
-        "transitions": transitions,
+    return render(request, 'new_employee_detail.html', {
+        'employee':    employee,
+        'form':        form,
+        'can_edit':    employee.can_edit(request.user),
+        'transitions': transitions,
     })

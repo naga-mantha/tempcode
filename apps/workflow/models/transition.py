@@ -3,10 +3,10 @@ from django.contrib.auth.models import Group
 from apps.workflow.models import Workflow, State
 
 class Transition(models.Model):
-    workflow = models.ForeignKey(Workflow, on_delete=models.CASCADE, related_name="transitions")
-    name = models.CharField(max_length=100)  # e.g. “Approve”, “Reject”
-    source_state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="transitions_from")
-    dest_state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="transitions_to")
+    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, related_name="transitions")
+    name = models.CharField(max_length=100)
+    source_state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="transitions_from")
+    dest_state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="transitions_to")
     allowed_groups = models.ManyToManyField(Group, blank=True, help_text="Which user groups may trigger this")
 
     objects = models.Manager()

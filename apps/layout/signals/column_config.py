@@ -3,7 +3,6 @@ from django.dispatch       import receiver
 from django.conf           import settings
 from django.apps           import apps as django_apps
 from apps.layout.models               import UserColumnConfig, TableViewConfig
-from apps.layout.views                import get_flat_fields
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_default_column_configs(sender, instance, created, **kwargs):

@@ -7,118 +7,106 @@ from apps.layout.models import TableViewConfig, UserColumnConfig, FieldDisplayRu
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from apps.layout.filter_registry import get_filter_schema
+from apps.workflow.views.permissions import can_read_field
+from apps.layout.helpers.get_model_from_table import get_model_from_table
+from apps.layout.helpers.api_helpers import get_filtered_queryset
 
+def _collect_filters(request, config):
+    # Start with any saved filter-values
+    filters = {}
+    if fid := request.GET.get("filter"):
+        ufc = get_object_or_404(
+            UserFilterConfig,
+            id=fid, user=request.user, table_config=config
+        )
+        filters.update(ufc.values)
+    # Merge in any other non-empty GET params (excluding filter+config)
+    for k, v in request.GET.items():
+        if k in ("filter", "config") or not v:
+            continue
+        filters[k] = v
+    return filters
+
+def _select_item(queryset, selected_id, default_field="is_default", fallback=None):
+    """
+    Given a queryset and a selected_id, returns:
+      - the object with that id, if present
+      - else the first where default_field=True
+      - else the provided fallback
+    """
+    if selected_id:
+        obj = queryset.filter(id=selected_id).first()
+        if obj:
+            return obj
+    default = queryset.filter(is_default=True).first()
+    return default or fallback
+
+@login_required
 def table_by_name(request, table_name):
+    # 1) Resolve table & model
     config = get_object_or_404(TableViewConfig, table_name=table_name)
-    app_label, model_name = config.model_label.split('.')
-    model = apps.get_model(app_label, model_name)
+    model  = get_model_from_table(table_name)
 
-    # -----------------------------
-    # COLUMN CONFIG
-    # Get the chosen column config
-    user_configs = UserColumnConfig.objects.filter(user=request.user, table_config=config)
-    selected_config_id = request.GET.get("config")
-    selected_config = (
-        user_configs.filter(id=selected_config_id).first() if selected_config_id
-        else user_configs.filter(is_default=True).first()
-    )
+    # 2) Column config
+    col_qs    = UserColumnConfig.objects.filter(user=request.user, table_config=config)
+    col       = _select_item(col_qs, request.GET.get("config"))
+    all_fields = get_flat_fields(model, user=request.user)
+    # only include those that the selected config lists, in order
+    fields    = [f for name in col.fields for f in all_fields if f["name"] == name]
 
-    if not selected_config:
-        selected_config = UserColumnConfig.objects.get(user=None, name="Basic")
-
-    print(selected_config)
-
-    # Get field names and flatten
-    all_fields = get_flat_fields(model)
-    fields = [f for name in selected_config.fields for f in all_fields if f["name"] == name]
-    # fields.insert(0, {"name": "id", "label": "ID", "editable": False})
-
-    # -----------------------------
-    # FILTER CONFIG
-    filter_configs = UserFilterConfig.objects.filter(user=request.user, table_config=config)
-    selected_filter_id = request.GET.get("filter")
-    selected_filter = (
-        filter_configs.filter(id=selected_filter_id).first() if selected_filter_id
-        else filter_configs.filter(is_default=True).first()
-    )
-    filter_schema = get_filter_schema(table_name)
+    # 3) Filter config
+    filt_qs   = UserFilterConfig.objects.filter(user=request.user, table_config=config)
+    filt      = _select_item(filt_qs, request.GET.get("filter"))
+    filter_schema = get_filter_schema(table_name, user=request.user)
+    selected_values = filt.values if filt else {}
 
     return render(request, "table_view/table.html", {
-        "app_label": app_label,
-        "model_name": model_name,
-        "table_name": table_name,
-        "fields": fields,
-        "title": config.title or model.__name__,
-        "tabulator_options": config.tabulator_options,
+        "app_label":            config.model_label.split(".")[0],
+        "model_name":           config.model_label.split(".")[1],
+        "table_name":           table_name,
+        "fields":               fields,
+        "title":                config.title or model.__name__,
+        "tabulator_options":    config.tabulator_options,
 
         # column config
-        "user_configs": user_configs,
-        "active_config_id": selected_config.id if selected_config else None,
+        "user_configs":         col_qs,
+        "active_config_id":     col.id if col else None,
 
         # filter config
-        "filter_configs": filter_configs,
-        "active_filter_id": selected_filter.id if selected_filter else None,
-        "filter_schema": filter_schema,
-        "selected_filter_values": selected_filter.values if selected_filter else {},
+        "filter_configs":       filt_qs,
+        "active_filter_id":     filt.id if filt else None,
+        "filter_schema":        filter_schema,
+        "selected_filter_values": selected_values,
     })
 
 
 @login_required
 def table_data_by_name(request, table_name):
-    # 1) Resolve the table & model
+    # 1) Resolve table, model & config
     config = get_object_or_404(TableViewConfig, table_name=table_name)
-    app_label, model_name = config.model_label.split('.')
-    model = apps.get_model(app_label, model_name)
+    model  = get_model_from_table(table_name)
 
-    # Start with full queryset
-    qs = model.objects.all()
+    # 2) Build the filters dict
+    filters = _collect_filters(request, config)
 
-    # 2) Load saved filter values (if any)
-    filters = {}
-    if (fid := request.GET.get("filter")) and request.user.is_authenticated:
-        ufc = get_object_or_404(
-            UserFilterConfig,
-            id=fid,
-            user=request.user,
-            table_config=config
-        )
-        filters.update(ufc.values)
+    # 3) Delegate model-+field-perm checks and filter application
+    qs, allowed_fields = get_filtered_queryset(
+        user=request.user,
+        model=model,
+        table_name=table_name,
+        filters=filters,
+    )
 
-    # 3) Merge dynamic filters from the query string
-    for key, val in request.GET.items():
-        if key in ("filter", "config") or not val:
-            continue
-        filters[key] = val
-
-    # 4) Apply each registered filter handler
-    schema = get_filter_schema(table_name)
-    for key, val in filters.items():
-        entry = schema.get(key)
-        if entry and callable(entry.get("handler")):
-            qs = entry["handler"](qs, val)
-
-    # 5) Determine which fields to return (column config)
-    field_names = []
-    if (cid := request.GET.get("config")) and request.user.is_authenticated:
+    # 4) Apply user-chosen column config (if any)
+    if cid := request.GET.get("config"):
         ucc = get_object_or_404(
             UserColumnConfig,
-            id=cid,
-            user=request.user,
-            table_config=config
+            id=cid, user=request.user, table_config=config
         )
-        field_names = ucc.fields
-    # else:
-    #     # fallback: include all fields (except excluded) + id
-    #     from apps.layout.views import get_flat_fields  # or import at top
-    #     field_names = [f["name"] for f in get_flat_fields(model)]
-    # # ensure “id” is always first
-    # if "id" not in field_names:
-    #     field_names.insert(0, "id")
+        allowed_fields = [f for f in ucc.fields if f in allowed_fields]
 
-    # 6) Return JSON
-    data = list(qs.values(*field_names))
-    return JsonResponse(data, safe=False)
-
+    # 5) Return only those columns
+    return JsonResponse(list(qs.values(*allowed_fields)), safe=False)
 
 def table_update_by_name(request, table_name, pk):
     config = get_object_or_404(TableViewConfig, table_name=table_name)
@@ -130,86 +118,110 @@ def table_update_by_name(request, table_name, pk):
     obj.save()
     return JsonResponse({'success': True})
 
-def get_flat_fields(model):
+def get_flat_fields(model, user):
+    """
+    Returns a list of dicts describing every non-excluded DB field on `model`,
+    expanding FK→subfields. If `user` is provided, only includes fields
+    they have `view_<model>_<field>` permission on.
+    """
     model_label = f"{model._meta.app_label}.{model.__name__}"
     rules = FieldDisplayRule.objects.filter(model_label=model_label)
     rule_map = {r.field_name: r for r in rules}
 
+    # dummy instance for permission checks
+    instance = model()
+
     fields = []
     for field in model._meta.fields:
+        # 1) skip excluded by your FieldDisplayRule
         rule = rule_map.get(field.name)
         if rule and rule.is_excluded:
-            continue  # Skip excluded fields
+            continue
+
+        # 2) skip if user lacks read-perm
+        if user and not can_read_field(user, instance, field.name):
+            continue
 
         if isinstance(field, models.ForeignKey):
-            rel_model = field.remote_field.model
-            rel_label = f"{rel_model._meta.app_label}.{rel_model.__name__}"
-            rel_rules = FieldDisplayRule.objects.filter(model_label=rel_label)
-            rel_rule_map = {r.field_name: r for r in rel_rules}
+            # expand FK subfields
+            rel_model   = field.remote_field.model
+            rel_label   = f"{rel_model._meta.app_label}.{rel_model.__name__}"
+            rel_rules   = FieldDisplayRule.objects.filter(model_label=rel_label)
+            rel_rmap    = {r.field_name: r for r in rel_rules}
+            rel_instance = rel_model()
 
-            for subfield in rel_model._meta.fields:
-                if subfield.name == "id":
+            for sub in rel_model._meta.fields:
+                if sub.name == "id":
                     continue
-                rel_rule = rel_rule_map.get(subfield.name)
+
+                # skip excluded
+                rel_rule = rel_rmap.get(sub.name)
                 if rel_rule and rel_rule.is_excluded:
                     continue
 
+                # skip if user lacks perm on this subfield
+                sub_field_name = f"{field.name}__{sub.name}"
+                if user and not can_read_field(user, rel_instance, sub.name):
+                    continue
+
                 fields.append({
-                    "name": f"{field.name}__{subfield.name}",
-                    "label": f"{field.verbose_name.title()} → {subfield.verbose_name.title()}",
+                    "name":      sub_field_name,
+                    "label":     f"{field.verbose_name.title()} → {sub.verbose_name.title()}",
                     "mandatory": rel_rule.is_mandatory if rel_rule else False,
-                    "editable": False
+                    "editable":  False,
                 })
         else:
+            # normal field
             fields.append({
-                "name": field.name,
-                "label": field.verbose_name.title(),
+                "name":      field.name,
+                "label":     field.verbose_name.title(),
                 "mandatory": rule.is_mandatory if rule else False,
-                "editable": True
+                "editable":  True,
             })
+
     return fields
 
 @login_required
 def column_config_view(request, table_name):
-    config = get_object_or_404(TableViewConfig, table_name=table_name)
-    model = apps.get_model(*config.model_label.split('.'))
-    all_fields = get_flat_fields(model)
+    # 1) Resolve table + model
+    config      = get_object_or_404(TableViewConfig, table_name=table_name)
+    model       = get_model_from_table(table_name)
+    all_fields  = get_flat_fields(model, user=request.user)
+    qs          = UserColumnConfig.objects.filter(user=request.user, table_config=config)
 
-    user_configs = UserColumnConfig.objects.filter(user=request.user, table_config=config)
-
-    raw_id = request.GET.get("config") or request.POST.get("config_id")
-    selected_config_id = raw_id if raw_id not in [None, "", "None"] else None
-    selected_config = user_configs.filter(id=selected_config_id).first() if selected_config_id else None
+    # 2) Pick the config (from GET or POST)
+    config_id   = request.POST.get("config_id") or request.GET.get("config")
+    selected    = _select_item(qs, config_id)
 
     if request.method == "POST":
-        selected_fields = request.POST.getlist("field_order[]")
-        name = request.POST.get("name", "Unnamed").strip()
-        is_default = request.POST.get("is_default") == "on"
-
-        if selected_config:
-            selected_config.fields = selected_fields
-            selected_config.name = name
-            selected_config.is_default = is_default
-            selected_config.save()
+        # 3) Gather posted data
+        data = {
+            "fields":     request.POST.getlist("field_order[]"),
+            "name":       request.POST.get("name", "Unnamed").strip(),
+            "is_default": bool(request.POST.get("is_default")),
+        }
+        # 4) Update or create
+        if selected:
+            for k, v in data.items():
+                setattr(selected, k, v)
+            selected.save()
         else:
-            selected_config = UserColumnConfig.objects.create(
+            UserColumnConfig.objects.create(
                 user=request.user,
                 table_config=config,
-                name=name,
-                fields=selected_fields,
-                is_default=is_default
+                **data
             )
-
         return redirect("layout_table_by_name", table_name=table_name)
 
-    selected_fields = selected_config.fields if selected_config else [f["name"] for f in all_fields]
+    # 5) Set up context for GET
+    selected_fields = selected.fields if selected else [f["name"] for f in all_fields]
 
     return render(request, "table_view/column_config.html", {
-        "table_name": table_name,
-        "all_fields": all_fields,
-        "selected_fields": selected_fields,
-        "user_configs": user_configs,
-        "selected_config_id": selected_config.id if selected_config else "",
+        "table_name":        table_name,
+        "all_fields":        all_fields,
+        "selected_fields":   selected_fields,
+        "user_configs":      qs,
+        "selected_config_id": selected.id if selected else "",
     })
 
 @require_POST
@@ -257,62 +269,56 @@ def delete_column_config(request, table_name, config_id):
 
 @login_required
 def filter_config_view(request, table_name):
-    """
-    List + create / edit one UserFilterConfig for this user + table.
-    """
-    # 1) Lookup the table config & filter‐schema metadata
-    table_conf    = get_object_or_404(TableViewConfig, table_name=table_name)
-    schema        = get_filter_schema(table_name)
-    user_filters  = UserFilterConfig.objects.filter(
+    # 1) Lookup table + user’s existing filters
+    table_conf   = get_object_or_404(TableViewConfig, table_name=table_name)
+    user_filters = UserFilterConfig.objects.filter(
         user=request.user,
         table_config=table_conf
     )
+    schema       = get_filter_schema(table_name, user=request.user)
 
-    # 2) Are we editing an existing one?
-    editing_id = request.GET.get("id") or request.POST.get("id")
-    editing = user_filters.filter(id=editing_id).first() if editing_id else None
+    # 2) Pick the one we’re editing (if any)
+    cfg_id  = request.POST.get("id") or request.GET.get("id")
+    editing = _select_item(user_filters, cfg_id)
 
     if request.method == "POST":
-        # 3) Parse POSTed form
-        name       = request.POST.get("name","").strip()
-        is_default = bool(request.POST.get("is_default"))
-        # Gather only schema keys:
-        values = {
-            k: request.POST[k]
-            for k in schema.keys()
-            if request.POST.get(k)
+        # 3) Gather form data
+        data = {
+            "name":       request.POST.get("name", "").strip() or "Unnamed",
+            "is_default": bool(request.POST.get("is_default")),
+            "values": {
+                k: request.POST[k]
+                for k in schema.keys()
+                if request.POST.get(k)
+            }
         }
 
-        # 4) If marking default, clear prior defaults
-        if is_default:
+        # 4) If new default, clear others
+        if data["is_default"]:
             user_filters.update(is_default=False)
 
+        # 5) Create or update
         if editing:
-            editing.name       = name
-            editing.values     = values
-            editing.is_default = is_default
+            for attr, val in data.items():
+                setattr(editing, attr, val)
             editing.save()
         else:
-            editing = UserFilterConfig.objects.create(
+            UserFilterConfig.objects.create(
                 user=request.user,
                 table_config=table_conf,
-                name=name,
-                values=values,
-                is_default=is_default,
+                **data
             )
 
         return redirect("layout_filter_config", table_name=table_name)
 
-    # 5) Prepare initial values for the form
-    initial = editing.values if editing else {}
+    # 6) Render with initial values
     return render(request, "table_view/filter_config.html", {
-        "table_name":        table_name,
-        "filter_schema":     schema,
-        "user_filters":      user_filters,
-        "editing":           editing,
-        "initial_values":    initial,
+        "table_name":     table_name,
+        "filter_schema":  schema,
+        "user_filters":   user_filters,
+        "editing":        editing,
+        "initial_values": editing.values if editing else {},
     })
-
 
 @login_required
 @require_POST

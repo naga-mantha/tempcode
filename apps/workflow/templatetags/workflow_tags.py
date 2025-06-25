@@ -12,7 +12,6 @@ def render_transition_form(context, obj, url_name):
     user = context["request"].user
     transitions = obj.get_available_transitions(user)
     action_url = reverse(url_name, args=[obj.pk])
-    # action_url = reverse(url_name, args=[obj._meta.app_label, obj._meta.model_name, obj.pk, url_name])
 
     return {
         "transitions": transitions,
