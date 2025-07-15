@@ -5,10 +5,7 @@ class TableViewConfig(models.Model):
     model_label = models.CharField(max_length=255)  # e.g. "accounts.CustomUser"
     title = models.CharField(max_length=255, blank=True, null=True)
     tabulator_options = models.JSONField(default=dict)
-    default_columns = models.JSONField(
-        default=list,
-        help_text="List of field-names, in order, to show by default"
-    )
+    default_columns = models.JSONField(default=list, help_text="List of field-names, in order, to show by default")
 
     objects = models.Manager()
 

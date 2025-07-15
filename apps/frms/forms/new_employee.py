@@ -20,9 +20,7 @@ class NewEmployeeForm(FieldLevelFormMixin, forms.ModelForm):
             self.fields.pop('workflow', None)
         else:
             # Only Active workflows can be chosen when creating new records
-            self.fields['workflow'].queryset = Workflow.objects.filter(
-                status=Workflow.ACTIVE
-            )
+            self.fields['workflow'].queryset = Workflow.objects.filter(status=Workflow.ACTIVE)
 
         # === Crispy setup ===
         self.helper = FormHelper()
@@ -37,7 +35,6 @@ class NewEmployeeForm(FieldLevelFormMixin, forms.ModelForm):
 
             FormActions(
                 Submit('update_new_employee', 'Save changes', css_class="btn btn-success"),
-                # Button('cancel', 'Cancel', css_class="btn btn-danger")
             )
         )
 
@@ -65,4 +62,5 @@ class NewEmployeeForm(FieldLevelFormMixin, forms.ModelForm):
 
         if commit:
             obj.save()
+
         return obj

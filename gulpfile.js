@@ -20,9 +20,8 @@ function move_css() {
 
 function move_js() {
     return gulp.src([
-        'node_modules/bootstrap/dist/js/bootstrap.min.js',
-		'node_modules/@popperjs/core/dist/umd/popper.min.js',
         'node_modules/tabulator-tables/dist/js/tabulator.min.js',
+        'node_modules/sortablejs/Sortable.min.js',
 	], {"allowEmpty": true})
 	.pipe(gulp.dest('apps/common/src/vendor-js'))
 }
@@ -46,6 +45,11 @@ function img() {
 	.pipe(gulp.dest('apps/common/dist/images/'));
 }
 
+function move_alpine_js() {
+    return gulp.src('node_modules/alpinejs/dist/cdn.min.js')
+	.pipe(gulp.dest('apps/common/dist/'));
+}
+
 function js() {
 	return gulp.src(['apps/common/src/js/**/*.js'])
 	.pipe(plumber())
@@ -67,8 +71,6 @@ function vendor_js() {
 	return gulp.src('apps/common/src/vendor-js/*.js')
 	.pipe(plumber())
 	.pipe(order([
-        "apps/common/src/vendor-js/popper.min.js",
-		"apps/common/src/vendor-js/bootstrap.min.js",
 		"apps/common/src/vendor-js/*.js"
 	], { base: __dirname }))
 	.pipe(concat('vendor.min.js'))
@@ -88,8 +90,8 @@ exports.move_css = move_css;
 exports.move_js = move_js;
 exports.move_icons = move_icons;
 exports.move_fonts = move_fonts
-//exports.move = series(move_css, move_js, move_icons, move_fonts);
-exports.move = series(move_css, move_js);
+exports.move_alpine_js = move_alpine_js
+exports.move = series(move_css, move_js, move_icons, move_fonts, move_alpine_js);
 
 exports.img = img;
 exports.js = js;

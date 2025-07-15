@@ -26,6 +26,7 @@ urlpatterns = [
     path(r'comments/', include('django_comments_xtd.urls')),
     path('', include('apps.common.urls')),
     path('', include('apps.frms.urls')),
+    path('', include('apps.production.urls')),
     path('', include('apps.workflow.urls')),
     path('layout/', include('apps.layout.urls')),
 

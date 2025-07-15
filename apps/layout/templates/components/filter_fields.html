@@ -1,0 +1,33 @@
+{% load dict_extras %}
+
+<fieldset class="mb-3">
+  {% for key, cfg in filter_schema.items %}
+    <div class="form-group">
+      <label>{{ cfg.label }}</label>
+      {% if cfg.input_type == 'text' %}
+        <input
+          class="form-control mb-4"
+          type="text"
+          name="{{ key }}"
+          value="{{ initial_values|get_item:key|default:'' }}"
+        />
+      {% elif cfg.input_type == 'select' %}
+        <select class="form-control" name="{{ key }}">
+          <option value="">— any —</option>
+          {% for val,label in cfg.options %}
+            <option value="{{ val }}" {% if initial_values|get_item:key == val %}selected{% endif %}>
+              {{ label }}
+            </option>
+          {% endfor %}
+        </select>
+      {% elif cfg.input_type == 'date' %}
+        <input
+          class="form-control"
+          type="date"
+          name="{{ key }}"
+          value="{{ initial_values|get_item:key|default:'' }}"
+        />
+      {% endif %}
+    </div>
+  {% endfor %}
+</fieldset>

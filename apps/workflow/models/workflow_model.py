@@ -79,27 +79,30 @@ class WorkflowModel(models.Model):
         """
         Field‐level edit check:
           1) Superuser bypass
-          2) Static field‐level via Django's 'change_model_field' perm
-          3) Dynamic state‐level override via State.field_perms or state.allowed_groups
+          2) Django 'change_<model>_<field>' perm
+          3) Workflow state‐level via State.allowed_groups
         """
+        # 1) Superuser bypass
         if user.is_superuser:
             return True
 
-        # static: do they have the 'change_model_field' perm?
+        # 2) Static field‐level perm
         if not can_write_field(user, self, field_name):
             return False
 
-        # dynamic: if a workflow is set, check per‐state overrides
+        # 3) Dynamic: if a workflow is set, enforce state.allowed_groups
         if self.workflow:
+            # no edits when workflow is inactive
             if self.workflow.status == Workflow.INACTIVE:
                 return False
 
-            # first look for a state‐specific override
-            fp = self.state.field_perms.filter(field_name=field_name).first()
-            allowed = fp.allowed_groups.all() if fp else self.state.allowed_groups.all()
+            allowed = self.state.allowed_groups.all()
+            # if no groups configured → everyone with the change perm may edit
             if not allowed.exists():
                 return True
+
+            # otherwise only those in allowed_groups
             return user.groups.filter(pk__in=allowed.values_list("pk", flat=True)).exists()
 
-        # no workflow → static passed → allow
+        # No workflow defined → static perm was enough
         return True

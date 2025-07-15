@@ -2,7 +2,6 @@ from django.db import models
 from apps.accounts.models import CustomUser
 from apps.workflow.models import WorkflowModel, Workflow, State
 from django.urls import reverse
-from django.contrib.contenttypes.models import ContentType
 
 class NewEmployee(WorkflowModel):
     first_name = models.CharField(max_length=100, default="")

@@ -1,16 +1,34 @@
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
-from apps.frms.models import NewEmployee
-from django_comments_xtd.models import XtdComment
+from apps.common.models import *
+from apps.production.views.scheduling import *
+from datetime import datetime, time, timedelta, date
 
 class Command(BaseCommand):
-    help = 'Test'
+    help = 'Create Calendar Days'
 
     def handle(self, *args, **kwargs):
-        qs = XtdComment.objects.select_related('user', 'content_type').all()
-        for c in qs:
-            self.stdout.write(f"[{c.id}] {getattr(c.user, 'username', 'Anonymous')}"
-                              f" on {c.content_type.app_label}.{c.content_type.model}"
-                              f"#{c.object_pk} at {c.submit_date}")
-            self.stdout.write(c.comment)
-            self.stdout.write("-" * 50)
+        labor_resource = Labor.objects.get(name="John")
+        labor_date = date(2025, 7, 9)
+        print("Available Slots for Labor:")
+        slot_labor = get_available_slots(labor_resource, labor_date)
+        print(slot_labor)
+        print("---------------------------------------------------------------------------")
+
+        machine_resource = Machine.objects.get(code="m_001")
+        machine_date = date(2025, 7, 9)
+        print("Available Slots for Machine:")
+        slot_machine = get_available_slots(machine_resource, machine_date)
+        print(slot_machine)
+        print("---------------------------------------------------------------------------")
+
+        print("Intersection:")
+        intersection_slots = intersect_slots(slot_labor, slot_machine)
+        print(intersection_slots)
+        print("---------------------------------------------------------------------------")
+
+
+        print(find_slot_fit((intersection_slots), duration_minutes=30))
+
+        operation = ProductionOrderOperation.objects.get(operation=20)
+        next_sched = operation.prev_operation
+        print(next_sched)

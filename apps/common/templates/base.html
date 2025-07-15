@@ -10,11 +10,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet">
 
     {% load static %}
+    <script src="{% static 'cdn.min.js' %}" defer></script>
     <script src="{% static 'vendor.min.js' %}"></script>
-    <script src="{% static 'script.min.js' %}"></script>
+<!--    UNCOMMENT BELOW LINE LATER-->
+<!--    <script src="{% static 'script.min.js' %}"></script>-->
     <link rel="stylesheet" href="{% static 'bootstrap-icons.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor.min.css' %}">
     <link rel="stylesheet" href="{% static 'style.min.css' %}">
+
+       <!-- Parsley (deferred so it initializes after the DOM) -->
+    <script src="https://cdn.jsdelivr.net/npm/just-validate@latest/dist/just-validate.production.min.js" defer></script>
+
+        <!-- Optional: override Parsley to use Bootstrap classes -->
+    <script defer>
+      window.ParsleyConfig = {
+        errorsWrapper: '<ul class="invalid-feedback list-unstyled"></ul>',
+        errorTemplate: '<li></li>',
+        errorClass:  'is-invalid',
+        successClass: 'is-valid'
+      };
+    </script>
   </head>
 
   <body>

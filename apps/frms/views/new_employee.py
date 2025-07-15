@@ -24,8 +24,8 @@ def new_employee(request):
 
 @login_required
 def new_employee_list(request):
-    # Only show employees submitted by this user
     employees = NewEmployee.objects.filter(submitted_by=request.user)
+
     return render(request, 'new_employee_list.html', {'employees': employees})
 
 @login_required
@@ -42,28 +42,19 @@ def new_employee_detail(request, pk):
         if not employee.can_edit(request.user):
             raise PermissionDenied("You may not edit this record in its current status.")
 
-        form = NewEmployeeForm(
-            request.POST,
-            instance=employee,
-            user=request.user,
-            exclude_workflow=True
-        )
+        form = NewEmployeeForm(request.POST, instance=employee, user=request.user, exclude_workflow=True)
         if form.is_valid():
             form.save()
             return redirect('new_employee_detail', pk=employee.pk)
     else:
-        form = NewEmployeeForm(
-            instance=employee,
-            user=request.user,
-            exclude_workflow=True
-        )
+        form = NewEmployeeForm(instance=employee, user=request.user, exclude_workflow=True)
 
     # Always load available transitions for the workflow widget
     transitions = employee.get_available_transitions(request.user)
 
     return render(request, 'new_employee_detail.html', {
-        'employee':    employee,
-        'form':        form,
-        'can_edit':    employee.can_edit(request.user),
+        'employee': employee,
+        'form': form,
+        'can_edit': employee.can_edit(request.user),
         'transitions': transitions,
     })

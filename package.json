@@ -1,7 +1,9 @@
 {
   "dependencies": {
+    "alpinejs": "^3.14.9",
     "autoprefixer": "^10.4.21",
     "bootstrap": "^5.3.6",
+    "bootstrap-icons": "^1.13.1",
     "cssnano": "^7.0.7",
     "gulp": "^5.0.1",
     "gulp-concat": "^2.6.1",
@@ -12,6 +14,7 @@
     "gulp-uglify": "^3.0.2",
     "path": "^0.12.7",
     "sass": "^1.89.1",
+    "sortablejs": "^1.15.6",
     "tabulator-tables": "^6.3.1"
   }
 }

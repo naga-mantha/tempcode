@@ -23,17 +23,16 @@ def get_filtered_queryset(user, model, table_name, filters):
     Returns: (filtered_queryset, allowed_field_list)
     """
     # model-level permission
-    app_label   = model._meta.app_label
-    model_name  = model._meta.model_name
+    app_label = model._meta.app_label
+    model_name = model._meta.model_name
+
     perm_string = f"{app_label}.view_{model_name}"
     if not user.has_perm(perm_string):
         raise PermissionDenied(f"You cannot view {model.__name__}")
 
-    # apply filters
     qs = model.objects.all()
     qs = apply_filter_registry(table_name, qs, filters, user=user)
 
-    # determine allowed fields
     allowed_fields = get_allowed_fields(user, model, 'view')
     if not allowed_fields:
         raise PermissionDenied("You cannot view any fields of this model.")

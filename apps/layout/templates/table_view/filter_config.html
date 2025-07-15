@@ -2,76 +2,124 @@
 {% load dict_extras %}
 
 {% block content %}
-  <h1>Manage Filters for “{{ table_name }}”</h1>
+  <div class="main-container">
+    <h1 class="page-title">Customize Filters for '{{ title }}' page</h1>
 
-  <h2>Saved Filter Sets</h2>
-  <ul>
-    {% for f in user_filters %}
-      <li>
-        <strong>{{ f.name }}</strong>
-        {% if f.is_default %}(default){% endif %}
-        — <a href="?id={{ f.id }}">Edit</a>
-<form action="{% url 'layout_filter_delete' table_name f.id %}" method="post" style="display:inline">
-            {% csrf_token %}
-            <button type="submit">Delete</button>
-          </form>
-      </li>
-    {% empty %}
-      <li>No saved filters yet.</li>
-    {% endfor %}
-  </ul>
-
-  <h2>{% if editing %}Edit{% else %}New{% endif %} Filter</h2>
-  <form method="post">
-    {% csrf_token %}
-    {% if editing %}
-      <input type="hidden" name="id" value="{{ editing.id }}">
+    {% include "components/instructions.html" with id="custom-instructions" instructions=instructions %}
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
     {% endif %}
 
-    <div>
-      <label>Name:</label>
-      <input type="text" name="name" value="{{ editing.name|default:'' }}" required>
-    </div>
-    <div>
-      <label>Make Default:</label>
-      <input type="checkbox" name="is_default" {% if editing.is_default %}checked{% endif %}>
-    </div>
+    <div class="mx-auto" style="max-width: 500px;">
 
-    <fieldset>
-      <legend>Conditions</legend>
-      {% for key, cfg in filter_schema.items %}
-        <div class="filter-field">
-          <label>{{ cfg.label }}</label>
-          {% if cfg.input_type == 'text' %}
-            <input
-              type="text"
-              name="{{ key }}"
-              value="{{ initial_values|get_item:key|default:'' }}"
-            />
-          {% elif cfg.input_type == 'select' %}
-            <select name="{{ key }}">
-              <option value="">— any —</option>
-              {% for val,label in cfg.options %}
-                <option value="{{ val }}"
-                  {% if initial_values|get_item:key == val %}selected{% endif %}>
-                  {{ label }}
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        {# GET form for selecting which filter to edit/create #}
+        <form method="get" action="{% url 'layout_filter_config' table_name %}">
+          <div class="input-group">
+            <label for="filter-select" class="input-group-text">Saved Filter:</label>
+            <select id="filter-select" name="id"
+                    class="form-select"
+                    onchange="this.form.submit()">
+              <option value="">-- New Filter --</option>
+              {% for f in user_filters %}
+                <option value="{{ f.id }}"
+                  {% if editing and editing.id == f.id %}selected{% endif %}>
+                  {{ f.name }}{% if f.is_default %} (default){% endif %}
                 </option>
               {% endfor %}
             </select>
-          {% elif cfg.input_type == 'date' %}
-            <input
-              type="date"
-              name="{{ key }}"
-              value="{{ initial_values|get_item:key|default:'' }}"
-            />
-          {% endif %}
-        </div>
-      {% endfor %}
-    </fieldset>
+          </div>
+        </form>
 
-    <button type="submit">
-      {% if editing %}Save Changes{% else %}Create Filter{% endif %}
-    </button>
-    <a href="{% url 'layout_filter_config' table_name %}">Cancel</a>
-  </form>
+        {# POST form for deleting the selected filter #}
+        {% if editing %}
+          <form method="post"
+                action="{% url 'layout_filter_delete' table_name editing.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete</button>
+          </form>
+        {% endif %}
+      </div>
+
+      <hr>
+
+      <form id="viewForm" method="post" action="{% url 'layout_filter_config' table_name %}" novalidate>
+        {% csrf_token %}
+        {% if editing %}
+          <input type="hidden" name="id" value="{{ editing.id }}">
+        {% endif %}
+
+           <div class="row mb-3">
+            <label for="filter-name" class="col-2 col-form-label">Name</label>
+            <div class="col-sm-10">
+              <input
+                type="text"
+                class="form-control"
+                id="filter-name"
+                name="name"
+                value="{{ editing.name|default:'' }}"
+              />
+              <!-- Just-validate will inject a <div class="invalid-feedback"> here when needed -->
+            </div>
+          </div>
+
+        <div class="form-check mb-3">
+          <input id="filter-default"
+                 class="form-check-input"
+                 type="checkbox"
+                 name="is_default"
+                 {% if editing.is_default %}checked{% endif %}>
+          <label class="form-check-label" for="filter-default">
+            Set as Default
+          </label>
+        </div>
+
+        {# ← HERE is the collapsible panel! → #}
+        <details class="border rounded mb-3">
+          <summary class="p-2 bg-light" style="cursor: pointer; font-weight: bold;">
+            Filter Conditions
+          </summary>
+          <div class="p-3">
+            {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values %}
+          </div>
+        </details>
+
+        <button type="submit" class="btn btn-success">
+          {% if editing %}Save Changes{% else %}Create Filter{% endif %}
+        </button>
+        <a class="btn btn-secondary" href="{% url 'layout_filter_config' table_name %}">
+          Cancel
+        </a>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const validation = new JustValidate('#viewForm', {
+        errorFieldCssClass: 'is-invalid',
+        errorLabelCssClass: 'invalid-feedback',
+      });
+
+      validation
+        .addField('#filter-name', [
+          {
+            rule: 'required',
+            errorMessage: 'Please enter a name for this filter.'
+          }
+        ])
+        .onSuccess((event) => {
+          // only submits if all rules pass
+          event.target.submit();
+        });
+    });
+  </script>
 {% endblock %}

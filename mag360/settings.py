@@ -15,6 +15,7 @@ from pathlib import Path
 import environ
 import os
 import sys
+from django.contrib.messages import constants as msg
 
 env = environ.Env()
 environ.Env.read_env()
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
     'apps.frms',
     'apps.hr',
     'apps.it',
+    'apps.production',
     'apps.workflow',
     'apps.layout',
     'django_extensions',
@@ -171,3 +173,12 @@ COMMENTS_XTD_LIST_ORDER = (
 # CRISPY FORMS
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
+
+# Django message framework (django.contrib.messages)
+MESSAGE_TAGS = {
+    msg.DEBUG:    'secondary',
+    msg.INFO:     'info',
+    msg.SUCCESS:  'success',
+    msg.WARNING:  'warning',
+    msg.ERROR:    'danger',    # ← map “error” → “danger”
+}

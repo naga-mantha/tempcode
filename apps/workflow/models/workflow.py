@@ -3,7 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 
 class Workflow(models.Model):
     ACTIVE   = "active"
-    DEPRECATED = "Deprecated"
+    DEPRECATED = "deprecated"
     INACTIVE = "inactive"
     STATUS_CHOICES = [
         (ACTIVE,   "Active"),
@@ -11,10 +11,9 @@ class Workflow(models.Model):
         (INACTIVE, "Inactive"),
     ]
 
-    name = models.CharField(max_length=100, unique=True)
-    content_type = models.ForeignKey(ContentType, blank=True, null=True, on_delete=models.PROTECT, help_text="Which Django model this workflow is for")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=ACTIVE, help_text="“Active” allows creation & transitions; “Deprecated” allows transitions only; “Inactive” disallows both."
-    )
+    name = models.CharField(max_length=100, unique=True, verbose_name="WF Name")
+    content_type = models.ForeignKey(ContentType, blank=True, null=True, on_delete=models.PROTECT, help_text="Which Django model this workflow is for", verbose_name="WF Model")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=ACTIVE, help_text="“Active” allows creation & transitions; “Deprecated” allows transitions only; “Inactive” disallows both.", verbose_name="WF Status")
 
     objects = models.Manager()
 
