@@ -7,6 +7,7 @@ from apps.common.models.machines import Machine
 from apps.common.models.tasks import Task
 from apps.common.models.work_centers import WorkCenter
 from apps.common.models.labors import Labor
+from apps.common.models.labor_vacations import LaborVacation
 from apps.common.models.machine_down_time import MachineDowntime
 from apps.common.models.purchase_orders import PurchaseOrder
 from apps.common.models.purchase_order_lines import PurchaseOrderLine

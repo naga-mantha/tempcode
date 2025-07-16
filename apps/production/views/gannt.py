@@ -12,6 +12,7 @@ from django.shortcuts import redirect
 def run_scheduler(request):
     ProductionOrderSchedule.objects.all().delete()
 
+    # ToDo: This works for backward planning. We need to order_by required_start for forward plannin
     unscheduled_ops = ProductionOrderOperation.objects.filter(
         schedule__isnull=True
     ).order_by("priority", "required_end")   #Schedules operations with priority 1,2,3 etc..
@@ -27,9 +28,9 @@ def run_scheduler(request):
 def gannt_page(request):
     schedule = ProductionOrderSchedule.df_objects.all()
 
-    df = schedule.to_dataframe(fieldnames=['operation', 'machine', 'operation__operation', 'operation__labor','start_datetime', 'end_datetime'])
+    df = schedule.to_dataframe(fieldnames=['operation', 'machine', 'operation__operation', 'labor','start_datetime', 'end_datetime'])
 
-    fig = px.timeline(df, x_start="start_datetime", x_end="end_datetime", y="machine", color="operation__labor", text="operation__operation")
+    fig = px.timeline(df, x_start="start_datetime", x_end="end_datetime", y="machine", color="labor", text="operation__operation")
     fig.update_yaxes(autorange="reversed")
 
     fig = fig.to_html()

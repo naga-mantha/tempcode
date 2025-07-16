@@ -1,8 +1,9 @@
 from datetime import datetime, time, timedelta, date, timezone
 from django.utils.timezone import make_aware
-from apps.common.models import ProductionOrderSchedule, CalendarShift, CalendarDay, ProductionOrderOperation, Machine, MachineDowntime
+from apps.common.models import ProductionOrderSchedule, CalendarShift, CalendarDay, Labor, Machine, MachineDowntime
 from apps.common.functions.lists import reverse_chunks
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 # def try_schedule_operation(operation, direction="backward") -> tuple[datetime, datetime] | None:
 #     """
@@ -143,83 +144,92 @@ def try_schedule_operation(operation, direction="backward"):
 
     while remaining_time > 0:
         if direction == "forward":
-            slot_labor = get_available_slots(operation.labor, start_datetime)
-            candidates = [operation.task.primary_machine] + list(operation.task.alternate_machines.all())
+            # build your machine candidates exactly as before
+            machines = [operation.task.primary_machine] \
+                       + list(operation.task.alternate_machines.all())
 
-            options = []
-            for m in candidates:
-                slot_machine = get_available_slots(m, start_datetime)
-                inter = intersect_slots(slot_labor, slot_machine)
-                if not inter:
+            # pull **all** labors in the op’s workcenter
+            labors = operation.workcenter.labor_set.all()
+
+            options = []  # will hold (machine, labor, start, end)
+
+            for m in machines:
+                m_slots = get_available_slots(m, start_datetime)
+                if not m_slots:
                     continue
 
-                # On first loop, keep only the (start,end) intersection times when the end > start_datetime
-                if i == 0:
-                    filtered = [(s, e) for s, e in inter if e > start_datetime]
-                # Keep only the (start,end) intersection times when the end > start_datetime +
-                # Drop any booked slots (start < slot_end and end > slot_start)
-                else:
-                    filtered = [
-                        (s, e)
-                        for s, e in inter
-                        if e > start_datetime and not (s < slot_end and e > slot_start)
-                    ]
+                for lab in labors:
+                    l_slots = get_available_slots(lab, start_datetime)
+                    if not l_slots:
+                        continue
 
-                # If start is less than original_start_datetime, then force it to original_start_datetime
-                filtered = [(max(s, start_datetime), e) for s, e in filtered]
+                    # intersect that labor’s slots with the machine’s
+                    inter = intersect_slots(l_slots, m_slots)
+                    if not inter:
+                        continue
 
-                # Make sure the start and end are not the same
-                filtered = [(s, e) for s, e in filtered if (e - s).total_seconds() > 0]
-                if not filtered:
-                    continue
+                    # apply your “i==0 / overlap‐filter” logic
+                    if i == 0:
+                        filtered = [(s, e) for s, e in inter if e > start_datetime]
+                    else:
+                        filtered = [
+                            (s, e)
+                            for s, e in inter
+                            if e > start_datetime
+                               and not (s < slot_end and e > slot_start)
+                        ]
 
-                # split across days: book at most what's available
-                max_chunk = max((e - s).total_seconds() / 3600 for s, e in filtered)
-                chunk_to_book = min(remaining_time, max_chunk)
+                    # clamp & drop zero-length
+                    filtered = [(max(s, start_datetime), e) for s, e in filtered]
+                    filtered = [(s, e) for s, e in filtered if (e - s).total_seconds() > 0]
+                    if not filtered:
+                        continue
 
-                try:
-                    s_fit, e_fit = find_slot_fit(
-                        filtered,
-                        duration_hours=chunk_to_book,
-                        backward_planning=False
-                    )
-                except ValueError:
-                    continue
+                    # figure out how big a piece you can book
+                    max_chunk = max((e - s).total_seconds() / 3600 for s, e in filtered)
+                    chunk_to_book = min(remaining_time, max_chunk)
 
-                options.append((m, s_fit, e_fit))
+                    try:
+                        s_fit, e_fit = find_slot_fit(
+                            filtered,
+                            duration_hours=chunk_to_book,
+                            backward_planning=False
+                        )
+                    except ValueError:
+                        continue
+
+                    options.append((m, lab, s_fit, e_fit))
 
             if not options:
-                # bump to next day
+                # no (machine,lab) combo could fit → advance day and retry
                 start_datetime += timedelta(days=1)
-
-                # track how many days we’ve tried without booking anything
                 days_without_schedule += 1
                 if days_without_schedule > MAX_LOOKAHEAD_DAYS:
-                    raise RuntimeError(
-                        f"No availability found in the next {MAX_LOOKAHEAD_DAYS} days; aborting scheduling."
-                    )
-
+                    raise RuntimeError("…")
                 continue
 
-            # choose the earliest fit across machines
-            scheduled_machine, s_fit, e_fit = min(options, key=lambda x: x[1])
+            # pick the (machine, labor) with the earliest start
+            scheduled_machine, scheduled_labor, slot_start, slot_end = min(
+                options, key=lambda x: x[2]
+            )
 
-            # persist *this* piece
+            # persist that chunk
             ProductionOrderSchedule.objects.create(
                 operation=operation,
                 machine=scheduled_machine,
-                start_datetime=s_fit,
-                end_datetime=e_fit,
+                labor=scheduled_labor,
+                start_datetime=slot_start,
+                end_datetime=slot_end,
                 schedule_state="scheduled",
             )
 
             # record overall start on first piece
             if i == 0:
-                full_start = s_fit
+                full_start = slot_start
 
-            # advance
-            remaining_time -= (e_fit - s_fit).total_seconds() / 3600
-            slot_start, slot_end = s_fit, e_fit
+            # advance your cursor
+            remaining_time -= (slot_end - slot_start).total_seconds() / 3600
+            slot_start, slot_end = slot_start, slot_end
             start_datetime = slot_end
             i += 1
 
@@ -263,12 +273,29 @@ def get_available_slots(resource, date):
 
         working_windows.append((start_dt, end_dt))
 
+    window_start = min(start for start, _ in working_windows)
+    window_end = max(end for _, end in working_windows)
+
+    # build the time-window filter once
+    time_q = Q(
+        start_datetime__lt=window_end,
+        end_datetime__gt=window_start,
+    )
+
+    # choose the right field depending on resource type
+    if isinstance(resource, Machine):
+        sched_q = Q(machine=resource)
+    elif isinstance(resource, Labor):
+        sched_q = Q(labor=resource)
+    else:
+        raise TypeError(f"Unsupported resource type: {type(resource)}")
+
     # Fetch scheduled operations overlapping any working window
-    scheduled_ops = ProductionOrderSchedule.objects.filter(
-        operation__in=resource.operations.all(),
-        start_datetime__lt=max(end for _, end in working_windows),
-        end_datetime__gt=min(start for start, _ in working_windows)
-    ).order_by("start_datetime")
+    scheduled_ops = (
+        ProductionOrderSchedule.objects
+            .filter(time_q & sched_q)
+            .order_by("start_datetime")
+    )
 
     # Build list of blocked intervals
     blocked = [(op.start_datetime, op.end_datetime) for op in scheduled_ops]

@@ -1,5 +1,5 @@
 from django.db import models
-from apps.common.models import ProductionOrder, Task, Machine, Labor, PurchaseOrderLine
+from apps.common.models import ProductionOrder, Task, Machine, WorkCenter, PurchaseOrderLine
 from apps.workflow.models import WorkflowModel, Workflow, State
 from django_pandas.managers import DataFrameManager
 
@@ -11,7 +11,7 @@ class ProductionOrderOperation(WorkflowModel):
     operation = models.PositiveIntegerField(blank=True, null=True)
     task = models.ForeignKey(Task, on_delete=models.PROTECT, blank=True, null=True)
     machine = models.ForeignKey(Machine, on_delete=models.PROTECT, blank=True, null=True, related_name="operations")
-    labor = models.ForeignKey(Labor, on_delete=models.PROTECT, blank=True, null=True, related_name="operations")
+    workcenter = models.ForeignKey(WorkCenter, on_delete=models.PROTECT, blank=True, null=True, related_name="operations")
     setup_time = models.FloatField(default=0, blank=True, null=True)
     production_time = models.FloatField(default=0, blank=True, null=True)
     wait_time = models.FloatField(default=0, blank=True, null=True)
