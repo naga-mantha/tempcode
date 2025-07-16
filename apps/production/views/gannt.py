@@ -27,9 +27,9 @@ def run_scheduler(request):
 def gannt_page(request):
     schedule = ProductionOrderSchedule.df_objects.all()
 
-    df = schedule.to_dataframe(fieldnames=['operation', 'operation__machine', 'operation__operation', 'operation__labor','start_datetime', 'end_datetime'])
+    df = schedule.to_dataframe(fieldnames=['operation', 'machine', 'operation__operation', 'operation__labor','start_datetime', 'end_datetime'])
 
-    fig = px.timeline(df, x_start="start_datetime", x_end="end_datetime", y="operation__machine", color="operation__labor", text="operation__operation")
+    fig = px.timeline(df, x_start="start_datetime", x_end="end_datetime", y="machine", color="operation__labor", text="operation__operation")
     fig.update_yaxes(autorange="reversed")
 
     fig = fig.to_html()

@@ -4,7 +4,7 @@ from django_pandas.managers import DataFrameManager
 from apps.common.models import Calendar, WorkCenter
 
 class Labor(WorkflowModel):
-    name = models.CharField(max_length=100)  # TODO: Later link this to Employee Model (Or maybe make this the employee model ??)
+    name = models.CharField(max_length=100)
     workcenter = models.ForeignKey(WorkCenter, on_delete=models.PROTECT, blank=True, null=True)
     calendar = models.ForeignKey(Calendar, on_delete=models.PROTECT, blank=True, null=True)
     workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, blank=True, null=True)

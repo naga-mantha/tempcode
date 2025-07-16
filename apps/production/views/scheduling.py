@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta, date, timezone
 from django.utils.timezone import make_aware
 from apps.common.models import ProductionOrderSchedule, CalendarShift, CalendarDay, ProductionOrderOperation, Machine, MachineDowntime
 from apps.common.functions.lists import reverse_chunks
+from django.core.exceptions import ValidationError
 
 # def try_schedule_operation(operation, direction="backward") -> tuple[datetime, datetime] | None:
 #     """
@@ -112,6 +113,7 @@ from apps.common.functions.lists import reverse_chunks
 #
 #     return (full_start, full_end)
 
+MAX_LOOKAHEAD_DAYS = 30
 BACKWARD_PLANNING_ENGINE_FAIL = "Couldn't schedule using backward planning"
 OTHER_ERROR = "Some other failure reason"
 def try_schedule_operation(operation, direction="backward"):
@@ -122,7 +124,8 @@ def try_schedule_operation(operation, direction="backward"):
 
     # For forward planning, check when the previous operation will be completed and set the current operation start time to that
     if ProductionOrderSchedule.objects.filter(operation=operation.prev_operation, schedule_state="scheduled").exists():
-        prev_op = ProductionOrderSchedule.objects.get(operation=operation.prev_operation, schedule_state="scheduled")
+        prev_qs = ProductionOrderSchedule.objects.filter(operation=operation.prev_operation, schedule_state="scheduled")
+        prev_op = prev_qs.first()
         earliest = max(operation.required_start, prev_op.end_datetime)
     else:
         earliest = operation.required_start
@@ -133,120 +136,98 @@ def try_schedule_operation(operation, direction="backward"):
         earliest = max(earliest, po_rec_dt)
 
     start_datetime = earliest
-
-    #ToDo: Deal with this in backward planning
-    original_end_datetime = operation.required_end
-    end_datetime = original_end_datetime
-
-
     remaining_time = operation.remaining_time
     i = 0
+    days_without_schedule = 0
+    full_start = None
 
-    # START LOOP
     while remaining_time > 0:
-        if direction=="backward":
-            slot_labor = get_available_slots(operation.labor, end_datetime)
-            slot_machine = get_available_slots(operation.machine, end_datetime)
-            intersection_slots = intersect_slots(slot_labor, slot_machine)
-
-            # Keep only the (start,end) intersection times where the start < original_end_datetime
-            intersection_slots = [
-                (start, end)
-                for start, end in intersection_slots
-                if start <= original_end_datetime
-            ]
-
-            # If end is greater than original_end_datetime, then force it to original_end_datetime
-            intersection_slots = [
-                (start,
-                 original_end_datetime if end > original_end_datetime else end)
-                for start, end in intersection_slots
-            ]
-
-
-            intersection_slots = intersection_slots[::-1]  # Reverse the time slots (so that night shifts gets scheduled first before morning shoft
-            slot_start, slot_end = find_slot_fit((intersection_slots), duration_hours=remaining_time, backward_planning=True)
-
-            remaining_time = remaining_time - (slot_end - slot_start).total_seconds()/3600   #Convert seconds to hours
-            end_datetime = end_datetime - timedelta(days=1)
-
-            production_start = slot_start
-            production_end = slot_end
-
-
-
-            if production_end and i==0:
-                full_end = production_end
-                i = i + 1
-
-            if ProductionOrderSchedule.objects.filter(operation=operation.prev_operation, schedule_state="scheduled").exists():
-                prev_op = ProductionOrderSchedule.objects.get(operation=operation.prev_operation, schedule_state="scheduled")
-                prev_op_end_time = prev_op.end_datetime
-                if production_start < prev_op_end_time:
-                    return BACKWARD_PLANNING_ENGINE_FAIL
-
-
-        if direction=="forward":
+        if direction == "forward":
             slot_labor = get_available_slots(operation.labor, start_datetime)
-            slot_machine = get_available_slots(operation.machine, start_datetime)
-            intersection_slots = intersect_slots(slot_labor, slot_machine)
+            candidates = [operation.task.primary_machine] + list(operation.task.alternate_machines.all())
 
-            # If its a holiday and there are no slots, move to next day
-            if not intersection_slots:
-                start_datetime = start_datetime + timedelta(days=1)
-                continue  # restart the loop using the new start_datetime
+            options = []
+            for m in candidates:
+                slot_machine = get_available_slots(m, start_datetime)
+                inter = intersect_slots(slot_labor, slot_machine)
+                if not inter:
+                    continue
 
-            # On first loop, keep only the (start,end) intersection times when the end > start_datetime
+                # On first loop, keep only the (start,end) intersection times when the end > start_datetime
+                if i == 0:
+                    filtered = [(s, e) for s, e in inter if e > start_datetime]
+                # Keep only the (start,end) intersection times when the end > start_datetime +
+                # Drop any booked slots (start < slot_end and end > slot_start)
+                else:
+                    filtered = [
+                        (s, e)
+                        for s, e in inter
+                        if e > start_datetime and not (s < slot_end and e > slot_start)
+                    ]
+
+                # If start is less than original_start_datetime, then force it to original_start_datetime
+                filtered = [(max(s, start_datetime), e) for s, e in filtered]
+
+                # Make sure the start and end are not the same
+                filtered = [(s, e) for s, e in filtered if (e - s).total_seconds() > 0]
+                if not filtered:
+                    continue
+
+                # split across days: book at most what's available
+                max_chunk = max((e - s).total_seconds() / 3600 for s, e in filtered)
+                chunk_to_book = min(remaining_time, max_chunk)
+
+                try:
+                    s_fit, e_fit = find_slot_fit(
+                        filtered,
+                        duration_hours=chunk_to_book,
+                        backward_planning=False
+                    )
+                except ValueError:
+                    continue
+
+                options.append((m, s_fit, e_fit))
+
+            if not options:
+                # bump to next day
+                start_datetime += timedelta(days=1)
+
+                # track how many days we’ve tried without booking anything
+                days_without_schedule += 1
+                if days_without_schedule > MAX_LOOKAHEAD_DAYS:
+                    raise RuntimeError(
+                        f"No availability found in the next {MAX_LOOKAHEAD_DAYS} days; aborting scheduling."
+                    )
+
+                continue
+
+            # choose the earliest fit across machines
+            scheduled_machine, s_fit, e_fit = min(options, key=lambda x: x[1])
+
+            # persist *this* piece
+            ProductionOrderSchedule.objects.create(
+                operation=operation,
+                machine=scheduled_machine,
+                start_datetime=s_fit,
+                end_datetime=e_fit,
+                schedule_state="scheduled",
+            )
+
+            # record overall start on first piece
             if i == 0:
-                filtered = [(s, e) for s, e in intersection_slots if e > start_datetime]
+                full_start = s_fit
 
-            # Keep only the (start,end) intersection times when the end > start_datetime +
-            # Drop any booked slots (start < slot_end and end > slot_start)
-            else:
-                filtered = [
-                    (s, e)
-                    for s, e in intersection_slots
-                    if e > start_datetime and not (s < slot_end and e > slot_start)
-                ]
-
-            # If start is less than original_start_datetime, then force it to original_start_datetime
-            filtered = [(max(s, start_datetime), e) for s, e in filtered]
-
-            # Make sure the start and end are not the same
-            filtered = [(s, e) for s, e in filtered if (e - s).total_seconds() > 0]
-
-            intersection_slots = filtered
-
-            # Find and book the next chunk
-            slot_start, slot_end = find_slot_fit(intersection_slots, duration_hours=remaining_time, backward_planning=False)
-            remaining_time -= (slot_end - slot_start).total_seconds() / 3600
-            print("Slot Start:", slot_start, "Slot End:", slot_end, "Remaining:", remaining_time)
-
-            # Advance your cursor
+            # advance
+            remaining_time -= (e_fit - s_fit).total_seconds() / 3600
+            slot_start, slot_end = s_fit, e_fit
             start_datetime = slot_end
-
-            # Record the true production start
-            if i == 0:
-                full_start = slot_start
             i += 1
 
+    if full_start is None:
+        raise ValidationError("Unable to schedule operation on any machine")
 
-    # Outside Loop
-    if direction=="backward":
-        full_start = production_start
-        full_end = full_end
-    else:
-        full_start = full_start
-        full_end = slot_end
-
-    ProductionOrderSchedule.objects.create(
-            operation=operation,
-            start_datetime=full_start,
-            end_datetime=full_end,
-            schedule_state="scheduled"
-        )
-
-    return None
+    full_end = slot_end
+    return full_start, full_end
 
 def get_available_slots(resource, date):
     """

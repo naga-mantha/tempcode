@@ -3,8 +3,8 @@ from apps.common.models.calendar_days import CalendarDay
 from apps.common.models.shift_templates import ShiftTemplate
 from apps.common.models.calendar_shifts import CalendarShift
 from apps.common.models.items import Item
-from apps.common.models.tasks import Task
 from apps.common.models.machines import Machine
+from apps.common.models.tasks import Task
 from apps.common.models.work_centers import WorkCenter
 from apps.common.models.labors import Labor
 from apps.common.models.machine_down_time import MachineDowntime
