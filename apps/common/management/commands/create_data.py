@@ -17,8 +17,8 @@ class Command(BaseCommand):
         call_command('create_items')
         call_command('create_tasks')
         call_command('create_machines')
-        call_command('create_purchase_orders')
-        call_command('create_purchase_order_lines')
+        # call_command('create_purchase_orders')
+        # call_command('create_purchase_order_lines')
         call_command('create_production_orders')
         call_command('create_production_order_operations')
 

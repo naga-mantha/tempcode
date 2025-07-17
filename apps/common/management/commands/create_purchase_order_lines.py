@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from apps.common.models import *
 from datetime import date, datetime
+from django.utils.timezone import make_aware
 
 class Command(BaseCommand):
     help = 'Create Purchase Order Lines'
@@ -8,8 +9,8 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         objects = []
 
-        data = [{"order": "2000", "line": 10, "sequence": 0, "final_receive_date": datetime(2025, 7, 6, 1, 0, 0) },
-                {"order": "2001", "line": 10, "sequence": 0, "final_receive_date": datetime(2025, 7, 10, 0, 0, 0) },
+        data = [{"order": "2000", "line": 10, "sequence": 0, "final_receive_date": make_aware(datetime(2025, 7, 6, 1, 0, 0)) },
+                {"order": "2001", "line": 10, "sequence": 0, "final_receive_date": make_aware(datetime(2025, 7, 10, 0, 0, 0)) },
                 ]
 
         for i in range(0, len(data)):

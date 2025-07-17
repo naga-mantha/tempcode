@@ -5,8 +5,8 @@ from apps.common.models import Labor
 
 class LaborVacation(WorkflowModel):
     labor = models.ForeignKey(Labor, on_delete=models.PROTECT, related_name="vacations")
-    start_date = models.DateField()
-    end_date = models.DateField()
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
     workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, blank=True, null=True)
     state = models.ForeignKey(State, on_delete=models.PROTECT, blank=True, null=True)
 

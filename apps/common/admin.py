@@ -38,8 +38,8 @@ class WorkCenterAdmin(admin.ModelAdmin):
 
 @admin.register(Labor)
 class LaborAdmin(admin.ModelAdmin):
-    list_display = ("name", "workcenter", "calendar", )
-    search_fields = ("name",)
+    list_display = ("code", "name", "workcenter", "calendar", )
+    search_fields = ("code", "name",)
 
 @admin.register(Calendar)
 class CalendarAdmin(admin.ModelAdmin):
@@ -75,3 +75,8 @@ class PurchaseOrderLineAdmin(admin.ModelAdmin):
 class MachineDowntimeAdmin(admin.ModelAdmin):
     list_display = ("machine", "start_dt", "end_dt",)
     search_fields = ("start_dt", "end_dt",)
+
+@admin.register(LaborVacation)
+class LaborVacationAdmin(admin.ModelAdmin):
+    list_display = ("labor", "start_date", "end_date",)
+    search_fields = ("start_date", "end_date",)

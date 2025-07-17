@@ -1,40 +1,64 @@
 from django.core.management.base import BaseCommand
 from apps.common.models import *
+from apps.common.functions import files
+import os
+import environ
+import re
+import logging
 from datetime import date, datetime
 
+env = environ.Env()
+environ.Env.read_env()
+status = env('STATUS')
+error_logger = logging.getLogger(name="app_errors")
+debug_logger = logging.getLogger(__name__)
+
 class Command(BaseCommand):
-    help = 'Create Production Order Operations'
+  help = 'Create Production Order Operations'
 
-    def handle(self, *args, **kwargs):
-        objects = []
+  def handle(self, *args, **kwargs):
+    try:
+      if status == "DEV":
+        file = "C:/Users/n.mantha/Desktop/datafiles/Work-Order-Operations-"
+      else:
+        file = "C:/inetpub/wwwroot/reports/Work-Order-Operations-"
 
-        data = [{"production_order": "1000", "operation": "10", "task": "001", "machine": "m_001", "workcenter": "610", "remaining_time": 12, "required_start": datetime(2025, 7, 1, 8, 0, 0), "required_end": datetime(2025, 7, 9, 10, 0, 0), "priority": 999, "op_po": None, "op_po_line": None, "op_po_seq": None},
-                {"production_order": "1000", "operation": "20", "task": "002", "machine": "m_001", "workcenter": "615", "remaining_time": 5, "required_start": datetime(2025, 7, 5, 8, 0, 0), "required_end": datetime(2025, 7, 10, 10, 0, 0), "priority": 999, "op_po": 2000, "op_po_line": 10, "op_po_seq": 0},
-                {"production_order": "1000", "operation": "30", "task": "003", "machine": "m_002", "workcenter": "610", "remaining_time": 6, "required_start": datetime(2025, 7, 10, 8, 0, 0), "required_end": datetime(2025, 7, 15, 10, 0, 0), "priority": 999, "op_po": None, "op_po_line": None, "op_po_seq": None},
-                # {"production_order": "1000", "operation": "40", "task": "004", "machine": "m_004", "workcenter": "610", "remaining_time": 5, "required_start": datetime(2025, 7, 15, 10, 0, 0), "required_end": datetime(2025, 7, 21, 10, 0, 0), "priority": 999, "op_po": None, "op_po_line": None, "op_po_seq": None},
-                # {"production_order": "1000", "operation": "50", "task": "005", "machine": "m_005", "workcenter": "610", "remaining_time": 1, "required_start": datetime(2025, 7, 22, 10, 0, 0), "required_end": datetime(2025, 7, 25, 10, 0, 0), "priority": 999, "op_po": None, "op_po_line": None, "op_po_seq": None},
-                ]
+      file_copy = files.read_text_contents(file, ["Date", "MAI", "ELIMETAL", "Prdn", " ", "-"])
+      objects = []
 
-        for i in range(0, len(data)):
+      # Open the copied file and read the contents
+      with open(file_copy, "r") as f:
+        lines = f.readlines()
+
+      for line in lines:
+        line_check = files.check_file_line(line)
+
+        if not line_check:
+          error_logger.error("Line Error ##: %s" % (line))
+
+        else:
+          currentline = line.split("|")
+
+          if currentline[0].strip() != "":
             obj = ProductionOrderOperation()
-
-            obj.production_order = ProductionOrder.objects.get(production_order=data[i]["production_order"])
-            obj.operation = data[i]["operation"]
-            obj.task = Task.objects.get(code=data[i]["task"])
-            obj.machine = Machine.objects.get(code=data[i]["machine"])
-            obj.workcenter = WorkCenter.objects.get(code=data[i]["workcenter"])
-            obj.remaining_time = data[i]["remaining_time"]
-            obj.required_start = data[i]["required_start"]
-            obj.required_end = data[i]["required_end"]
-            obj.priority = data[i]["priority"]
-            obj.op_po = None
-
-            if data[i]["op_po"]:
-                obj.op_po = PurchaseOrderLine.objects.get(order=PurchaseOrder.objects.get(order=data[i]["op_po"]), line=data[i]["op_po_line"], sequence=data[i]["op_po_seq"])
+            obj.production_order = None if currentline[0].strip()=="" else ProductionOrder.objects.get_or_create(production_order=currentline[0].strip())[0]
+            obj.operation = currentline[7].strip()
+            obj.task = None if currentline[10].strip()=="" else Task.objects.get_or_create(code=currentline[10].strip())[0]
+            obj.workcenter = None if currentline[12].strip()=="" else WorkCenter.objects.get_or_create(code=currentline[12].strip())[0]
+            obj.machine = None if currentline[14].strip()=="" else Machine.objects.get_or_create(code=currentline[14].strip())[0]
+            obj.remaining_time = 1 if currentline[19].strip()==0 else currentline[19].strip()
+            obj.required_start = None if currentline[15].strip() == "" else datetime.strptime(currentline[15].strip(), '%m/%d/%Y')
 
             objects.append(obj)
 
-        ProductionOrderOperation.objects.bulk_create(objects,
-                                      update_conflicts=True,
-                                      unique_fields=['production_order', 'operation'],
-                                      update_fields=["task", "machine", "workcenter", "remaining_time", "required_start", "required_end", "priority", "op_po" ])
+      ProductionOrderOperation.objects.bulk_create(objects,
+                                update_conflicts=True,
+                                unique_fields=['production_order', 'operation'],
+                                update_fields=["task", "workcenter", "machine", "remaining_time", "required_start"])
+
+      os.remove(file_copy)
+
+      debug_logger.info("Updated Production Order Operations")
+
+    except Exception as e:
+      error_logger.error(e, exc_info=True)
