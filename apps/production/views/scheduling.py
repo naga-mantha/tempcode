@@ -138,8 +138,9 @@ def try_schedule_operation(operation, direction="backward"):
 
 def get_available_slots(resource, date):
     """
-    Returns a list of available (start, end) datetime slots for the given resource (Labor or Machine)
-    on a specific date using the resource's calendar, shift templates, and labor vacations.
+    Returns a list of available (start, end) datetime slots for the given resource
+    (Labor or Machine) on a specific date, honoring the resource’s calendar,
+    its assigned shifts, and any vacations or downtimes.
     """
 
     # 1) Respect the calendar (holidays/weekends)
@@ -151,7 +152,7 @@ def get_available_slots(resource, date):
             is_working_day=True
         )
     except CalendarDay.DoesNotExist:
-        return []  # Non-working day
+        return []  # Non-working day for this calendar
 
     # 2) If resource is a Labor, check for vacations
     if isinstance(resource, Labor):
@@ -159,15 +160,24 @@ def get_available_slots(resource, date):
             if vac.covers(date):
                 return []  # Labor is on vacation
 
-    # 3) Get all assigned shifts for the day
-    calendar_shifts = (
-        CalendarShift.objects
-            .filter(calendar_day=cal_day)
-            .select_related("shift_template")
-    )
+    # 3) Get only the shifts this resource can actually work
+    if isinstance(resource, Labor):
+        # assumes you’ve added a M2M: CalendarShift.labours → Labor
+        calendar_shifts = (
+            CalendarShift.objects
+                .filter(calendar_day=cal_day, labours=resource)
+                .select_related("shift_template")
+        )
+    else:
+        # machines see every shift on their calendar
+        calendar_shifts = (
+            CalendarShift.objects
+                .filter(calendar_day=cal_day)
+                .select_related("shift_template")
+        )
 
     if not calendar_shifts.exists():
-        return []  # No shifts → no work
+        return []  # No shifts → no work for this resource
 
     # 4) Build working windows for each shift
     working_windows = []
@@ -176,9 +186,11 @@ def get_available_slots(resource, date):
         end_time   = shift.shift_template.end_time
 
         start_dt = make_aware(datetime.combine(date, start_time))
+        # handle overnight shifts
         if end_time < start_time:
-            # Shift crosses midnight
-            end_dt = make_aware(datetime.combine(date + timedelta(days=1), end_time))
+            end_dt = make_aware(
+                datetime.combine(date + timedelta(days=1), end_time)
+            )
         else:
             end_dt = make_aware(datetime.combine(date, end_time))
 
@@ -187,11 +199,9 @@ def get_available_slots(resource, date):
     window_start = min(s for s, _ in working_windows)
     window_end   = max(e for _, e in working_windows)
 
-    # 5) Prepare scheduling query filters
-    time_q = Q(
-        start_datetime__lt=window_end,
-        end_datetime__gt=window_start,
-    )
+    # 5) Find any existing booked intervals in that window
+    time_q = Q(start_datetime__lt=window_end,
+               end_datetime__gt=window_start)
     if isinstance(resource, Machine):
         sched_q = Q(machine=resource)
     else:
@@ -203,10 +213,10 @@ def get_available_slots(resource, date):
             .order_by("start_datetime")
     )
 
-    # 6) Blocked intervals: existing schedules
-    blocked = [(op.start_datetime, op.end_datetime) for op in scheduled_ops]
+    blocked = [(op.start_datetime, op.end_datetime)
+               for op in scheduled_ops]
 
-    # 7) Include machine downtimes
+    # 6) Add machine downtimes
     if isinstance(resource, Machine):
         dt_windows = MachineDowntime.objects.filter(
             machine=resource,
@@ -215,7 +225,7 @@ def get_available_slots(resource, date):
         ).order_by("start_dt")
         blocked += [(dt.start_dt, dt.end_dt) for dt in dt_windows]
 
-    # 8) Subtract blocked slots from each working window
+    # 7) Subtract blocked intervals from each shift window
     free_slots = []
     for win_start, win_end in working_windows:
         current = win_start
@@ -229,6 +239,7 @@ def get_available_slots(resource, date):
             free_slots.append((current, win_end))
 
     return free_slots
+
 
 def intersect_slots(slots_a, slots_b):
     """
