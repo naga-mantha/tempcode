@@ -1,8 +1,11 @@
 from django.urls import path
-from apps.workflow.views.autocomplete import ContentTypeAutocomplete, FieldNameAutocomplete
+from apps.workflow.views.transition import perform_transition
 
 app_name = 'workflow'
 urlpatterns = [
-    path('autocomplete/contenttype/', ContentTypeAutocomplete.as_view(), name='contenttype-autocomplete'),
-    path('autocomplete/field-name/', FieldNameAutocomplete.as_view(), name='fieldname-autocomplete'),
+    path(
+        "transition/<str:app_label>/<str:model_name>/<int:object_id>/<str:transition_name>/",
+        perform_transition,
+        name="workflow_perform_transition"
+    ),
 ]

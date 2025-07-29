@@ -1,0 +1,19 @@
+{% if hidden %}
+  <!-- Do not render -->
+{% elif readonly %}
+  <div class="mb-3">
+    <label class="form-label">{{ field.label }}</label>
+    <div class="form-control-plaintext">{{ field.value }}</div>
+  </div>
+{% else %}
+  <div class="mb-3">
+    <label class="form-label">{{ field.label }}</label>
+    {{ field }}
+    {% if field.help_text %}
+      <div class="form-text">{{ field.help_text }}</div>
+    {% endif %}
+    {% for error in field.errors %}
+      <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+  </div>
+{% endif %}

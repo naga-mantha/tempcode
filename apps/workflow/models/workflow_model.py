@@ -1,3 +1,7 @@
+# NOT NEEDED ANYMORE
+
+
+
 from django.db import models
 from django.contrib.contenttypes.models import ContentType
 from apps.workflow.models import Workflow, State, Transition, WorkflowLog

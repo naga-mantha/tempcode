@@ -1,0 +1,11 @@
+django
+django-crispy-forms
+django-comments-xtd
+django-contrib-comments
+django-environ
+django-extensions
+pandas
+django-pandas
+python-dateutil
+numpy
+plotly

@@ -1,0 +1,5 @@
+{% for block in rendered_blocks %}
+  <div class="{% if block.layout == 'row' %}mb-4{% else %}col{% endif %}">
+    {% include block.template with form=block.context.form save_url=block.context.save_url data=block.context.data %}
+  </div>
+{% endfor %}

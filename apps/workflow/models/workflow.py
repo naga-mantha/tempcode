@@ -19,3 +19,9 @@ class Workflow(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_model_class(self):
+        return self.content_type.model_class() if self.content_type else None
+
+    def has_state(self, name):
+        return self.states.filter(name=name).exists()

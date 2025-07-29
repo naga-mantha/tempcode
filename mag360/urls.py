@@ -27,7 +27,8 @@ urlpatterns = [
     path('', include('apps.common.urls')),
     path('', include('apps.frms.urls')),
     path('', include('apps.production.urls')),
-    path('', include('apps.workflow.urls')),
+    path('workflow/', include('apps.workflow.urls')),
+    path('', include('apps.blocks.urls')),
     path('layout/', include('apps.layout.urls')),
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

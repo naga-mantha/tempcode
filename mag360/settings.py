@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'apps.production',
     'apps.workflow',
     'apps.layout',
+    'apps.blocks',
+    'apps.permissions',
     'django_extensions',
     'django.contrib.admin',
     'django.contrib.auth',

@@ -1,0 +1,5 @@
+<a href="{{ href|default:'#' }}"
+   class="btn btn-{{ style|default:'primary' }} {{ extra_classes|default:'' }}">
+   {% if icon %}<i class="bi bi-{{ icon }}"></i>{% endif %}
+   {{ label }}
+</a>

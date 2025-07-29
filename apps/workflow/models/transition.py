@@ -16,3 +16,6 @@ class Transition(models.Model):
 
     def __str__(self):
         return f"{self.workflow.name}: {self.source_state.name} → {self.dest_state.name} ({self.name})"
+
+    def is_allowed_for_user(self, user):
+        return user.groups.filter(id__in=self.allowed_groups.values_list("id", flat=True)).exists()

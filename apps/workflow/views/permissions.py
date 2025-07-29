@@ -1,3 +1,7 @@
+# NOT NEEDED ANYMORE
+
+
+
 def can_read_field(user, instance, field_name):
     """
     Returns True if `user` may view (read) this single field.
@@ -55,6 +59,23 @@ def get_allowed_fields(user, model, action):
             allowed.append(field.name)
 
     return allowed
+
+def get_field_permission(user, model, field_name):
+    """
+    Returns 'write', 'read', or 'hide' for a given user/model/field.
+    Extend this to support workflow status, roles, etc.
+    """
+    if user.is_superuser:
+        return "write"
+
+    # Placeholder rules — update to real logic
+    if model.__name__ == "Labor":
+        if field_name == "rate":
+            return "hide"
+        elif field_name == "shift":
+            return "read"
+
+    return "write"
 
 class FieldLevelFormMixin:
     """
