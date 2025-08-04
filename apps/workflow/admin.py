@@ -15,7 +15,3 @@ class StateAdmin(admin.ModelAdmin):
 class TransitionAdmin(admin.ModelAdmin):
     list_display = ("name", "workflow", "source_state", "dest_state", )
     search_fields = ("name",)
-
-@admin.register(WorkflowLog)
-class WorkflowLogAdmin(admin.ModelAdmin):
-    list_display = ("timestamp", "user", "transition", "comment", "content_type", )

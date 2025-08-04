@@ -1,14 +1,12 @@
 from django.db import models
-from apps.workflow.models import WorkflowModel, Workflow, State
+from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 from apps.common.models import Labor
 
-class LaborVacation(WorkflowModel):
+class LaborVacation(WorkflowModelMixin):
     labor = models.ForeignKey(Labor, on_delete=models.PROTECT, related_name="vacations")
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
-    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, blank=True, null=True)
-    state = models.ForeignKey(State, on_delete=models.PROTECT, blank=True, null=True)
 
     objects = models.Manager()
     df_objects = DataFrameManager()

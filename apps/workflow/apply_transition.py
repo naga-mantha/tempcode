@@ -1,5 +1,5 @@
 from django.core.exceptions import PermissionDenied
-from .models import Transition, TransitionLog
+from .models import Transition, TransitionLog, Workflow
 from django.contrib.contenttypes.models import ContentType
 
 def get_allowed_transitions(obj, user):
@@ -8,6 +8,9 @@ def get_allowed_transitions(obj, user):
 
     if not state or not workflow:
         return []
+
+    if workflow.status == Workflow.INACTIVE:
+        return Transition.objects.none()
 
     transitions = Transition.objects.filter(
         workflow=workflow,
@@ -21,6 +24,10 @@ def get_allowed_transitions(obj, user):
 
 def apply_transition(obj, transition_name, user, *, comment="", save=True):
     allowed_transitions = get_allowed_transitions(obj, user)
+    workflow = getattr(obj, "workflow", None)
+
+    if not workflow or workflow.status == Workflow.INACTIVE:
+        raise PermissionDenied("This workflow is inactive and cannot be modified.")
 
     transition = next((t for t in allowed_transitions if t.name == transition_name), None)
     if not transition:

@@ -1,48 +1,108 @@
-def _get_perm_codename(model, field_name, mode):
-    """
-    Returns: app_label.view_model_field or app_label.change_model_field
-    """
+# apps/permissions/checks.py
+
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import QuerySet
+
+# --------------------
+# MODEL-LEVEL CHECKS
+# --------------------
+
+def can_view_model(user, model):
+    if user.is_superuser or user.is_staff:
+        return True
     model_name = model._meta.model_name
     app_label = model._meta.app_label
-    return f"{app_label}.{mode}_{model_name}_{field_name}"
+    return user.has_perm(f"{app_label}.view_{model_name}")
 
-# -------------------------------------------------------- FIELD LEVEL PERMISSIONS
-def can_read_field(user, model, field_name, instance=None):
-    """
-    Checks if the user can read a specific field.
-    Requires both:
-    - model-level 'view' permission
-    - field-level 'view' permission
-    """
+def can_add_model(user, model):
     if user.is_superuser or user.is_staff:
         return True
+    model_name = model._meta.model_name
+    app_label = model._meta.app_label
+    return user.has_perm(f"{app_label}.add_{model_name}")
 
-    # Step 1: check model-level view permission
+def can_change_model(user, model):
+    if user.is_superuser or user.is_staff:
+        return True
+    model_name = model._meta.model_name
+    app_label = model._meta.app_label
+    return user.has_perm(f"{app_label}.change_{model_name}")
+
+def can_delete_model(user, model):
+    if user.is_superuser or user.is_staff:
+        return True
+    model_name = model._meta.model_name
+    app_label = model._meta.app_label
+    return user.has_perm(f"{app_label}.delete_{model_name}")
+
+# ------------------------
+# INSTANCE-LEVEL CHECKS
+# ------------------------
+
+def can_view_instance(user, instance):
+    model = type(instance)
+    if user.is_superuser or user.is_staff:
+        return True
     if not can_view_model(user, model):
         return False
+    if hasattr(instance, "can_user_view"):
+        return instance.can_user_view(user)
+    return True
 
-    # Step 2: check field-level view permission
-    perm = _get_perm_codename(model, field_name, "view")
-    return user.has_perm(perm)
-
-
-def can_write_field(user, model, field_name, instance=None):
-    """
-    Checks if the user can write to a specific field.
-    Requires both:
-    - model-level 'change' permission
-    - field-level 'change' permission
-    """
+def can_change_instance(user, instance):
+    model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
-
-    # Step 1: check model-level change permission
     if not can_change_model(user, model):
         return False
+    if hasattr(instance, "can_user_change"):
+        return instance.can_user_change(user)
+    return True
 
-    # Step 2: check field-level change permission
-    perm = _get_perm_codename(model, field_name, "change")
-    return user.has_perm(perm)
+def can_delete_instance(user, instance):
+    model = type(instance)
+    if user.is_superuser or user.is_staff:
+        return True
+    if not can_delete_model(user, model):
+        return False
+    if hasattr(instance, "can_user_delete"):
+        return instance.can_user_delete(user)
+    return True
+
+# --------------------
+# FIELD-LEVEL CHECKS
+# --------------------
+
+def _get_perm_codename(model, field_name, action):
+    model_name = model._meta.model_name
+    app_label = model._meta.app_label
+    return f"{app_label}.{action}_{model_name}_{field_name}"
+
+def can_read_field(user, model, field_name, instance=None):
+    if user.is_superuser or user.is_staff:
+        return True
+    if not can_view_model(user, model):
+        return False
+    if instance and not can_view_instance(user, instance):
+        return False
+    return user.has_perm(_get_perm_codename(model, field_name, "view"))
+
+def can_write_field(user, model, field_name, instance=None):
+    if user.is_superuser or user.is_staff:
+        return True
+    if not can_change_model(user, model):
+        return False
+    if instance and not can_change_instance(user, instance):
+        return False
+    return user.has_perm(_get_perm_codename(model, field_name, "change"))
+
+def get_readable_fields(user, model, instance=None):
+    return [
+        field.name
+        for field in model._meta.fields
+        if can_read_field(user, model, field.name, instance)
+    ]
 
 def get_editable_fields(user, model, instance=None):
     return [
@@ -51,81 +111,36 @@ def get_editable_fields(user, model, instance=None):
         if can_write_field(user, model, field.name, instance)
     ]
 
-def get_readable_fields(user, model, instance=None):
-    return [
-        field.name
-        for field in model._meta.fields
-        if can_read_field(user, model, field.name, instance)
-    ]
-# -------------------------------------------------------- MODEL LEVEL PERMISSIONS
-def can_view_model(user, model):
+# ----------------------------------------
+# INSTANCE-LEVEL QUERYSET FILTER UTILITIES
+# ----------------------------------------
+
+def filter_viewable_queryset(user, queryset: QuerySet):
     """
-    Wrapper for checking if user can view this model at all.
+    Returns only the objects the user is allowed to view.
     """
     if user.is_superuser or user.is_staff:
-        return True
+        return queryset
+    return queryset.filter(
+        pk__in=[obj.pk for obj in queryset if can_view_instance(user, obj)]
+    )
 
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm = f"{app_label}.view_{model_name}"
-    return user.has_perm(perm)
-
-
-def can_add_model(user, model):
+def filter_editable_queryset(user, queryset: QuerySet):
     """
-    Checks if user can add new records to the model.
+    Returns only the objects the user is allowed to edit.
     """
     if user.is_superuser or user.is_staff:
-        return True
+        return queryset
+    return queryset.filter(
+        pk__in=[obj.pk for obj in queryset if can_change_instance(user, obj)]
+    )
 
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm = f"{app_label}.add_{model_name}"
-    return user.has_perm(perm)
-
-
-def can_change_model(user, model):
+def filter_deletable_queryset(user, queryset: QuerySet):
     """
-    Checks if user can generally change records for this model.
+    Returns only the objects the user is allowed to delete.
     """
     if user.is_superuser or user.is_staff:
-        return True
-
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm = f"{app_label}.change_{model_name}"
-    return user.has_perm(perm)
-
-
-def can_delete_model(user, model):
-    """
-    Checks if user can delete records from this model.
-    """
-    if user.is_superuser or user.is_staff:
-        return True
-
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm = f"{app_label}.delete_{model_name}"
-    return user.has_perm(perm)
-
-# -------------------------------------------------------- INSTANCE LEVEL PERMISSIONS
-def can_delete_instance(user, instance):
-    """
-    Checks if user is allowed to delete a specific instance.
-    Extend this with custom rules such as:
-    - Only the creator can delete
-    - Cannot delete if instance is 'locked' or 'approved'
-    """
-    if user.is_superuser or user.is_staff:
-        return True
-
-    model = type(instance)
-    if not can_delete_model(user, model):
-        return False
-
-    # TODO: Add custom logic, e.g.
-    # if hasattr(instance, "created_by") and instance.created_by != user:
-    #     return False
-
-    return True
+        return queryset
+    return queryset.filter(
+        pk__in=[obj.pk for obj in queryset if can_delete_instance(user, obj)]
+    )

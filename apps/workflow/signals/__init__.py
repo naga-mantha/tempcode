@@ -1,1 +1,1 @@
-from apps.workflow.signals.field_permissions import *
+from apps.workflow.signals.generate_workflow_permissions import *

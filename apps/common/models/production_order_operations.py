@@ -1,12 +1,12 @@
 from django.db import models
 from apps.common.models import ProductionOrder, Task, Machine, WorkCenter, PurchaseOrderLine
-from apps.workflow.models import WorkflowModel, Workflow, State
+from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 
 class ProductionOrderOperationQuerySet(models.QuerySet):
     pass
 
-class ProductionOrderOperation(WorkflowModel):
+class ProductionOrderOperation(WorkflowModelMixin):
     production_order = models.ForeignKey(ProductionOrder, on_delete=models.PROTECT, blank=True, null=True, related_name="operations")
     operation = models.PositiveIntegerField(blank=True, null=True)
     task = models.ForeignKey(Task, on_delete=models.PROTECT, blank=True, null=True)
@@ -21,8 +21,6 @@ class ProductionOrderOperation(WorkflowModel):
     required_end = models.DateTimeField(blank=True, null=True) # Used in MPS (Can read from INFOR)
     priority = models.PositiveIntegerField(default=999, help_text="Lower numbers = higher priority. 1 = top priority")
     op_po = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, blank=True, null=True)
-    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, blank=True, null=True)
-    state = models.ForeignKey(State, on_delete=models.PROTECT, blank=True, null=True)
 
     objects = models.Manager()
     df_objects = DataFrameManager()
