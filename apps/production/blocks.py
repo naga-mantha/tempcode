@@ -9,17 +9,33 @@ class ProductionOrderTableBlock(TableBlock):
     def get_model(self):
         return ProductionOrder
 
-    def get_queryset(self, user, filters):
-        qs = ProductionOrder.objects.all()
+    def get_queryset(self, user, filters, column_config):
+        selected_fields = column_config.fields if column_config else []
+
+        # Extract related fields for select_related
+        related_fields = set()
+        for f in selected_fields:
+            if "__" in f:
+                related_fields.add(f.split("__")[0])
+
+        qs = ProductionOrder.objects.select_related(*related_fields)
+
+        # Apply filters to the queryset (still as model instances)
         return apply_filter_registry("production_order_table", qs, filters, user)
 
-    def get_field_labels(self, user):
-        return {
-            "production_order": "Order #",
-            "status": "Status",
-            "quantity": "Quantity",
-            "due_date": "Due Date",
-        }
+
+    def get_column_defs(self, user, column_config=None):
+        from apps.blocks.helpers.column_config import get_user_column_config
+        from django.contrib.admin.utils import label_for_field
+
+        fields = column_config.fields if column_config else get_user_column_config(user, self.block)
+        model = self.get_model()
+
+        defs = []
+        for field in fields:
+            label = label_for_field(field, model, return_attr=False)
+            defs.append({"field": field, "title": label})
+        return defs
 
     def get_tabulator_options(self, user):
         return {

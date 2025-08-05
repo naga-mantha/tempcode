@@ -11,7 +11,7 @@ from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from django.http import Http404
 from apps.blocks.registry import BLOCK_REGISTRY
-
+from apps.blocks.helpers.field_rules import get_flat_fields
 @csrf_exempt
 @require_POST
 @login_required
@@ -47,6 +47,13 @@ def column_config_view(request, block_name):
     user = request.user
     configs = BlockColumnConfig.objects.filter(block=block, user=user)
 
+    block_instance = get_block(block_name)
+    if not block_instance:
+        raise Http404(f"Block '{block_name}' not found.")
+    model = block_instance.get_model()
+
+    fields_metadata = get_flat_fields(model, user)
+
     if request.method == "POST":
         action = request.POST.get("action")
         config_id = request.POST.get("config_id")
@@ -56,9 +63,19 @@ def column_config_view(request, block_name):
         if action == "create":
             fields = request.POST.get("fields", "")
             field_list = [f.strip() for f in fields.split(",") if f.strip()]
-            BlockColumnConfig.objects.create(block=block, user=user, name=name, fields=field_list)
+
+            existing = BlockColumnConfig.objects.filter(block=block, user=user, name=name).first()
+            if existing:
+                existing.fields = field_list
+                existing.save()
+            else:
+                BlockColumnConfig.objects.create(
+                    block=block, user=user, name=name, fields=field_list
+                )
+
         elif action == "delete":
             BlockColumnConfig.objects.get(id=config_id, user=user, block=block).delete()
+
         elif action == "set_default":
             config = BlockColumnConfig.objects.get(id=config_id, user=user, block=block)
             config.is_default = True
@@ -68,9 +85,9 @@ def column_config_view(request, block_name):
 
     return render(request, "blocks/table/column_config_view.html", {
         "block": block,
-        "configs": configs
+        "configs": configs,
+        "fields_metadata": fields_metadata,
     })
-
 
 @login_required
 def filter_config_view(request, block_name):

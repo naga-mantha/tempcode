@@ -10,6 +10,14 @@ class BlockColumnConfig(models.Model):
     fields = models.JSONField(default=list)
     is_default = models.BooleanField(default=False)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["block", "user", "name"],
+                name="unique_column_config_per_user_block"
+            )
+        ]
+
     def save(self, *args, **kwargs):
         if not self.pk:
             if not BlockColumnConfig.objects.filter(block=self.block, user=self.user).exists():

@@ -2,15 +2,54 @@
 {% block content %}
 <h2>Manage Column Configurations for {{ block.name }}</h2>
 
-<form method="post">
+<!-- Dropdown to load/edit existing configs -->
+<div class="mb-3">
+  <label for="config-select">Select View:</label>
+  <select id="config-select" class="form-select d-inline-block w-auto">
+    <option value="">-- New Configuration --</option>
+    {% for config in configs %}
+      <option value="{{ config.id }}" data-fields="{{ config.fields|join:',' }}">{{ config.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<!-- Field selection with drag/drop -->
+<form id="config-form" method="post">
   {% csrf_token %}
-  <input type="text" name="name" placeholder="New View Name" required>
   <input type="hidden" name="action" value="create">
-  <input type="text" name="fields" placeholder="Comma separated fields (e.g. name,price,status)" required>
-  <button type="submit">Create View</button>
+  <input type="hidden" name="fields" id="fields-input">
+
+  <div class="mb-3">
+    <label for="view-name">View Name:</label>
+    <input type="text" name="name" id="view-name" required class="form-control d-inline-block w-auto">
+    <button type="submit" class="btn btn-primary">Save View</button>
+  </div>
+
+  <ul id="field-list" class="list-group">
+    {% for field in fields_metadata %}
+    <li class="list-group-item d-flex align-items-center" data-name="{{ field.name }}">
+      <input type="checkbox"
+             class="form-check-input me-2"
+             {% if field.mandatory %}checked disabled{% endif %}
+             name="field_check"
+             value="{{ field.name }}">
+      <span class="me-2">
+  {% if "__" in field.name %}
+    <small class="text-muted">{{ field.name }}</small><br>
+  {% endif %}
+  {{ field.label }}
+</span>
+      {% if field.mandatory %}
+        <span class="badge bg-warning text-dark ms-auto">Mandatory</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
 </form>
 
-<table class="table mt-4">
+<!-- Existing configs table -->
+<h3 class="mt-5">Saved Views</h3>
+<table class="table mt-2">
   <thead>
     <tr>
       <th>Name</th>
@@ -30,14 +69,14 @@
           {% csrf_token %}
           <input type="hidden" name="action" value="set_default">
           <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit">Set Default</button>
+          <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
         </form>
         {% if configs|length > 1 %}
         <form method="post" style="display:inline-block">
           {% csrf_token %}
           <input type="hidden" name="action" value="delete">
           <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+          <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
         </form>
         {% endif %}
       </td>
@@ -45,4 +84,45 @@
     {% endfor %}
   </tbody>
 </table>
+
+<!-- Sortable.js (drag-drop support) -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+  const sortable = Sortable.create(document.getElementById("field-list"), {
+    animation: 150
+  });
+
+  const configSelect = document.getElementById("config-select");
+  const checkboxes = document.querySelectorAll("#field-list input[type=checkbox]");
+  const viewNameInput = document.getElementById("view-name");
+
+  configSelect?.addEventListener("change", function () {
+    const selectedOption = this.options[this.selectedIndex];
+    const viewName = selectedOption.textContent;
+    const selectedFields = selectedOption.dataset.fields?.split(",") || [];
+
+    viewNameInput.value = viewName === "-- New Configuration --" ? "" : viewName;
+
+    checkboxes.forEach(chk => {
+      if (chk.disabled) return;  // skip mandatory
+      chk.checked = selectedFields.includes(chk.value.trim());
+    });
+
+    // Sort field list based on the selectedFields order
+    const list = document.getElementById("field-list");
+    selectedFields.reverse().forEach(fieldName => {
+      const el = list.querySelector(`[data-name="${CSS.escape(fieldName.trim())}"]`);
+      if (el) list.prepend(el);
+    });
+  });
+
+  document.getElementById("config-form").addEventListener("submit", function (e) {
+    const fields = [];
+    document.querySelectorAll("#field-list input[type=checkbox]:checked").forEach(chk => {
+      fields.push(chk.value);
+    });
+    document.getElementById("fields-input").value = fields.join(",");
+  });
+</script>
 {% endblock %}

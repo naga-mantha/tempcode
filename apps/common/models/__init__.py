@@ -14,3 +14,4 @@ from apps.common.models.purchase_order_lines import PurchaseOrderLine
 from apps.common.models.production_orders import ProductionOrder
 from apps.common.models.production_order_operations import ProductionOrderOperation
 from apps.common.models.production_order_schedules import ProductionOrderSchedule
+from apps.common.models.field_display_rule import FieldDisplayRule

@@ -2,8 +2,6 @@ from django.shortcuts import render
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.helpers.column_config import get_user_column_config
-from apps.blocks.helpers.filter_config import get_user_filter_config
 from apps.blocks.helpers.permissions import get_readable_fields_state, get_editable_fields_state
 from apps.blocks.helpers.field_rules import get_field_display_rules
 
@@ -24,27 +22,12 @@ class TableBlock:
         return self._block
 
     def get_model(self):
-        """
-        Should be overridden in subclass to return the model class.
-        """
         raise NotImplementedError("You must override get_model()")
 
-    def get_queryset(self, user, filters):
-        """
-        Should be overridden in subclass to return filtered queryset.
-        """
-        raise NotImplementedError("You must override get_queryset(user, filters)")
-
-    def get_field_labels(self, user):
-        """
-        Optional override: return a dict of field → label.
-        """
-        return {}
+    def get_queryset(self, user, filters, active_column_config):
+        raise NotImplementedError("You must override get_queryset(user, filters, active_column_config)")
 
     def get_tabulator_options(self, user):
-        """
-        Optional override: return Tabulator options dict.
-        """
         return {}
 
     def get_column_config_queryset(self, user):
@@ -57,7 +40,6 @@ class TableBlock:
         model = self.get_model()
         user = request.user
 
-        # Load saved configs
         column_config_id = request.GET.get("column_config_id")
         filter_config_id = request.GET.get("filter_config_id")
 
@@ -85,9 +67,8 @@ class TableBlock:
         selected_fields = active_column_config.fields if active_column_config else []
         filter_values = active_filter_config.values if active_filter_config else {}
 
-        # Get filtered data
-        queryset = self.get_queryset(user, filter_values)
-        sample_obj = queryset.first()
+        queryset = self.get_queryset(user, filter_values, active_column_config)
+        sample_obj = queryset.first() if queryset else None
 
         if not sample_obj:
             return {
@@ -117,21 +98,40 @@ class TableBlock:
             if f in readable_fields and not display_rules.get(f, {}).get("is_excluded", False)
         ]
 
-        # Labels and field metadata
-        label_map = self.get_field_labels(user)
+        # Column definitions
+        column_defs = {col["field"]: col["title"] for col in self.get_column_defs(user, active_column_config)}
+
         fields = []
         for f in visible_fields:
             fields.append({
                 "name": f,
-                "label": label_map.get(f, f.replace("_", " ").title()),
+                "label": column_defs.get(f, f.replace("_", " ").title()),
                 "mandatory": display_rules.get(f, {}).get("is_mandatory", False),
                 "editable": f in editable_fields,
             })
 
+        # Since queryset is already .values(), rows are flat dicts
+        rows = []
+        for obj in queryset:
+            row = {}
+            for field in visible_fields:
+                parts = field.split("__")
+                value = obj
+                try:
+                    for part in parts:
+                        value = getattr(value, part)
+                except Exception:
+                    value = None
+                current = row
+                for part in parts[:-1]:
+                    current = current.setdefault(part, {})
+                current[parts[-1]] = value
+            rows.append(row)
+
         return {
             "block_name": self.block_name,
             "fields": fields,
-            "rows": list(queryset.values(*visible_fields)),
+            "rows": rows,
             "tabulator_options": self.get_tabulator_options(user),
             "column_configs": column_configs,
             "filter_configs": filter_configs,
