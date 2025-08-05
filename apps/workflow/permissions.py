@@ -7,27 +7,30 @@ def get_workflow_state(obj):
 # --------------------------------
 # FIELD-LEVEL CHECKS AT STATE
 # --------------------------------
-def _get_field_perm_codename(model, instance, field_name, action):
-    state = getattr(instance, "workflow_state", None)
+def _get_field_perm_codename(model, instance, field_name, state, action):
     model_name = model._meta.model_name
     app_label = model._meta.app_label
     return f"{app_label}.{action}_{model_name}_{field_name}_{state.name.lower().replace(' ', '_')}"
 
 def can_read_field_state(user, model, field_name, instance=None):
+    state = getattr(instance, "workflow_state", None)
+
     if not can_read_field(user, model, field_name, instance):
         return False
 
-    if instance:
-        return user.has_perm(_get_field_perm_codename(model, instance, field_name, "view"))
+    if instance and state:
+        return user.has_perm(_get_field_perm_codename(model, instance, field_name, state, "view"))
 
     return True
 
 def can_write_field_state(user, model, field_name, instance=None):
+    state = getattr(instance, "workflow_state", None)
+
     if not can_write_field(user, model, field_name, instance):
         return False
 
-    if instance:
-        return user.has_perm(_get_field_perm_codename(model, instance, field_name, "change"))
+    if instance and state:
+        return user.has_perm(_get_field_perm_codename(model, instance, field_name, state, "change"))
 
     return True
 

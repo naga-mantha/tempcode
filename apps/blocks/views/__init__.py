@@ -1,1 +1,0 @@
-from apps.blocks.views.labor_layout_view import *

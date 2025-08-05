@@ -7,8 +7,9 @@ class ProductionOrderQuerySet(models.QuerySet):
 
 class ProductionOrder(WorkflowModelMixin):
     production_order = models.CharField(max_length=10)
-    part_no = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
+    status = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.FloatField(blank=True, null=True)
+    due_date = models.DateField(blank=True, null=True)
 
     objects = models.Manager()
     df_objects = DataFrameManager()

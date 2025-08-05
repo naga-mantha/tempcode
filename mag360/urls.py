@@ -25,10 +25,8 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path(r'comments/', include('django_comments_xtd.urls')),
     path('', include('apps.common.urls')),
-    path('', include('apps.frms.urls')),
     path('', include('apps.production.urls')),
     path('workflow/', include('apps.workflow.urls')),
-    path('', include('apps.blocks.urls')),
-    path('layout/', include('apps.layout.urls')),
+    path('blocks/', include('apps.blocks.urls')),
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

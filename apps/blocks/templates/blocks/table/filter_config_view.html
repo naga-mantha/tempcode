@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Manage Filter Configurations for {{ block.name }}</h2>
+
+<form method="post">
+  {% csrf_token %}
+  <input type="text" name="name" placeholder="New Filter Name" required>
+  <input type="hidden" name="action" value="create">
+  <textarea name="values" placeholder='JSON filter (e.g. {"status": "active"})' required></textarea>
+
+  <button type="submit">Create Filter</button>
+</form>
+
+<table class="table mt-4">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Filters</th>
+      <th>Default</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for config in configs %}
+    <tr>
+      <td>{{ config.name }}</td>
+      <td><pre>{{ config.values|safe }}</pre></td>
+      <td>{% if config.is_default %}✔{% endif %}</td>
+      <td>
+        <form method="post" style="display:inline-block">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="set_default">
+          <input type="hidden" name="config_id" value="{{ config.id }}">
+          <button type="submit">Set Default</button>
+        </form>
+        {% if configs|length > 1 %}
+        <form method="post" style="display:inline-block">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="config_id" value="{{ config.id }}">
+          <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,9 +1,8 @@
-class Block:
-    id: str = ""
-    template_name: str = ""
+from django.db import models
 
-    def get_context(self, request) -> dict:
-        return {}
+class Block(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True)
 
-    def has_permission(self, request) -> bool:
-        return True
+    def __str__(self):
+        return self.name

@@ -1,0 +1,113 @@
+{% load static %}
+<link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
+<script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <label class="me-2">View:</label>
+    <select id="column-config-select" class="form-select d-inline-block w-auto me-2">
+      {% for cfg in column_configs %}
+        <option value="{{ cfg.id }}" {% if cfg.id == active_column_config_id %}selected{% endif %}>
+          {{ cfg.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>
+  </div>
+
+  <div>
+    <label class="me-2">Filter:</label>
+    <select id="filter-config-select" class="form-select d-inline-block w-auto me-2">
+      {% for cfg in filter_configs %}
+        <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>
+          {{ cfg.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-link p-0" href="{% url 'filter_config_view' block_name %}">Manage Filters</a>
+  </div>
+</div>
+
+<div id="table-{{ block_name }}"></div>
+
+<!-- Safe JSON script blocks -->
+  {{ rows|json_script:"table-data-json" }}
+  {{ fields|json_script:"field-defs-json" }}
+  {{ tabulator_options|json_script:"tabulator-options-json" }}
+
+<script>
+  const tableData = JSON.parse(document.getElementById("table-data-json").textContent);
+  const fieldDefs = JSON.parse(document.getElementById("field-defs-json").textContent);
+  const tabulatorOptions = JSON.parse(document.getElementById("tabulator-options-json").textContent);
+  const inlineEditUrl = "{% url 'inline_edit' block_name %}";
+
+  const columns = fieldDefs.map(f => {
+    const col = {
+      title: f.label,
+      field: f.name,
+    };
+
+    if (f.editable) {
+      col.editor = "input";
+    }
+
+    if (f.mandatory) {
+      col.cssClass = (col.cssClass || "") + " bg-warning-subtle";
+    }
+
+    return col;
+  });
+console.log("tableData", tableData);
+console.log("fieldDefs", fieldDefs);
+console.log("columns", columns);
+  const table = new Tabulator("#table-{{ block_name }}", {
+    data: tableData,
+    columns: columns,
+    placeholder: "No data available",
+    ...tabulatorOptions,
+    cellEdited: function(cell) {
+      const rowData = cell.getRow().getData();
+      const updatedValue = cell.getValue();
+      const field = cell.getField();
+      const id = rowData.id;
+
+      fetch(inlineEditUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token }}"
+        },
+        body: JSON.stringify({
+          id: id,
+          field: field,
+          value: updatedValue
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          alert("Error: " + data.error);
+          cell.restoreOldValue();
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        cell.restoreOldValue();
+      });
+    }
+  });
+
+  document.getElementById("column-config-select")?.addEventListener("change", function() {
+    location.href = `?column_config_id=${this.value}`;
+  });
+
+  document.getElementById("filter-config-select")?.addEventListener("change", function() {
+    location.href = `?filter_config_id=${this.value}`;
+  });
+</script>
+
+<style>
+  .bg-warning-subtle {
+    background-color: #fff8e1 !important;
+  }
+</style>

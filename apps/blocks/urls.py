@@ -1,6 +1,9 @@
 from django.urls import path
-from .views import *
+import apps.blocks.blocks.table.views as table_views
 
 urlpatterns = [
-    path("labor-page/", labor_page, name="labor_page"),
+    path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
+    path("table/<str:block_name>/edit/", table_views.inline_edit, name="inline_edit"),
+    path("table/<str:block_name>/columns/", table_views.column_config_view, name="column_config_view"),
+    path("table/<str:block_name>/filters/", table_views.filter_config_view, name="filter_config_view"),
 ]

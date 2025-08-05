@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Manage Column Configurations for {{ block.name }}</h2>
+
+<form method="post">
+  {% csrf_token %}
+  <input type="text" name="name" placeholder="New View Name" required>
+  <input type="hidden" name="action" value="create">
+  <input type="text" name="fields" placeholder="Comma separated fields (e.g. name,price,status)" required>
+  <button type="submit">Create View</button>
+</form>
+
+<table class="table mt-4">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Fields</th>
+      <th>Default</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for config in configs %}
+    <tr>
+      <td>{{ config.name }}</td>
+      <td>{{ config.fields|join:", " }}</td>
+      <td>{% if config.is_default %}✔{% endif %}</td>
+      <td>
+        <form method="post" style="display:inline-block">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="set_default">
+          <input type="hidden" name="config_id" value="{{ config.id }}">
+          <button type="submit">Set Default</button>
+        </form>
+        {% if configs|length > 1 %}
+        <form method="post" style="display:inline-block">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="config_id" value="{{ config.id }}">
+          <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
