@@ -4,6 +4,8 @@ from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.helpers.permissions import get_readable_fields_state, get_editable_fields_state
 from apps.blocks.helpers.field_rules import get_field_display_rules
+from django.db import models
+import json
 
 class TableBlock:
     template_name = "blocks/table/table_block.html"
@@ -70,21 +72,34 @@ class TableBlock:
         queryset = self.get_queryset(user, filter_values, active_column_config)
         sample_obj = queryset.first() if queryset else None
 
-        if not sample_obj:
-            return {
-                "block_name": self.block_name,
-                "fields": [],
-                "rows": [],
-                "tabulator_options": {},
-                "column_configs": column_configs,
-                "filter_configs": filter_configs,
-                "active_column_config_id": active_column_config.id if active_column_config else None,
-                "active_filter_config_id": active_filter_config.id if active_filter_config else None,
-            }
+        # if not sample_obj:
+        #     return {
+        #         "block_name": self.block_name,
+        #         "fields": [],
+        #         "rows": [],
+        #         "tabulator_options": {},
+        #         "column_configs": column_configs,
+        #         "filter_configs": filter_configs,
+        #         "active_column_config_id": active_column_config.id if active_column_config else None,
+        #         "active_filter_config_id": active_filter_config.id if active_filter_config else None,
+        #     }
+
+        # Model introspection
+        model_list = []
+        model_list.append(model)
+        for field in model._meta.fields:
+            print(f"Field: {field.name} ({field.get_internal_type()})")
+            if isinstance(field, models.ForeignKey):
+                print(f"ForeignKey: {field.name} -> {field.remote_field.model.__name__}")
+                model_list.append(field.remote_field.model)
+
 
         # Permissions
-        readable_fields = get_readable_fields_state(user, model, sample_obj)
-        editable_fields = get_editable_fields_state(user, model, sample_obj)
+        readable_fields = []
+        editable_fields = []
+        for m in model_list:
+            readable_fields.extend(get_readable_fields_state(user, m, sample_obj))
+            editable_fields.extend(get_editable_fields_state(user, m, sample_obj))
 
         # Display Rules
         model_label = f"{model._meta.app_label}.{model.__name__}"
@@ -93,10 +108,15 @@ class TableBlock:
         }
 
         # Final visible fields
+        # visible_fields = [
+        #     f for f in selected_fields
+        #     if f in readable_fields and not display_rules.get(f, {}).get("is_excluded", False)
+        # ]
+
         visible_fields = [
             f for f in selected_fields
-            if f in readable_fields and not display_rules.get(f, {}).get("is_excluded", False)
         ]
+
 
         # Column definitions
         column_defs = {col["field"]: col["title"] for col in self.get_column_defs(user, active_column_config)}
@@ -110,33 +130,50 @@ class TableBlock:
                 "editable": f in editable_fields,
             })
 
-        # Since queryset is already .values(), rows are flat dicts
-        rows = []
+        # Construct data
+        data = []
         for obj in queryset:
             row = {}
-            for field in visible_fields:
-                parts = field.split("__")
-                value = obj
-                try:
-                    for part in parts:
-                        value = getattr(value, part)
-                except Exception:
-                    value = None
-                current = row
-                for part in parts[:-1]:
-                    current = current.setdefault(part, {})
-                current[parts[-1]] = value
-            rows.append(row)
+            for field in selected_fields:
+                if "__" in field:
+                    # Handle related fields
+                    related_field, sub_field = field.split("__", 1)
+                    related_obj = getattr(obj, related_field, None)
+                    value = getattr(related_obj, sub_field, None) if related_obj else None
+                else:
+                    # Handle regular fields
+                    value = getattr(obj, field, None)
+
+                # Replace None with an empty string and convert objects to strings
+                row[field] = value if value is not None else ""
+                if isinstance(value, (object, models.Model)):
+                    row[field] = str(value)
+
+            data.append(row)
+
+        # Construct columns
+        columns = [
+            {
+                "title": field.get("label", field.get("field", "").replace("_", " ").title()),
+                "field": field.get("field"),
+            }
+            for field in self.get_column_defs(user, active_column_config)
+        ]
+        print("Data:")
+        print(data)
+        print("Columns")
+        print(columns)
 
         return {
             "block_name": self.block_name,
             "fields": fields,
-            "rows": rows,
             "tabulator_options": self.get_tabulator_options(user),
             "column_configs": column_configs,
             "filter_configs": filter_configs,
             "active_column_config_id": active_column_config.id if active_column_config else None,
             "active_filter_config_id": active_filter_config.id if active_filter_config else None,
+            "columns": columns,
+            "data": json.dumps(data),
         }
 
     def render(self, request):

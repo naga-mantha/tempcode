@@ -30,84 +30,20 @@
 
 <div id="table-{{ block_name }}"></div>
 
-<!-- Safe JSON script blocks -->
-  {{ rows|json_script:"table-data-json" }}
-  {{ fields|json_script:"field-defs-json" }}
-  {{ tabulator_options|json_script:"tabulator-options-json" }}
-
+{% block scripts %}
 <script>
-  const tableData = JSON.parse(document.getElementById("table-data-json").textContent);
-  const fieldDefs = JSON.parse(document.getElementById("field-defs-json").textContent);
-  const tabulatorOptions = JSON.parse(document.getElementById("tabulator-options-json").textContent);
-  const inlineEditUrl = "{% url 'inline_edit' block_name %}";
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1) Initialize the table
+    const table = new Tabulator("#table-{{ block_name }}", {
+      layout: "fitColumns",
+       data:{{ data|safe }},
 
-  const columns = fieldDefs.map(f => {
-    const col = {
-      title: f.label,
-      field: f.name,
-    };
+      columns:{{ columns|safe }},
 
-    if (f.editable) {
-      col.editor = "input";
-    }
+      ...{{ tabulator_options|safe }},  // ensure trailing comma
 
-    if (f.mandatory) {
-      col.cssClass = (col.cssClass || "") + " bg-warning-subtle";
-    }
-
-    return col;
-  });
-console.log("tableData", tableData);
-console.log("fieldDefs", fieldDefs);
-console.log("columns", columns);
-  const table = new Tabulator("#table-{{ block_name }}", {
-    data: tableData,
-    columns: columns,
-    placeholder: "No data available",
-    ...tabulatorOptions,
-    cellEdited: function(cell) {
-      const rowData = cell.getRow().getData();
-      const updatedValue = cell.getValue();
-      const field = cell.getField();
-      const id = rowData.id;
-
-      fetch(inlineEditUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": "{{ csrf_token }}"
-        },
-        body: JSON.stringify({
-          id: id,
-          field: field,
-          value: updatedValue
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success) {
-          alert("Error: " + data.error);
-          cell.restoreOldValue();
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        cell.restoreOldValue();
-      });
-    }
-  });
-
-  document.getElementById("column-config-select")?.addEventListener("change", function() {
-    location.href = `?column_config_id=${this.value}`;
-  });
-
-  document.getElementById("filter-config-select")?.addEventListener("change", function() {
-    location.href = `?filter_config_id=${this.value}`;
+    });
   });
 </script>
+{% endblock %}
 
-<style>
-  .bg-warning-subtle {
-    background-color: #fff8e1 !important;
-  }
-</style>

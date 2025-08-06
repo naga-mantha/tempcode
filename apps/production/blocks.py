@@ -35,6 +35,7 @@ class ProductionOrderTableBlock(TableBlock):
         for field in fields:
             label = label_for_field(field, model, return_attr=False)
             defs.append({"field": field, "title": label})
+
         return defs
 
     def get_tabulator_options(self, user):

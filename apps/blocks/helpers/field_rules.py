@@ -25,7 +25,6 @@ def get_flat_fields(model, user=None):
 
     dummy_instance = model()
     fields = []
-    print("IIIIIIIIIIIIIIIIIIIIIIIIIIIII")
 
     for field in model._meta.fields:
         rule = rule_map.get(field.name)
