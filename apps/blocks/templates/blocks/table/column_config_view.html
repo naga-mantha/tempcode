@@ -27,22 +27,13 @@
 
   <ul id="field-list" class="list-group">
     {% for field in fields_metadata %}
-    <li class="list-group-item d-flex align-items-center" data-name="{{ field.name }}">
-      <input type="checkbox"
-             class="form-check-input me-2"
-             {% if field.mandatory %}checked disabled{% endif %}
-             name="field_check"
-             value="{{ field.name }}">
-      <span class="me-2">
-  {% if "__" in field.name %}
-    <small class="text-muted">{{ field.name }}</small><br>
-  {% endif %}
-  {{ field.label }}
-</span>
-      {% if field.mandatory %}
-        <span class="badge bg-warning text-dark ms-auto">Mandatory</span>
-      {% endif %}
-    </li>
+      <li class="list-group-item d-flex align-items-center" data-name="{{ field.name }}">
+        <input type="checkbox" class="form-check-input me-2" {% if field.mandatory %}checked disabled{% endif %}
+               name="field_check" value="{{ field.name }}">
+        {{ field.label }} ({{field.model}})
+
+        {% if field.mandatory %}<span class="badge bg-warning text-dark ms-auto">Mandatory</span>{% endif %}
+      </li>
     {% endfor %}
   </ul>
 </form>
@@ -62,7 +53,7 @@
     {% for config in configs %}
     <tr>
       <td>{{ config.name }}</td>
-      <td>{{ config.fields|join:", " }}</td>
+      <td>{{ config.fields|join:"<br>"|safe }}</td>
       <td>{% if config.is_default %}✔{% endif %}</td>
       <td>
         <form method="post" style="display:inline-block">

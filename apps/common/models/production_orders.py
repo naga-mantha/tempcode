@@ -6,7 +6,7 @@ class ProductionOrderQuerySet(models.QuerySet):
     pass
 
 class ProductionOrder(WorkflowModelMixin):
-    production_order = models.CharField(max_length=10)
+    production_order = models.CharField(max_length=10, verbose_name="Prod Order")
     status = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.FloatField(blank=True, null=True)
     due_date = models.DateField(blank=True, null=True)

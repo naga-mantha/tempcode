@@ -11,7 +11,9 @@ from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from django.http import Http404
 from apps.blocks.registry import BLOCK_REGISTRY
-from apps.blocks.helpers.field_rules import get_flat_fields
+from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+
+
 @csrf_exempt
 @require_POST
 @login_required
@@ -52,13 +54,12 @@ def column_config_view(request, block_name):
         raise Http404(f"Block '{block_name}' not found.")
     model = block_instance.get_model()
 
-    fields_metadata = get_flat_fields(model, user)
+    fields_metadata = get_model_fields_for_column_config(model, user)
 
     if request.method == "POST":
         action = request.POST.get("action")
         config_id = request.POST.get("config_id")
         name = request.POST.get("name")
-        fields = request.POST.getlist("fields")
 
         if action == "create":
             fields = request.POST.get("fields", "")
@@ -69,9 +70,7 @@ def column_config_view(request, block_name):
                 existing.fields = field_list
                 existing.save()
             else:
-                BlockColumnConfig.objects.create(
-                    block=block, user=user, name=name, fields=field_list
-                )
+                BlockColumnConfig.objects.create(block=block, user=user, name=name, fields=field_list)
 
         elif action == "delete":
             BlockColumnConfig.objects.get(id=config_id, user=user, block=block).delete()

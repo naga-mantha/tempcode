@@ -36,12 +36,17 @@
     // 1) Initialize the table
     const table = new Tabulator("#table-{{ block_name }}", {
       layout: "fitColumns",
-       data:{{ data|safe }},
-
+      data:{{ data|safe }},
       columns:{{ columns|safe }},
-
       ...{{ tabulator_options|safe }},  // ensure trailing comma
+    });
 
+    document.getElementById("column-config-select")?.addEventListener("change", function() {
+      location.href = `?column_config_id=${this.value}`;
+    });
+
+    document.getElementById("filter-config-select")?.addEventListener("change", function() {
+      location.href = `?filter_config_id=${this.value}`;
     });
   });
 </script>

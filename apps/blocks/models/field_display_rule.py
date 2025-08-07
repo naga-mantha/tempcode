@@ -1,5 +1,3 @@
-# apps/production/models/field_display_rule.py
-
 from django.db import models
 
 class FieldDisplayRule(models.Model):

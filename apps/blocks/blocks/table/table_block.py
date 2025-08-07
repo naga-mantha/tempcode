@@ -88,9 +88,7 @@ class TableBlock:
         model_list = []
         model_list.append(model)
         for field in model._meta.fields:
-            print(f"Field: {field.name} ({field.get_internal_type()})")
             if isinstance(field, models.ForeignKey):
-                print(f"ForeignKey: {field.name} -> {field.remote_field.model.__name__}")
                 model_list.append(field.remote_field.model)
 
 
@@ -103,20 +101,28 @@ class TableBlock:
 
         # Display Rules
         model_label = f"{model._meta.app_label}.{model.__name__}"
+
+    #TODO: Later fix the issue where if a field is made mandatory/excluded, it should be reflected in final table. Since the configs wont be saved automaticallt until users saves it
+        # rules = get_field_display_rules(model_label)
+        # mandatory_fields = set(rules.get("mandatory", []))
+        # excluded_fields = set(rules.get("excluded", []))
+        # effective_fields = [f for f in selected_fields if f not in excluded_fields]
+        #
+        # for field in mandatory_fields:
+        #     if field not in effective_fields:
+        #         effective_fields.append(field)
+
         display_rules = {
             r.field_name: r for r in get_field_display_rules(model_label)
         }
 
-        # Final visible fields
-        # visible_fields = [
-        #     f for f in selected_fields
-        #     if f in readable_fields and not display_rules.get(f, {}).get("is_excluded", False)
-        # ]
+        print("Display Rules:", display_rules)
 
+        # Final visible fields
         visible_fields = [
             f for f in selected_fields
+            if f in readable_fields and not (display_rules.get(f) and display_rules[f].is_excluded)
         ]
-
 
         # Column definitions
         column_defs = {col["field"]: col["title"] for col in self.get_column_defs(user, active_column_config)}
@@ -126,7 +132,7 @@ class TableBlock:
             fields.append({
                 "name": f,
                 "label": column_defs.get(f, f.replace("_", " ").title()),
-                "mandatory": display_rules.get(f, {}).get("is_mandatory", False),
+                "mandatory": display_rules[f].is_mandatory if f in display_rules else False,
                 "editable": f in editable_fields,
             })
 
@@ -150,20 +156,15 @@ class TableBlock:
                     row[field] = str(value)
 
             data.append(row)
-
+        from django.contrib.admin.utils import label_for_field
         # Construct columns
         columns = [
             {
-                "title": field.get("label", field.get("field", "").replace("_", " ").title()),
+                "title": label_for_field(field.get("field"), self.get_model(), return_attr=False),
                 "field": field.get("field"),
             }
             for field in self.get_column_defs(user, active_column_config)
         ]
-        print("Data:")
-        print(data)
-        print("Columns")
-        print(columns)
-
         return {
             "block_name": self.block_name,
             "fields": fields,
