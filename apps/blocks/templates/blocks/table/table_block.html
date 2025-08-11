@@ -14,9 +14,42 @@
     </select>
     <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>
   </div>
-
+<div>
+    <label class="me-2">Filter:</label>
+    <select id="filter-config-select" class="form-select d-inline-block w-auto">
+      <option value="">-- None --</option>
+      {% for f in filter_configs %}
+        <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+          {{ f.name }}{% if f.is_default %} (default){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-link p-0 ms-2" href="{% url 'table_filter_config' block_name %}">Manage Filters</a>
+  </div>
 
 </div>
+
+{# Live (non-persistent) filter fields; pre-populated from selected saved filter #}
+<form method="get" id="dynamic-filters-form" class="mb-3">
+  {# preserve current selections when applying live overrides #}
+  {% if active_column_config_id %}
+    <input type="hidden" name="column_config_id" value="{{ active_column_config_id }}">
+  {% endif %}
+  {% if active_filter_config_id %}
+    <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
+  {% endif %}
+
+  <details class="border rounded">
+    <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
+      Filter Conditions
+    </summary>
+    <div class="p-3">
+      {# Renders actual inputs based on your schema #}
+      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values %}
+      <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+    </div>
+  </details>
+</form>
 
 <div id="table-{{ block_name }}"></div>
 
@@ -31,14 +64,26 @@
       ...{{ tabulator_options|safe }},  // ensure trailing comma
     });
 
+    // helper to preserve both column_config_id and filter_config_id in URL
+    function setSearchParams(params) {
+      const url = new URL(window.location.href);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === "" || v === null || v === undefined) url.searchParams.delete(k);
+        else url.searchParams.set(k, v);
+      });
+      window.location.href = url.toString();
+    }
+
+    // 2) Keep both selections when switching either dropdown
     document.getElementById("column-config-select")?.addEventListener("change", function() {
-      location.href = `?column_config_id=${this.value}`;
+      const filterId = document.getElementById("filter-config-select")?.value || "";
+      setSearchParams({ column_config_id: this.value, filter_config_id: filterId });
     });
 
     document.getElementById("filter-config-select")?.addEventListener("change", function() {
-      location.href = `?filter_config_id=${this.value}`;
+      const columnId = document.getElementById("column-config-select")?.value || "";
+      setSearchParams({ column_config_id: columnId, filter_config_id: this.value });
     });
   });
 </script>
 {% endblock %}
-

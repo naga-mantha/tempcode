@@ -129,28 +129,50 @@ def _resolve_filter_schema(raw_schema, user):
         schema[key] = item
     return schema
 
-def _extract_filter_values_from_post(post, schema):
+def _collect_filters(qd, schema, base=None, *, prefix="filters.", allow_flat=True):
     """
-    Collects only keys present in schema from POST (names are 'filters.<key>').
-    Handles multiselect (list), boolean (checkbox), others as strings if non-empty.
+    Build a dict of filter values from a QueryDict (GET or POST), overlaying 'base'.
+    - Only keys in 'schema' are considered (safe).
+    - Reads `filters.<key>` first; if allow_flat=True, also accepts flat `<key>`.
+    - Handles types: multiselect (list), boolean (truthy strings), others as strings.
+    - For unchecked booleans: add a hidden <input name="filters.<key>" value="0"> in the form.
     """
-    values = {}
+    base = dict(base or {})
+    if not schema:
+        return base
+
+    TRUTHY = {"1", "true", "on", "yes", "y", "t"}
+
     for key, cfg in schema.items():
-        field_name = f"filters.{key}"
+        names = [f"{prefix}{key}"]
+        if allow_flat:
+            names.append(key)  # accept flat as fallback
 
-        if cfg.get("type") == "multiselect":
-            data = post.getlist(field_name)
-            if data:
-                values[key] = data
+        found = False
+        for name in names:
+            if cfg.get("type") == "multiselect":
+                vals = qd.getlist(name)
+                if vals:
+                    base[key] = vals
+                    found = True
+                    break
 
-        elif cfg.get("type") == "boolean":
-            values[key] = post.get(field_name) == "1"
+            elif cfg.get("type") == "boolean":
+                if name in qd:  # present means explicit override (supports hidden "0")
+                    base[key] = (qd.get(name) or "").strip().lower() in TRUTHY
+                    found = True
+                    break
 
-        else:
-            raw = post.get(field_name)
-            if raw not in (None, ""):
-                values[key] = raw
-    return values
+            else:
+                raw = qd.get(name)
+                if raw not in (None, ""):
+                    base[key] = raw
+                    found = True
+                    break
+
+        # if not found: leave existing base[key] (from saved config) as-is
+    return base
+
 def _get_db_block_or_404(block_name):
     # If your Block model uses slug instead of name, switch to slug=block_name
     return get_object_or_404(Block, name=block_name)
@@ -186,7 +208,7 @@ def filter_config_view(request, block_name):
             messages.error(request, "Please provide a name.")
             return redirect("table_filter_config", block_name=block_name)
 
-        values = _extract_filter_values_from_post(request.POST, filter_schema)
+        values = _collect_filters(request.POST, filter_schema, base={})
 
         if edit_id:
             cfg = get_object_or_404(

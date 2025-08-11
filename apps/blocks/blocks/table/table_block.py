@@ -6,6 +6,7 @@ from apps.blocks.helpers.permissions import get_readable_fields_state, get_edita
 from apps.blocks.helpers.field_rules import get_field_display_rules
 from django.db import models
 import json
+from apps.blocks.blocks.table.views import _resolve_filter_schema, _collect_filters
 
 class TableBlock:
     template_name = "blocks/table/table_block.html"
@@ -57,6 +58,7 @@ class TableBlock:
         if not active_column_config:
             active_column_config = column_configs.filter(is_default=True).first()
 
+        # --- filters: choose active saved filter (default if none in GET) ---
         active_filter_config = None
         if filter_config_id:
             try:
@@ -66,8 +68,40 @@ class TableBlock:
         if not active_filter_config:
             active_filter_config = filter_configs.filter(is_default=True).first()
 
+        # --- resolve schema (reuses your helper) ---
+        try:
+            raw_schema = self.get_filter_schema(request)  # if your block takes request
+        except TypeError:
+            raw_schema = self.get_filter_schema(user)  # backward-compat
+        filter_schema = _resolve_filter_schema(raw_schema, user)
+
+        # --- live (non-persistent) overrides from GET (no helper, inline for clarity) ---
+        base_values = active_filter_config.values if active_filter_config else {}
+        # live_values = {}
+        # for key, cfg in (filter_schema or {}).items():
+        #     name = f"filters.{key}"
+        #     ftype = cfg.get("type", "text")
+        #
+        #     if ftype == "multiselect":
+        #         data = request.GET.getlist(name)
+        #         if data:
+        #             live_values[key] = data
+        #
+        #     elif ftype == "boolean":
+        #         # Only override if present in GET; add a hidden 0 in the template if you want unchecked -> False
+        #         if name in request.GET:
+        #             live_values[key] = request.GET.get(name) in ("1", "true", "on", "yes")
+        #
+        #     else:
+        #         raw = request.GET.get(name)
+        #         if raw not in (None, ""):
+        #             live_values[key] = raw
+
+        # merged values used to pre-populate fields and to filter queryset
+        selected_filter_values = _collect_filters(request.GET, filter_schema, base=base_values)
+        filter_values = selected_filter_values
+
         selected_fields = active_column_config.fields if active_column_config else []
-        filter_values = active_filter_config.values if active_filter_config else {}
 
         queryset = self.get_queryset(user, filter_values, active_column_config)
         sample_obj = queryset.first() if queryset else None
@@ -175,6 +209,8 @@ class TableBlock:
             "active_filter_config_id": active_filter_config.id if active_filter_config else None,
             "columns": columns,
             "data": json.dumps(data),
+            "filter_schema": filter_schema,                       # ← added
+            "selected_filter_values": selected_filter_values,     # ← added
         }
 
     def render(self, request):
