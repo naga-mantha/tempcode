@@ -14,6 +14,10 @@ def apply_filter_registry(table_name, queryset, filters, user):
     else:
         schema = {}
 
+    print(schema)
+
+
+
     for key, config in schema.items():
         if key in filters and filters[key] is not None:
             queryset = config["handler"](queryset, filters[key])

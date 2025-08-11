@@ -15,17 +15,7 @@
     <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>
   </div>
 
-  <div>
-    <label class="me-2">Filter:</label>
-    <select id="filter-config-select" class="form-select d-inline-block w-auto me-2">
-      {% for cfg in filter_configs %}
-        <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>
-          {{ cfg.name }}
-        </option>
-      {% endfor %}
-    </select>
-    <a class="btn btn-link p-0" href="{% url 'filter_config_view' block_name %}">Manage Filters</a>
-  </div>
+
 </div>
 
 <div id="table-{{ block_name }}"></div>

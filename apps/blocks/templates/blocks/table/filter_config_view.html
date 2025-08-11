@@ -1,49 +1,118 @@
 {% extends "base.html" %}
+{% load dict_extras %}
+
 {% block content %}
-<h2>Manage Filter Configurations for {{ block.name }}</h2>
+  <div class="main-container">
+    <h1 class="page-title">Customize Filters for '{{ block.name }}'</h1>
 
-<form method="post">
-  {% csrf_token %}
-  <input type="text" name="name" placeholder="New Filter Name" required>
-  <input type="hidden" name="action" value="create">
-  <textarea name="values" placeholder='JSON filter (e.g. {"status": "active"})' required></textarea>
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
 
-  <button type="submit">Create Filter</button>
-</form>
+    <div class="mx-auto" style="max-width: 720px;">
 
-<table class="table mt-4">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Filters</th>
-      <th>Default</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for config in configs %}
-    <tr>
-      <td>{{ config.name }}</td>
-      <td><pre>{{ config.values|safe }}</pre></td>
-      <td>{% if config.is_default %}✔{% endif %}</td>
-      <td>
-        <form method="post" style="display:inline-block">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="set_default">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit">Set Default</button>
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        {# GET form for selecting which saved filter to edit/create #}
+        <form method="get" action="{% url 'table_filter_config' route_block_name  %}">
+          <div class="input-group">
+            <label for="filter-select" class="input-group-text">Saved Filter:</label>
+            <select id="filter-select"
+                    name="id"
+                    class="form-select"
+                    onchange="this.form.submit()">
+              <option value="">-- New Filter --</option>
+              {% for f in user_filters %}
+                <option value="{{ f.id }}"
+                        {% if editing and editing.id == f.id %}selected{% endif %}>
+                  {{ f.name }}{% if f.is_default %} (default){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
         </form>
-        {% if configs|length > 1 %}
-        <form method="post" style="display:inline-block">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
-        </form>
+
+        {# POST form for deleting the selected filter #}
+        {% if editing %}
+          <form method="post"
+                action="{% url 'table_filter_delete' route_block_name editing.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete</button>
+          </form>
         {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+      </div>
+
+      <hr>
+
+      <form id="viewForm"
+            method="post"
+            action="{% url 'table_filter_config' route_block_name %}"
+            novalidate>
+        {% csrf_token %}
+        {% if editing %}
+          <input type="hidden" name="id" value="{{ editing.id }}">
+        {% endif %}
+
+        <div class="row mb-3">
+          <label for="filter-name" class="col-2 col-form-label">Name</label>
+          <div class="col-sm-10">
+            <input
+              type="text"
+              class="form-control"
+              id="filter-name"
+              name="name"
+              value="{{ editing.name|default:'' }}"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-check mb-3">
+          <input id="filter-default"
+                 class="form-check-input"
+                 type="checkbox"
+                 name="is_default"
+                 {% if editing and editing.is_default %}checked{% endif %}>
+          <label class="form-check-label" for="filter-default">
+            Set as Default
+          </label>
+        </div>
+
+        <details class="border rounded mb-3" open>
+          <summary class="p-2 bg-light" style="cursor: pointer; font-weight: bold;">
+            Filter Conditions
+          </summary>
+          <div class="p-3">
+            {# Renders actual fields from the filter schema #}
+            {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values %}
+          </div>
+        </details>
+
+        <button type="submit" class="btn btn-success">
+          {% if editing %}Save Changes{% else %}Create Filter{% endif %}
+        </button>
+        <a class="btn btn-secondary" href="{% url 'table_filter_config' route_block_name %}">
+          Cancel
+        </a>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Simple required validation for name; you can wire JustValidate later if you want
+  document.getElementById('viewForm').addEventListener('submit', function (e) {
+    const name = document.getElementById('filter-name').value.trim();
+    if (!name) {
+      e.preventDefault();
+      alert('Please enter a name for this filter.');
+    }
+  });
+</script>
 {% endblock %}
