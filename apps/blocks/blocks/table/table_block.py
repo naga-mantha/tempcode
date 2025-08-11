@@ -77,25 +77,6 @@ class TableBlock:
 
         # --- live (non-persistent) overrides from GET (no helper, inline for clarity) ---
         base_values = active_filter_config.values if active_filter_config else {}
-        # live_values = {}
-        # for key, cfg in (filter_schema or {}).items():
-        #     name = f"filters.{key}"
-        #     ftype = cfg.get("type", "text")
-        #
-        #     if ftype == "multiselect":
-        #         data = request.GET.getlist(name)
-        #         if data:
-        #             live_values[key] = data
-        #
-        #     elif ftype == "boolean":
-        #         # Only override if present in GET; add a hidden 0 in the template if you want unchecked -> False
-        #         if name in request.GET:
-        #             live_values[key] = request.GET.get(name) in ("1", "true", "on", "yes")
-        #
-        #     else:
-        #         raw = request.GET.get(name)
-        #         if raw not in (None, ""):
-        #             live_values[key] = raw
 
         # merged values used to pre-populate fields and to filter queryset
         selected_filter_values = _collect_filters(request.GET, filter_schema, base=base_values)
