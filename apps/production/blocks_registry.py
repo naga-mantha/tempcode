@@ -1,4 +1,13 @@
 from apps.production.blocks import ProductionOrderTableBlock
-from apps.blocks.registry import register_block
+from apps.blocks.registry import block_registry
 
-register_block("production_order_table", ProductionOrderTableBlock())
+
+def register(registry=block_registry):
+    """Register production related blocks."""
+
+    registry.register("production_order_table", ProductionOrderTableBlock())
+
+
+# Register immediately on import for backward compatibility.
+register()
+
