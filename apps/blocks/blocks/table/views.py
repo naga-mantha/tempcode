@@ -1,24 +1,18 @@
 import json
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, Http404
+from django.views.decorators.http import require_POST, csrf_exempt
 from django.contrib.auth.decorators import login_required
-from apps.blocks.registry import get_block
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+
 from apps.workflow.permissions import can_write_field_state
-from django.shortcuts import render, redirect
+from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from django.http import Http404
-from apps.blocks.registry import BLOCK_REGISTRY
 from apps.blocks.helpers.column_config import get_model_fields_for_column_config
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.contrib.auth.decorators import login_required
-from django.http import Http404
-from apps.blocks.registry import get_block
-from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.registry import get_block as get_block_impl
+
+
 @csrf_exempt
 @require_POST
 @login_required
@@ -29,11 +23,11 @@ def inline_edit(request, block_name):
         field = data.get("field")
         value = data.get("value")
 
-        block = get_block(block_name)
+        block = block_registry.get(block_name)
         if not block:
             return JsonResponse({"success": False, "error": "Invalid block"})
 
-        model = block["model"]
+        model = block.get_model()
         instance = model.objects.get(id=obj_id)
 
         if not can_write_field_state(request.user, model, field, instance):
@@ -54,7 +48,7 @@ def column_config_view(request, block_name):
     user = request.user
     configs = BlockColumnConfig.objects.filter(block=block, user=user)
 
-    block_instance = get_block(block_name)
+    block_instance = block_registry.get(block_name)
     if not block_instance:
         raise Http404(f"Block '{block_name}' not found.")
     model = block_instance.get_model()
@@ -94,19 +88,11 @@ def column_config_view(request, block_name):
     })
 
 def render_table_block(request, block_name):
-    block = BLOCK_REGISTRY.get(block_name)
+    block = block_registry.get(block_name)
     if not block:
         raise Http404(f"Block '{block_name}' not found in registry.")
     return block.render(request)
 
-
-
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.contrib.auth.decorators import login_required
-from django.http import Http404
-from apps.blocks.registry import get_block
-from apps.blocks.models.block_filter_config import BlockFilterConfig
 
 def _resolve_filter_schema(raw_schema, user):
     """
@@ -179,7 +165,7 @@ def _get_db_block_or_404(block_name):
 
 @login_required
 def filter_config_view(request, block_name):
-    block_impl = get_block_impl(block_name)  # registry object (Python)
+    block_impl = block_registry.get(block_name)  # registry object (Python)
     if not block_impl:
         raise Http404("Invalid block")
 
@@ -244,7 +230,7 @@ def filter_config_view(request, block_name):
 
 @login_required
 def filter_delete_view(request, block_name, config_id):
-    block_impl = get_block_impl(block_name)
+    block_impl = block_registry.get(block_name)
     if not block_impl:
         raise Http404("Invalid block")
     db_block = _get_db_block_or_404(block_name)
