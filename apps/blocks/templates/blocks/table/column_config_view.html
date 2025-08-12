@@ -17,7 +17,6 @@
 <form id="config-form" method="post">
   {% csrf_token %}
   <input type="hidden" name="action" value="create">
-  <input type="hidden" name="fields" id="fields-input">
 
   <div class="mb-3">
     <label for="view-name">View Name:</label>
@@ -29,7 +28,8 @@
     {% for field in fields_metadata %}
       <li class="list-group-item d-flex align-items-center" data-name="{{ field.name }}">
         <input type="checkbox" class="form-check-input me-2" {% if field.mandatory %}checked disabled{% endif %}
-               name="field_check" value="{{ field.name }}">
+               name="fields" value="{{ field.name }}">
+        {% if field.mandatory %}<input type="hidden" name="fields" value="{{ field.name }}">{% endif %}
         {{ field.label }} ({{field.model}})
 
         {% if field.mandatory %}<span class="badge bg-warning text-dark ms-auto">Mandatory</span>{% endif %}
@@ -106,14 +106,6 @@
       const el = list.querySelector(`[data-name="${CSS.escape(fieldName.trim())}"]`);
       if (el) list.prepend(el);
     });
-  });
-
-  document.getElementById("config-form").addEventListener("submit", function (e) {
-    const fields = [];
-    document.querySelectorAll("#field-list input[type=checkbox]:checked").forEach(chk => {
-      fields.push(chk.value);
-    });
-    document.getElementById("fields-input").value = fields.join(",");
   });
 </script>
 {% endblock %}

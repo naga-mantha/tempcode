@@ -19,7 +19,20 @@ class ColumnConfigForm(forms.Form):
     action = forms.ChoiceField(choices=ACTIONS)
     config_id = forms.IntegerField(required=False)
     name = forms.CharField(required=False)
-    fields = forms.CharField(required=False)
+    fields = forms.MultipleChoiceField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        choices = kwargs.pop("fields_choices", [])
+        self.readable_fields = set(kwargs.pop("readable_fields", []))
+        super().__init__(*args, **kwargs)
+        self.fields["fields"].choices = choices
+
+    def clean_fields(self):
+        fields = self.cleaned_data.get("fields") or []
+        invalid = [f for f in fields if f not in self.readable_fields]
+        if invalid:
+            raise forms.ValidationError("Invalid fields selected.")
+        return fields
 
 
 class ColumnConfigView(LoginRequiredMixin, FormView):
@@ -32,19 +45,31 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
         if not self.block_instance:
             raise Http404(f"Block '{block_name}' not found.")
         self.user = request.user
+        self.model = self.block_instance.get_model()
+        self.fields_metadata = get_model_fields_for_column_config(self.model, self.user)
         return super().dispatch(request, block_name, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        model = self.block_instance.get_model()
         configs = BlockColumnConfig.objects.filter(block=self.block, user=self.user)
-        fields_metadata = get_model_fields_for_column_config(model, self.user)
         context.update({
             "block": self.block,
             "configs": configs,
-            "fields_metadata": fields_metadata,
+            "fields_metadata": self.fields_metadata,
         })
         return context
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.update(
+            {
+                "fields_choices": [
+                    (f["name"], f["label"]) for f in self.fields_metadata
+                ],
+                "readable_fields": {f["name"] for f in self.fields_metadata},
+            }
+        )
+        return kwargs
 
     def form_valid(self, form):
         action = form.cleaned_data["action"]
@@ -52,8 +77,7 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
         name = form.cleaned_data.get("name")
 
         if action == "create":
-            fields = form.cleaned_data.get("fields") or ""
-            field_list = [f.strip() for f in fields.split(",") if f.strip()]
+            field_list = form.cleaned_data.get("fields") or []
             existing = BlockColumnConfig.objects.filter(block=self.block, user=self.user, name=name).first()
             if existing:
                 existing.fields = field_list
