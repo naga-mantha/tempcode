@@ -5,6 +5,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 
 from apps.workflow.permissions import can_write_field_state
 from apps.blocks.registry import block_registry
@@ -31,7 +32,7 @@ class InlineEditView(LoginRequiredMixin, View):
             return JsonResponse({"success": False, "error": form.errors}, status=400)
 
         obj_id = form.cleaned_data["id"]
-        field = form.cleaned_data["field"]
+        field_name = form.cleaned_data["field"]
         value = form.cleaned_data["value"]
 
         block = block_registry.get(block_name)
@@ -41,9 +42,18 @@ class InlineEditView(LoginRequiredMixin, View):
         model = block.get_model()
         instance = model.objects.get(id=obj_id)
 
-        if not can_write_field_state(request.user, model, field, instance):
+        if not can_write_field_state(request.user, model, field_name, instance):
             return JsonResponse({"success": False, "error": "Permission denied"})
 
-        setattr(instance, field, value)
-        instance.save()
+        try:
+            model_field = model._meta.get_field(field_name)
+            python_value = model_field.clean(value, instance)
+            setattr(instance, field_name, python_value)
+            instance.full_clean(validate_unique=False)
+            instance.save()
+        except FieldDoesNotExist:
+            return JsonResponse({"success": False, "error": "Invalid field"}, status=400)
+        except ValidationError as e:
+            return JsonResponse({"success": False, "error": e.messages}, status=400)
+
         return JsonResponse({"success": True})
