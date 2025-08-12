@@ -195,9 +195,16 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                     value = getattr(related_obj, sub_field, None) if related_obj else None
                 else:
                     value = getattr(obj, field, None)
-                row[field] = value if value is not None else ""
-                if isinstance(value, (object, models.Model)):
+                if value is None:
+                    row[field] = ""
+                elif isinstance(value, models.Model):
                     row[field] = str(value)
+                else:
+                    try:
+                        json.dumps(value)
+                        row[field] = value
+                    except TypeError:
+                        row[field] = str(value)
             data.append(row)
         return json.dumps(data)
 
