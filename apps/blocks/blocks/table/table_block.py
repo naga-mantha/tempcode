@@ -19,7 +19,15 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
     def __init__(self, block_name):
         self.block_name = block_name
         self._block = None
-        self._context_cache = None
+        # Cache context per-request to avoid leaking data across requests
+        # while still preventing duplicate work within a single request.
+        self._context_cache = {}
+
+    def render(self, request):
+        """Clear cached context and render the block."""
+        # Ensure previous request data is discarded before rendering.
+        self._context_cache.clear()
+        return super().render(request)
 
     @property
     def block(self):
@@ -99,9 +107,12 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         }
 
     def _get_context(self, request):
-        if self._context_cache is None:
-            self._context_cache = self._build_context(request)
-        return self._context_cache
+        cache_key = id(request)
+        if cache_key not in self._context_cache:
+            # Replace any existing cached context with the current request's
+            # context to keep the cache per-request.
+            self._context_cache = {cache_key: self._build_context(request)}
+        return self._context_cache[cache_key]
 
     def get_config(self, request):
         context = dict(self._get_context(request))
