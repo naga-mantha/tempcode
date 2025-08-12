@@ -1,6 +1,6 @@
 from apps.blocks.blocks.table.table_block import TableBlock
 from apps.common.models import ProductionOrder
-from apps.blocks.helpers.filter_config import apply_filter_registry
+from apps.blocks.services.filtering import apply_filter_registry
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
