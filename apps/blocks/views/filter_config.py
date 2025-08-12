@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import FormView
@@ -81,7 +82,16 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         cfg.name = name
         cfg.values = values
         cfg.is_default = is_default
-        cfg.save()
+        try:
+            cfg.save()
+        except IntegrityError:
+            messages.error(
+                self.request,
+                "Filter name already taken. Please choose a different name.",
+            )
+            if cfg.id:
+                return redirect(f"{self.request.path}?id={cfg.id}")
+            return redirect("table_filter_config", block_name=self.block_name)
         messages.success(self.request, "Filter saved.")
         return redirect(f"{self.request.path}?id={cfg.id}")
 
