@@ -1,0 +1,49 @@
+import json
+from django import forms
+from django.http import JsonResponse
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+from apps.workflow.permissions import can_write_field_state
+from apps.blocks.registry import block_registry
+
+
+class InlineEditForm(forms.Form):
+    id = forms.IntegerField()
+    field = forms.CharField()
+    value = forms.CharField(required=False)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class InlineEditView(LoginRequiredMixin, View):
+    form_class = InlineEditForm
+
+    def post(self, request, block_name):
+        try:
+            data = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+
+        form = self.form_class(data)
+        if not form.is_valid():
+            return JsonResponse({"success": False, "error": form.errors}, status=400)
+
+        obj_id = form.cleaned_data["id"]
+        field = form.cleaned_data["field"]
+        value = form.cleaned_data["value"]
+
+        block = block_registry.get(block_name)
+        if not block:
+            return JsonResponse({"success": False, "error": "Invalid block"})
+
+        model = block.get_model()
+        instance = model.objects.get(id=obj_id)
+
+        if not can_write_field_state(request.user, model, field, instance):
+            return JsonResponse({"success": False, "error": "Permission denied"})
+
+        setattr(instance, field, value)
+        instance.save()
+        return JsonResponse({"success": True})
