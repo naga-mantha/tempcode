@@ -7,3 +7,11 @@ class BlockFilterConfig(BaseUserConfig):
     """Stores filter configuration for a block and user."""
 
     values = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["block", "user", "name"],
+                name="unique_filter_config_per_user_block",
+            )
+        ]

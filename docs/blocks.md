@@ -48,7 +48,7 @@ Two models store per-user configuration for table-style blocks:
 
 * `BlockColumnConfig` keeps the list of visible fields for a block (`fields` JSON
   array) and enforces uniqueness per user/block combo【F:apps/blocks/models/block_column_config.py†L1-L17】.
-* `BlockFilterConfig` stores saved filter values in its `values` JSON field【F:apps/blocks/models/block_filter_config.py†L1-L9】.
+* `BlockFilterConfig` stores saved filter values in its `values` JSON field and enforces uniqueness per user/block combo【F:apps/blocks/models/block_filter_config.py†L1-L17】.
 
 These models allow users to persist multiple named configurations with one
 marked as the default.
