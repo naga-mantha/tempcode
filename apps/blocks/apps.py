@@ -1,4 +1,4 @@
-from importlib import import_module
+from importlib import import_module  # used for dynamic block loading
 
 from django.apps import AppConfig
 from django.conf import settings
