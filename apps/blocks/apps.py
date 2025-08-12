@@ -11,9 +11,6 @@ class BlocksConfig(AppConfig):
     name = "apps.blocks"
 
     def ready(self):
-        # Ensure signal handlers are connected.
-        import apps.blocks.signals.field_display_rule_signals  # noqa: F401
-
         # Load any block entry points defined in settings.BLOCKS.  Each entry
         # can be either a module path that performs registration on import or a
         # "module:callable" string where the callable accepts the registry
