@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
@@ -12,12 +12,14 @@ import json
 from .filter_utils import FilterResolutionMixin
 
 
-class TableBlock(FilterResolutionMixin):
+class TableBlock(BaseBlock, FilterResolutionMixin):
     template_name = "blocks/table/table_block.html"
+    supported_features = ["filters", "column_config"]
 
     def __init__(self, block_name):
         self.block_name = block_name
         self._block = None
+        self._context_cache = None
 
     @property
     def block(self):
@@ -43,7 +45,7 @@ class TableBlock(FilterResolutionMixin):
     def get_filter_config_queryset(self, user):
         return BlockFilterConfig.objects.filter(user=user, block=self.block)
 
-    def get_context(self, request):
+    def _build_context(self, request):
         user = request.user
         (
             column_configs,
@@ -75,6 +77,20 @@ class TableBlock(FilterResolutionMixin):
             "filter_schema": filter_schema,
             "selected_filter_values": selected_filter_values,
         }
+
+    def _get_context(self, request):
+        if self._context_cache is None:
+            self._context_cache = self._build_context(request)
+        return self._context_cache
+
+    def get_config(self, request):
+        context = dict(self._get_context(request))
+        context.pop("data", None)
+        return context
+
+    def get_data(self, request):
+        context = self._get_context(request)
+        return {"data": context.get("data")}
 
     def _select_configs(self, request):
         user = request.user
@@ -185,5 +201,3 @@ class TableBlock(FilterResolutionMixin):
             data.append(row)
         return json.dumps(data)
 
-    def render(self, request):
-        return render(request, self.template_name, self.get_context(request))
