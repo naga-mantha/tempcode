@@ -11,6 +11,7 @@ from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+from .filter_utils import FilterResolutionMixin
 
 
 @csrf_exempt
@@ -94,70 +95,6 @@ def render_table_block(request, block_name):
     return block.render(request)
 
 
-def _resolve_filter_schema(raw_schema, user):
-    """
-    Ensures each entry has: label, type (default 'text'), choices resolved (if callable).
-    Example schema item:
-      {
-        "label": "Status",
-        "type": "select" | "multiselect" | "text" | "number" | "date" | "boolean",
-        "choices": [("open","Open"), ("closed","Closed")] OR callable(user)->list,
-        "help": "Optional help text",
-        "handler": callable(queryset, val)  # used elsewhere, we leave it intact
-      }
-    """
-    schema = {}
-    for key, cfg in raw_schema.items():
-        item = dict(cfg)
-        item.setdefault("type", "text")
-        if "choices" in item and callable(item["choices"]):
-            item["choices"] = item["choices"](user)
-        schema[key] = item
-    return schema
-
-def _collect_filters(qd, schema, base=None, *, prefix="filters.", allow_flat=True):
-    """
-    Build a dict of filter values from a QueryDict (GET or POST), overlaying 'base'.
-    - Only keys in 'schema' are considered (safe).
-    - Reads `filters.<key>` first; if allow_flat=True, also accepts flat `<key>`.
-    - Handles types: multiselect (list), boolean (truthy strings), others as strings.
-    - For unchecked booleans: add a hidden <input name="filters.<key>" value="0"> in the form.
-    """
-    base = dict(base or {})
-    if not schema:
-        return base
-
-    TRUTHY = {"1", "true", "on", "yes", "y", "t"}
-
-    for key, cfg in schema.items():
-        names = [f"{prefix}{key}"]
-        if allow_flat:
-            names.append(key)  # accept flat as fallback
-
-        found = False
-        for name in names:
-            if cfg.get("type") == "multiselect":
-                vals = qd.getlist(name)
-                if vals:
-                    base[key] = vals
-                    found = True
-                    break
-
-            elif cfg.get("type") == "boolean":
-                if name in qd:  # present means explicit override (supports hidden "0")
-                    base[key] = (qd.get(name) or "").strip().lower() in TRUTHY
-                    found = True
-                    break
-
-            else:
-                raw = qd.get(name)
-                if raw not in (None, ""):
-                    base[key] = raw
-                    found = True
-                    break
-
-        # if not found: leave existing base[key] (from saved config) as-is
-    return base
 
 def _get_db_block_or_404(block_name):
     # If your Block model uses slug instead of name, switch to slug=block_name
@@ -184,7 +121,7 @@ def filter_config_view(request, block_name):
             )
 
     raw_schema = block_impl.get_filter_schema(request)
-    filter_schema = _resolve_filter_schema(raw_schema, request.user)
+    filter_schema = FilterResolutionMixin._resolve_filter_schema(raw_schema, request.user)
 
     if request.method == "POST":
         edit_id = request.POST.get("id")
@@ -194,7 +131,7 @@ def filter_config_view(request, block_name):
             messages.error(request, "Please provide a name.")
             return redirect("table_filter_config", block_name=block_name)
 
-        values = _collect_filters(request.POST, filter_schema, base={})
+        values = FilterResolutionMixin._collect_filters(request.POST, filter_schema, base={})
 
         if edit_id:
             cfg = get_object_or_404(
