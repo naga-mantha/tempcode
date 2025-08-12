@@ -36,6 +36,26 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
     def get_queryset(self, user, filters, active_column_config):
         raise NotImplementedError("You must override get_queryset(user, filters, active_column_config)")
 
+    def get_column_defs(self, user, column_config):
+        """Return the column definitions used by the table.
+
+        This should return a list of dictionaries describing each column. Every
+        dictionary must include at least the keys ``field`` (the model field
+        name) and ``title`` (the human-readable label). Example::
+
+            [
+                {"field": "name", "title": "Name"},
+                {"field": "status", "title": "Status"},
+            ]
+
+        Subclasses must override this method to provide the appropriate column
+        configuration.
+
+        """
+        raise NotImplementedError(
+            "You must override get_column_defs(user, column_config)"
+        )
+
     def get_tabulator_options(self, user):
         return {}
 
