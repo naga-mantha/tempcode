@@ -6,33 +6,28 @@ from django.db.models import QuerySet
 # MODEL-LEVEL CHECKS
 # --------------------
 
-def can_view_model(user, model):
+def can_act_on_model(user, model, action):
     if user.is_superuser or user.is_staff:
         return True
     model_name = model._meta.model_name
     app_label = model._meta.app_label
-    return user.has_perm(f"{app_label}.view_{model_name}")
+    return user.has_perm(f"{app_label}.{action}_{model_name}")
+
+
+def can_view_model(user, model):
+    return can_act_on_model(user, model, "view")
+
 
 def can_add_model(user, model):
-    if user.is_superuser or user.is_staff:
-        return True
-    model_name = model._meta.model_name
-    app_label = model._meta.app_label
-    return user.has_perm(f"{app_label}.add_{model_name}")
+    return can_act_on_model(user, model, "add")
+
 
 def can_change_model(user, model):
-    if user.is_superuser or user.is_staff:
-        return True
-    model_name = model._meta.model_name
-    app_label = model._meta.app_label
-    return user.has_perm(f"{app_label}.change_{model_name}")
+    return can_act_on_model(user, model, "change")
+
 
 def can_delete_model(user, model):
-    if user.is_superuser or user.is_staff:
-        return True
-    model_name = model._meta.model_name
-    app_label = model._meta.app_label
-    return user.has_perm(f"{app_label}.delete_{model_name}")
+    return can_act_on_model(user, model, "delete")
 
 # ------------------------
 # INSTANCE-LEVEL CHECKS
@@ -42,7 +37,7 @@ def can_view_instance(user, instance):
     model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
-    if not can_view_model(user, model):
+    if not can_act_on_model(user, model, "view"):
         return False
     if hasattr(instance, "can_user_view"):
         return instance.can_user_view(user)
@@ -52,7 +47,7 @@ def can_change_instance(user, instance):
     model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
-    if not can_change_model(user, model):
+    if not can_act_on_model(user, model, "change"):
         return False
     if hasattr(instance, "can_user_change"):
         return instance.can_user_change(user)
@@ -62,7 +57,7 @@ def can_delete_instance(user, instance):
     model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
-    if not can_delete_model(user, model):
+    if not can_act_on_model(user, model, "delete"):
         return False
     if hasattr(instance, "can_user_delete"):
         return instance.can_user_delete(user)
@@ -80,7 +75,7 @@ def _get_perm_codename(model, field_name, action):
 def can_read_field(user, model, field_name, instance=None):
     if user.is_superuser or user.is_staff:
         return True
-    if not can_view_model(user, model):
+    if not can_act_on_model(user, model, "view"):
         return False
     if instance and not can_view_instance(user, instance):
         return False
@@ -89,7 +84,7 @@ def can_read_field(user, model, field_name, instance=None):
 def can_write_field(user, model, field_name, instance=None):
     if user.is_superuser or user.is_staff:
         return True
-    if not can_change_model(user, model):
+    if not can_act_on_model(user, model, "change"):
         return False
     if instance and not can_change_instance(user, instance):
         return False
