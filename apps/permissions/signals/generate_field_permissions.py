@@ -8,7 +8,8 @@ from django.contrib.contenttypes.models import ContentType
 def generate_field_permissions(sender, **kwargs):
     """
     After every migrate, ensure each concrete model field has a
-    view_ and change_ permission (i.e. read/write) in Django's auth system.
+    view_ and change_ permission (i.e. read/write) in Django's auth system,
+    excluding auto-created and non-editable fields.
     """
     for model in django_apps.get_models():
         ct = ContentType.objects.get_for_model(model)
@@ -16,6 +17,8 @@ def generate_field_permissions(sender, **kwargs):
         verbose_name = model._meta.verbose_name.title()
 
         for field in model._meta.fields:
+            if field.auto_created or not field.editable:
+                continue  # Skip auto-created or read-only fields
             field_name = field.name
 
             # READ permission
