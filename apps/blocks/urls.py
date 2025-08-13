@@ -1,5 +1,5 @@
 from django.urls import path
-import apps.blocks.blocks.table.views as table_views
+from apps.blocks.views import table as table_views
 from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
 from apps.blocks.views.filter_config import FilterConfigView
