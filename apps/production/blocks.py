@@ -1,4 +1,4 @@
-from apps.blocks.blocks.table.table_block import TableBlock
+from apps.blocks.block_types.table.table_block import TableBlock
 from apps.common.models import ProductionOrder
 from apps.blocks.services.filtering import apply_filter_registry
 

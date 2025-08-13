@@ -9,7 +9,7 @@ from django.views.generic import FormView
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.blocks.table.filter_utils import FilterResolutionMixin
+from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 
 
 class FilterConfigForm(forms.Form):
