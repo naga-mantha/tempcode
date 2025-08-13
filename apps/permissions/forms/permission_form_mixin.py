@@ -9,7 +9,7 @@ class PermissionFormMixin:
     """
 
     def __init__(self, *args, user=None, instance=None, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, instance=instance, **kwargs)
 
         if not user:
             raise ValueError("PermissionFormMixin requires a 'user' argument")
