@@ -112,28 +112,31 @@ def filter_viewable_queryset(user, queryset: QuerySet):
     """
     Returns only the objects the user is allowed to view.
     """
+    objs = list(queryset)
+
     if user.is_superuser or user.is_staff:
-        return queryset
-    return queryset.filter(
-        pk__in=[obj.pk for obj in queryset if can_view_instance(user, obj)]
-    )
+        return objs
+
+    return [obj for obj in objs if can_view_instance(user, obj)]
 
 def filter_editable_queryset(user, queryset: QuerySet):
     """
     Returns only the objects the user is allowed to edit.
     """
+    objs = list(queryset)
+
     if user.is_superuser or user.is_staff:
-        return queryset
-    return queryset.filter(
-        pk__in=[obj.pk for obj in queryset if can_change_instance(user, obj)]
-    )
+        return objs
+
+    return [obj for obj in objs if can_change_instance(user, obj)]
 
 def filter_deletable_queryset(user, queryset: QuerySet):
     """
     Returns only the objects the user is allowed to delete.
     """
+    objs = list(queryset)
+
     if user.is_superuser or user.is_staff:
-        return queryset
-    return queryset.filter(
-        pk__in=[obj.pk for obj in queryset if can_delete_instance(user, obj)]
-    )
+        return objs
+
+    return [obj for obj in objs if can_delete_instance(user, obj)]
