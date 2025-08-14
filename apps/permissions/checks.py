@@ -211,31 +211,38 @@ def get_editable_fields(user, model, instance=None):
 # INSTANCE-LEVEL QUERYSET FILTER UTILITIES
 # ----------------------------------------
 
-def _filter_queryset_by_action(user, queryset: QuerySet, check_func) -> QuerySet:
+def _filter_queryset_by_action(
+    user, queryset: QuerySet, check_func, *, chunk_size: int = 2000
+) -> QuerySet:
     """Return ``queryset`` limited to objects where ``check_func`` allows action.
 
-    Objects are streamed using ``queryset.iterator()`` to avoid loading the
-    entire queryset at once. The primary keys of permitted objects are
-    collected in a list, so very large querysets may consume significant
+    Objects are streamed using ``queryset.iterator(chunk_size=...)`` and the
+    matching primary keys are processed in smaller batches. Each batch is
+    filtered with ``pk__in`` to avoid building a single large list of IDs in
     memory.
     """
 
     if user.is_superuser or user.is_staff:
         return queryset
 
-    allowed_ids = [
-        obj.pk for obj in queryset.iterator() if check_func(user, obj)
-    ]
-    return queryset.filter(pk__in=allowed_ids)
+    allowed_qs = queryset.none()
+    batch: list[int] = []
+    for obj in queryset.iterator(chunk_size=chunk_size):
+        if check_func(user, obj):
+            batch.append(obj.pk)
+        if len(batch) >= chunk_size:
+            allowed_qs |= queryset.filter(pk__in=batch)
+            batch.clear()
+    if batch:
+        allowed_qs |= queryset.filter(pk__in=batch)
+    return allowed_qs
 
 def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only viewable objects for the user.
 
     If the user lacks view permission on the model, an empty queryset is
-    returned. Rows are streamed using ``queryset.iterator()`` instead of
-    loading the entire queryset at once. The matching primary keys are still
-    collected in a list, so very large querysets may consume significant
-    memory.
+    returned. Rows are streamed using ``queryset.iterator()`` and processed in
+    batches, so only small groups of primary keys are kept in memory at a time.
     """
 
     model = queryset.model
@@ -247,9 +254,8 @@ def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may edit.
 
     If the user lacks change permission on the model, an empty queryset is
-    returned. Iterates with ``queryset.iterator()`` to avoid loading all rows
-    at once. The list of allowed IDs is still built in memory, which can grow
-    large for enormous querysets.
+    returned. The queryset is streamed with ``queryset.iterator()`` and
+    evaluated in batches to avoid accumulating all matching IDs in memory.
     """
 
     model = queryset.model
@@ -261,9 +267,9 @@ def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may delete.
 
     If the user lacks delete permission on the model, an empty queryset is
-    returned. Uses ``queryset.iterator()`` for streaming evaluation. As with
-    the other filters, a list of allowed IDs is accumulated in memory, which
-    may be substantial for very large querysets.
+    returned. The queryset is streamed using ``queryset.iterator()`` and
+    evaluated in batches so only a limited number of primary keys are stored at
+    once.
     """
 
     model = queryset.model
