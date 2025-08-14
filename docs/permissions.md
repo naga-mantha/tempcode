@@ -53,7 +53,9 @@ UI elements.
 All of these tags delegate to similarly named functions in
 `apps.permissions.checks` and return booleans indicating whether the request's
 user has the requisite permission. If you need to check permissions for a
-different user, pass them as the first argument to the tag.
+different user, pass them as the first argument to the tag. When omitting the
+user argument, the template context must include ``request`` so the current
+user can be inferred; otherwise pass the user explicitly.
 
 ## View Mixins
 
