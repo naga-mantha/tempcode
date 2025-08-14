@@ -176,10 +176,23 @@ def _get_fields_by_action(user, model, action, instance=None):
     if user.is_superuser or user.is_staff:
         return [field.name for field in fields]
 
+    if action == "view":
+        if not can_view_model(user, model):
+            return []
+        if instance and not can_view_instance(user, instance):
+            return []
+    elif action == "change":
+        if not can_change_model(user, model):
+            return []
+        if instance and not can_change_instance(user, instance):
+            return []
+    else:
+        raise ValueError(f"Unsupported action: {action}")
+
     return [
         field.name
         for field in fields
-        if can_act_on_field(user, model, field.name, action, instance)
+        if _cached_has_perm(user, _get_perm_codename(model, field.name, action))
     ]
 
 def get_readable_fields(user, model, instance=None):
