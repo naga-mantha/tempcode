@@ -24,3 +24,5 @@ class PermissionFormMixin:
                 del self.fields[name]
             elif name not in editable:
                 field.disabled = True
+                # Disabled fields must not be required so form validation passes
+                field.required = False
