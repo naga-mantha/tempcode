@@ -215,29 +215,42 @@ def _filter_queryset_by_action(user, queryset: QuerySet, check_func) -> QuerySet
 def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only viewable objects for the user.
 
-    Rows are streamed using ``queryset.iterator()`` instead of loading the
-    entire queryset at once. The matching primary keys are still collected in
-    a list, so very large querysets may consume significant memory.
+    If the user lacks view permission on the model, an empty queryset is
+    returned. Rows are streamed using ``queryset.iterator()`` instead of
+    loading the entire queryset at once. The matching primary keys are still
+    collected in a list, so very large querysets may consume significant
+    memory.
     """
 
+    model = queryset.model
+    if not can_view_model(user, model):
+        return queryset.none()
     return _filter_queryset_by_action(user, queryset, can_view_instance)
 
 def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may edit.
 
-    Iterates with ``queryset.iterator()`` to avoid loading all rows at once.
-    The list of allowed IDs is still built in memory, which can grow large for
-    enormous querysets.
+    If the user lacks change permission on the model, an empty queryset is
+    returned. Iterates with ``queryset.iterator()`` to avoid loading all rows
+    at once. The list of allowed IDs is still built in memory, which can grow
+    large for enormous querysets.
     """
 
+    model = queryset.model
+    if not can_change_model(user, model):
+        return queryset.none()
     return _filter_queryset_by_action(user, queryset, can_change_instance)
 
 def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may delete.
 
-    Uses ``queryset.iterator()`` for streaming evaluation. As with the other
-    filters, a list of allowed IDs is accumulated in memory, which may be
-    substantial for very large querysets.
+    If the user lacks delete permission on the model, an empty queryset is
+    returned. Uses ``queryset.iterator()`` for streaming evaluation. As with
+    the other filters, a list of allowed IDs is accumulated in memory, which
+    may be substantial for very large querysets.
     """
 
+    model = queryset.model
+    if not can_delete_model(user, model):
+        return queryset.none()
     return _filter_queryset_by_action(user, queryset, can_delete_instance)
