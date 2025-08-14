@@ -91,35 +91,38 @@ def can_delete_model(user, model):
 # INSTANCE-LEVEL CHECKS
 # ------------------------
 
-def can_view_instance(user, instance):
+def can_act_on_instance(user, instance, action):
     model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
-    if not can_view_model(user, model):
+
+    checks = {
+        "view": (can_view_model, "can_user_view"),
+        "change": (can_change_model, "can_user_change"),
+        "delete": (can_delete_model, "can_user_delete"),
+    }
+
+    if action not in checks:
+        raise ValueError(f"Unsupported action: {action}")
+
+    model_check, method_name = checks[action]
+    if not model_check(user, model):
         return False
-    if hasattr(instance, "can_user_view"):
-        return instance.can_user_view(user)
+    if hasattr(instance, method_name):
+        return getattr(instance, method_name)(user)
     return True
+
+
+def can_view_instance(user, instance):
+    return can_act_on_instance(user, instance, "view")
+
 
 def can_change_instance(user, instance):
-    model = type(instance)
-    if user.is_superuser or user.is_staff:
-        return True
-    if not can_change_model(user, model):
-        return False
-    if hasattr(instance, "can_user_change"):
-        return instance.can_user_change(user)
-    return True
+    return can_act_on_instance(user, instance, "change")
+
 
 def can_delete_instance(user, instance):
-    model = type(instance)
-    if user.is_superuser or user.is_staff:
-        return True
-    if not can_delete_model(user, model):
-        return False
-    if hasattr(instance, "can_user_delete"):
-        return instance.can_user_delete(user)
-    return True
+    return can_act_on_instance(user, instance, "delete")
 
 # --------------------
 # FIELD-LEVEL CHECKS
