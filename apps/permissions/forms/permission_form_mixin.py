@@ -1,5 +1,4 @@
-from django import forms
-from apps.permissions.checks import can_read_field, can_write_field
+from apps.permissions.checks import get_editable_fields, get_readable_fields
 
 class PermissionFormMixin:
     """
@@ -18,12 +17,12 @@ class PermissionFormMixin:
         model = self._meta.model
         instance = instance or getattr(self, 'instance', None)
 
-        fields_to_remove = []
-        for name, field in self.fields.items():
-            if not can_read_field(user, model, name, instance):
-                fields_to_remove.append(name)
-            elif not can_write_field(user, model, name, instance):
-                field.disabled = True
+        readable = set(get_readable_fields(user, model, instance))
+        editable = set(get_editable_fields(user, model, instance))
 
-        for name in fields_to_remove:
-            del self.fields[name]
+        for name in list(self.fields.keys()):
+            field = self.fields[name]
+            if name not in readable:
+                del self.fields[name]
+            elif name not in editable:
+                field.disabled = True
