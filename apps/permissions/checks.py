@@ -220,8 +220,8 @@ def can_delete_instance(user, instance):
 # FIELD-LEVEL CHECKS
 # --------------------
 
-def _get_perm_codename(model, field_name, action):
-    """Return the permission codename for acting on a model field.
+def _get_full_permission_name(model, field_name, action):
+    """Return the full permission name for acting on a model field.
 
     Args:
         model: The Django model class containing the field.
@@ -229,7 +229,8 @@ def _get_perm_codename(model, field_name, action):
         action: Permission prefix such as ``"view"`` or ``"change"``.
 
     Returns:
-        str: The full permission codename for the field action.
+        str: Permission name in ``"app_label.codename"`` format for the field
+            action.
     """
 
     model_name = model._meta.model_name
@@ -259,7 +260,7 @@ def can_act_on_field(user, model, field_name, action, instance=None):
     else:
         raise ValueError(f"Unsupported action: {action}")
 
-    return _cached_has_perm(user, _get_perm_codename(model, field_name, action))
+    return _cached_has_perm(user, _get_full_permission_name(model, field_name, action))
 
 
 def can_read_field(user, model, field_name, instance=None):
@@ -322,7 +323,7 @@ def _get_fields_by_action(user, model, action, instance=None):
     return [
         field.name
         for field in fields
-        if _cached_has_perm(user, _get_perm_codename(model, field.name, action))
+        if _cached_has_perm(user, _get_full_permission_name(model, field.name, action))
     ]
 
 def get_readable_fields(user, model, instance=None):
