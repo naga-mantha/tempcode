@@ -194,28 +194,49 @@ def get_editable_fields(user, model, instance=None):
 # ----------------------------------------
 
 def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
-    """Return a QuerySet containing only viewable objects for the user."""
+    """Return a QuerySet containing only viewable objects for the user.
+
+    Rows are streamed using ``queryset.iterator()`` instead of loading the
+    entire queryset at once. The matching primary keys are still collected in
+    a list, so very large querysets may consume significant memory.
+    """
 
     if user.is_superuser or user.is_staff:
         return queryset
 
-    allowed_ids = [obj.pk for obj in queryset if can_view_instance(user, obj)]
+    allowed_ids = [
+        obj.pk for obj in queryset.iterator() if can_view_instance(user, obj)
+    ]
     return queryset.filter(pk__in=allowed_ids)
 
 def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
-    """Return a QuerySet containing only objects the user may edit."""
+    """Return a QuerySet containing only objects the user may edit.
+
+    Iterates with ``queryset.iterator()`` to avoid loading all rows at once.
+    The list of allowed IDs is still built in memory, which can grow large for
+    enormous querysets.
+    """
 
     if user.is_superuser or user.is_staff:
         return queryset
 
-    allowed_ids = [obj.pk for obj in queryset if can_change_instance(user, obj)]
+    allowed_ids = [
+        obj.pk for obj in queryset.iterator() if can_change_instance(user, obj)
+    ]
     return queryset.filter(pk__in=allowed_ids)
 
 def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
-    """Return a QuerySet containing only objects the user may delete."""
+    """Return a QuerySet containing only objects the user may delete.
+
+    Uses ``queryset.iterator()`` for streaming evaluation. As with the other
+    filters, a list of allowed IDs is accumulated in memory, which may be
+    substantial for very large querysets.
+    """
 
     if user.is_superuser or user.is_staff:
         return queryset
 
-    allowed_ids = [obj.pk for obj in queryset if can_delete_instance(user, obj)]
+    allowed_ids = [
+        obj.pk for obj in queryset.iterator() if can_delete_instance(user, obj)
+    ]
     return queryset.filter(pk__in=allowed_ids)
