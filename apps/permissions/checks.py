@@ -1,6 +1,61 @@
 # apps/permissions/checks.py
 
+"""Utilities for permission checks.
+
+This module caches calls to :meth:`User.has_perm` for the duration of a
+request to avoid repeated permission lookups.  Use
+``clear_perm_cache()`` after long‑running tasks (such as management commands
+or Celery workers) to avoid stale results or memory growth.  The cache may
+also be temporarily disabled with the :func:`disable_perm_cache`
+context manager.
+"""
+
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 from django.db.models import QuerySet
+
+
+# ---------------------------------
+# per-request user.has_perm caching
+# ---------------------------------
+
+_perm_cache_var: ContextVar[dict] = ContextVar("perm_cache", default={})
+_cache_disabled_var: ContextVar[bool] = ContextVar("perm_cache_disabled", default=False)
+
+
+def _cached_has_perm(user, perm: str) -> bool:
+    """Return ``user.has_perm(perm)`` using a per-request cache."""
+
+    if _cache_disabled_var.get():
+        return user.has_perm(perm)
+
+    cache = _perm_cache_var.get()
+    key = (id(user), perm)
+    if key not in cache:
+        cache[key] = user.has_perm(perm)
+    return cache[key]
+
+
+def clear_perm_cache() -> None:
+    """Clear the permission cache.
+
+    Long-running tasks should call this periodically or on completion to
+    ensure fresh permission checks and prevent unbounded cache growth.
+    """
+
+    _perm_cache_var.set({})
+
+
+@contextmanager
+def disable_perm_cache():
+    """Context manager to temporarily disable caching of ``has_perm`` calls."""
+
+    token = _cache_disabled_var.set(True)
+    try:
+        yield
+    finally:
+        _cache_disabled_var.reset(token)
 
 # --------------------
 # MODEL-LEVEL CHECKS
@@ -11,7 +66,7 @@ def can_act_on_model(user, model, action):
         return True
     model_name = model._meta.model_name
     app_label = model._meta.app_label
-    return user.has_perm(f"{app_label}.{action}_{model_name}")
+    return _cached_has_perm(user, f"{app_label}.{action}_{model_name}")
 
 
 def can_view_model(user, model):
@@ -79,7 +134,7 @@ def can_read_field(user, model, field_name, instance=None):
         return False
     if instance and not can_view_instance(user, instance):
         return False
-    return user.has_perm(_get_perm_codename(model, field_name, "view"))
+    return _cached_has_perm(user, _get_perm_codename(model, field_name, "view"))
 
 def can_write_field(user, model, field_name, instance=None):
     if user.is_superuser or user.is_staff:
@@ -88,7 +143,7 @@ def can_write_field(user, model, field_name, instance=None):
         return False
     if instance and not can_change_instance(user, instance):
         return False
-    return user.has_perm(_get_perm_codename(model, field_name, "change"))
+    return _cached_has_perm(user, _get_perm_codename(model, field_name, "change"))
 
 def get_readable_fields(user, model, instance=None):
     return [
