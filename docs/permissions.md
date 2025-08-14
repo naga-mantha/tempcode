@@ -130,6 +130,46 @@ def project_detail(request, pk):
     ...
 ```
 
+## Field Utilities
+
+`get_readable_fields` and `get_editable_fields` return the set of field names a
+user may view or modify on a model or instance. They are handy when building
+custom forms or serializers that should respect field-level permissions.
+
+```python
+from apps.permissions.checks import get_readable_fields, get_editable_fields
+from myapp.models import Project
+
+readable = get_readable_fields(request.user, Project)
+editable = get_editable_fields(request.user, Project, instance=project)
+```
+
+These helpers power [PermissionFormMixin](#form-permissions), which removes
+unreadable fields and disables uneditable ones automatically.
+
+## Queryset Filtering
+
+To restrict querysets to only those objects a user may act upon, use
+`filter_viewable_queryset`, `filter_editable_queryset`, and
+`filter_deletable_queryset`.
+
+```python
+from apps.permissions.checks import (
+    filter_viewable_queryset,
+    filter_editable_queryset,
+    filter_deletable_queryset,
+)
+from myapp.models import Project
+
+qs = Project.objects.all()
+viewable = filter_viewable_queryset(request.user, qs)
+editable = filter_editable_queryset(request.user, qs)
+deletable = filter_deletable_queryset(request.user, qs)
+```
+
+These utilities pair well with [ModelPermissionRequiredMixin](#view-mixins) to
+ensure list views display only objects the user can view, edit, or delete.
+
 ## Form Permissions
 
 `PermissionFormMixin` filters form fields based on a user's permissions.
