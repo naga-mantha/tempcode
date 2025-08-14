@@ -4,10 +4,7 @@
 
 `apps.permissions.checks` caches calls to `User.has_perm` for the life of a
 request. To avoid cache leakage between requests you must clear this cache
-either via Django's `request_finished` signal or by using the middleware.
-The signal hook is registered automatically when `apps.permissions` is in
-`INSTALLED_APPS`. If you prefer middleware, add it to your `MIDDLEWARE`
-setting:
+using the middleware. Add it to your `MIDDLEWARE` setting:
 
 ```python
 MIDDLEWARE = [
@@ -16,8 +13,8 @@ MIDDLEWARE = [
 ]
 ```
 
-Either the middleware or the signal hook must be enabled to prevent
-unbounded cache growth.
+Without the middleware, permission checks will accumulate indefinitely,
+leading to unbounded cache growth.
 
 ## Temporarily disabling the cache
 
