@@ -18,10 +18,16 @@ def _user_and_obj(context, user_or_obj, obj=None):
     """Return a ``(user, obj)`` tuple.
 
     When ``obj`` is ``None`` the first positional argument is treated as
-    ``obj`` and ``context['request'].user`` is used for the user.
+    ``obj`` and ``context['request'].user`` is used for the user. The template
+    context must include ``request`` when the user argument is omitted.
     """
 
     if obj is None:
+        if "request" not in context:
+            raise ValueError(
+                "Template context does not include 'request'; pass a user "
+                "explicitly."
+            )
         user = context["request"].user
         obj = user_or_obj
     else:
@@ -33,7 +39,8 @@ def _user_model_field_instance(context, *args):
     """Return ``(user, model, field_name, instance)`` from ``args``.
 
     The ``user`` argument is optional; when omitted the current request user is
-    used. The ``instance`` argument remains optional.
+    used. The ``instance`` argument remains optional. The template context must
+    include ``request`` when the user argument is omitted.
     """
 
     if args and hasattr(args[0], "is_authenticated"):
@@ -42,6 +49,11 @@ def _user_model_field_instance(context, *args):
         field_name = args[2]
         instance = args[3] if len(args) > 3 else None
     else:
+        if "request" not in context:
+            raise ValueError(
+                "Template context does not include 'request'; pass a user "
+                "explicitly."
+            )
         user = context["request"].user
         model = args[0]
         field_name = args[1]
