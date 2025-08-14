@@ -148,54 +148,46 @@ def can_write_field(user, model, field_name, instance=None):
         return False
     return _cached_has_perm(user, _get_perm_codename(model, field_name, "change"))
 
-def get_readable_fields(user, model, instance=None):
-    """Return names of model fields the user may read, including M2M fields."""
+
+def _get_fields_by_action(user, model, action, instance=None):
+    """Return names of model fields the user may act on for ``action``."""
+
     fields = list(model._meta.fields) + list(model._meta.many_to_many)
 
     if user.is_superuser or user.is_staff:
         return [field.name for field in fields]
 
-    # Pre-compute model and instance permissions so they aren't evaluated for
-    # every field in the loop below.
-    if not can_view_model(user, model):
-        return []
-    if instance is not None and not can_view_instance(user, instance):
-        return []
+    if action == "view":
+        if not can_view_model(user, model):
+            return []
+        if instance is not None and not can_view_instance(user, instance):
+            return []
+    elif action == "change":
+        if not can_change_model(user, model):
+            return []
+        if instance is not None and not can_change_instance(user, instance):
+            return []
+    else:
+        raise ValueError(f"Unsupported action: {action}")
 
     app_label = model._meta.app_label
     model_name = model._meta.model_name
-    perm_prefix = f"{app_label}.view_{model_name}_"
+    perm_prefix = f"{app_label}.{action}_{model_name}_"
 
     return [
         field.name
         for field in fields
         if _cached_has_perm(user, f"{perm_prefix}{field.name}")
     ]
+
+def get_readable_fields(user, model, instance=None):
+    """Return names of model fields the user may read, including M2M fields."""
+    return _get_fields_by_action(user, model, "view", instance)
 
 
 def get_editable_fields(user, model, instance=None):
     """Return names of model fields the user may edit, including M2M fields."""
-    fields = list(model._meta.fields) + list(model._meta.many_to_many)
-
-    if user.is_superuser or user.is_staff:
-        return [field.name for field in fields]
-
-    # Pre-compute model and instance permissions so they aren't evaluated for
-    # every field in the loop below.
-    if not can_change_model(user, model):
-        return []
-    if instance is not None and not can_change_instance(user, instance):
-        return []
-
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm_prefix = f"{app_label}.change_{model_name}_"
-
-    return [
-        field.name
-        for field in fields
-        if _cached_has_perm(user, f"{perm_prefix}{field.name}")
-    ]
+    return _get_fields_by_action(user, model, "change", instance)
 
 # ----------------------------------------
 # INSTANCE-LEVEL QUERYSET FILTER UTILITIES
