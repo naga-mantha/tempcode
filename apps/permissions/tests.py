@@ -14,6 +14,7 @@ from apps.permissions.forms import PermissionFormMixin
 from apps.permissions.signals.generate_field_permissions import (
     generate_field_permissions,
 )
+from apps.permissions.utils import generate_field_permissions_for_model
 
 
 User = get_user_model()
@@ -119,7 +120,7 @@ class RebuildFieldPermissionsCommandTests(TestCase):
 
     @patch(
         "apps.permissions.management.commands.rebuild_field_permissions.generate_field_permissions_for_model",
-        return_value=0,
+        return_value=(0, 0),
     )
     def test_specific_model(self, mock_generate):
         call_command("rebuild_field_permissions", app="auth", model="User")
@@ -128,11 +129,51 @@ class RebuildFieldPermissionsCommandTests(TestCase):
 
     @patch(
         "apps.permissions.management.commands.rebuild_field_permissions.generate_field_permissions_for_model",
-        return_value=0,
+        return_value=(0, 0),
     )
     def test_app_only(self, mock_generate):
         call_command("rebuild_field_permissions", app="auth")
         auth_models = list(django_apps.get_app_config("auth").get_models())
         called_models = [call.args[0] for call in mock_generate.call_args_list]
         self.assertCountEqual(auth_models, called_models)
+
+
+class FieldPermissionCleanupTests(TestCase):
+    def test_deletes_obsolete_field_permissions(self):
+        class DummyModel(models.Model):
+            name = models.CharField(max_length=10)
+
+            class Meta:
+                app_label = "tests"
+
+        # Initial generation to create permissions for existing fields
+        generate_field_permissions_for_model(DummyModel)
+
+        ct = ContentType.objects.get_for_model(DummyModel)
+        # Create leftover permissions for a removed field
+        Permission.objects.create(
+            codename="view_dummymodel_old",
+            name='Can view field "old" on Model "DummyModel"',
+            content_type=ct,
+        )
+        Permission.objects.create(
+            codename="change_dummymodel_old",
+            name='Can change field "old" on Model "DummyModel"',
+            content_type=ct,
+        )
+
+        created, deleted = generate_field_permissions_for_model(DummyModel)
+
+        self.assertEqual(created, 0)
+        self.assertEqual(deleted, 2)
+        self.assertFalse(
+            Permission.objects.filter(
+                content_type=ct, codename="view_dummymodel_old"
+            ).exists()
+        )
+        self.assertFalse(
+            Permission.objects.filter(
+                content_type=ct, codename="change_dummymodel_old"
+            ).exists()
+        )
 
