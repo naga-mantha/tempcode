@@ -54,3 +54,77 @@ All of these tags delegate to similarly named functions in
 `apps.permissions.checks` and return booleans indicating whether the request's
 user has the requisite permission. If you need to check permissions for a
 different user, pass them as the first argument to the tag.
+
+## View Mixins
+
+`ModelPermissionRequiredMixin` and `InstancePermissionRequiredMixin` provide
+permission checks for class-based views. Set `permission_action` to the desired
+operation (`"view"`, `"add"`, `"change"`, or `"delete"` for model-level
+checks).
+
+```python
+from django.views.generic import CreateView, DetailView, ListView
+from apps.permissions.views import (
+    ModelPermissionRequiredMixin,
+    InstancePermissionRequiredMixin,
+)
+from myapp.models import Project
+
+class ProjectListView(ModelPermissionRequiredMixin, ListView):
+    model = Project
+    permission_action = "view"
+
+class ProjectCreateView(ModelPermissionRequiredMixin, CreateView):
+    model = Project
+    permission_action = "add"
+
+class ProjectDetailView(InstancePermissionRequiredMixin, DetailView):
+    model = Project
+    permission_action = "change"
+
+    def get_permission_object(self):
+        return self.get_object()
+```
+
+## View Decorators
+
+Function-based views can enforce permissions with the
+`model_permission_required` and `instance_permission_required` decorators.
+
+```python
+from django.shortcuts import get_object_or_404
+from apps.permissions.views import (
+    model_permission_required,
+    instance_permission_required,
+)
+from myapp.models import Project
+
+@model_permission_required(Project, "view")
+def project_list(request):
+    ...
+
+@model_permission_required(Project, "add")
+def project_create(request):
+    ...
+
+@instance_permission_required(lambda request, pk: get_object_or_404(Project, pk=pk), "change")
+def project_detail(request, pk):
+    ...
+```
+
+## Rebuilding Field Permissions
+
+Field-level permissions can be regenerated using the
+`rebuild_field_permissions` management command. It processes all models by
+default but can target a specific app or model.
+
+```bash
+# Rebuild for every model
+python manage.py rebuild_field_permissions
+
+# Rebuild for an app
+python manage.py rebuild_field_permissions --app auth
+
+# Rebuild for a single model
+python manage.py rebuild_field_permissions --app auth --model User
+```
