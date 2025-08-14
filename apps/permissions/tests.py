@@ -4,7 +4,8 @@ from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import CommandError, call_command
 from django.apps import apps as django_apps
-from django.test import TestCase
+from django.db import models
+from django.test import SimpleTestCase, TestCase
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -67,6 +68,41 @@ class M2MPermissionsTests(TestCase):
         self.assertIn("groups", form.fields)
         self.assertTrue(form.fields["groups"].disabled)
 
+
+class FieldFilteringTests(SimpleTestCase):
+    def test_non_editable_and_auto_created_fields_skipped(self):
+        class DummyModel(models.Model):
+            name = models.CharField(max_length=10)
+            hidden = models.CharField(max_length=10, editable=False)
+
+            class Meta:
+                app_label = "tests"
+
+        class DummyUser:
+            is_superuser = False
+            is_staff = False
+
+            def __init__(self):
+                self.calls = []
+
+            def has_perm(self, perm):
+                self.calls.append(perm)
+                return True
+
+        user = DummyUser()
+
+        readable = get_readable_fields(user, DummyModel)
+        editable = get_editable_fields(user, DummyModel)
+
+        self.assertEqual(readable, ["name"])
+        self.assertEqual(editable, ["name"])
+
+        self.assertIn("tests.view_dummymodel_name", user.calls)
+        self.assertIn("tests.change_dummymodel_name", user.calls)
+        self.assertNotIn("tests.view_dummymodel_id", user.calls)
+        self.assertNotIn("tests.view_dummymodel_hidden", user.calls)
+        self.assertNotIn("tests.change_dummymodel_id", user.calls)
+        self.assertNotIn("tests.change_dummymodel_hidden", user.calls)
 
 class RebuildFieldPermissionsCommandTests(TestCase):
     def test_model_requires_app(self):
