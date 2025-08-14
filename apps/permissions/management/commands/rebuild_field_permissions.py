@@ -45,12 +45,16 @@ class Command(BaseCommand):
                 models = django_apps.get_models()
 
             created_count = 0
+            deleted_count = 0
             for model in models:
-                created_count += generate_field_permissions_for_model(model)
+                created, deleted = generate_field_permissions_for_model(model)
+                created_count += created
+                deleted_count += deleted
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Field permissions rebuilt. Created {created_count} permissions."
+                    "Field permissions rebuilt. "
+                    f"Created {created_count} and deleted {deleted_count} permissions."
                 )
             )
         except CommandError:
