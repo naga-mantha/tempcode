@@ -24,26 +24,27 @@ UI elements.
 {% load permissions_tags %}
 
 {# Model-level check #}
-{% if user_can_add_model request.user MyModel %}
+{% if user_can_add_model MyModel %}
     <a href="{% url 'mymodel_add' %}">Add Model</a>
 {% endif %}
 
 {# Instance-level check #}
-{% if user_can_change_instance request.user object %}
+{% if user_can_change_instance object %}
     <a href="{% url 'mymodel_edit' object.pk %}">Edit</a>
 {% endif %}
 
 {# Field-level check without an instance #}
-{% if user_can_read request.user MyModel 'status' %}
+{% if user_can_read MyModel 'status' %}
     {{ object.status }}
 {% endif %}
 
 {# Field-level check honoring instance-level permissions #}
-{% if user_can_write request.user MyModel 'status' object %}
+{% if user_can_write MyModel 'status' object %}
     <!-- render editable field -->
 {% endif %}
 ```
 
 All of these tags delegate to similarly named functions in
-`apps.permissions.checks` and return booleans indicating whether the `user` has
-the requisite permission.
+`apps.permissions.checks` and return booleans indicating whether the request's
+user has the requisite permission. If you need to check permissions for a
+different user, pass them as the first argument to the tag.
