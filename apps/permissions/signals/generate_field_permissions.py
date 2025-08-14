@@ -1,37 +1,14 @@
 from django.apps import apps as django_apps
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
-from django.contrib.auth.models import Permission
-from django.contrib.contenttypes.models import ContentType
+
+from apps.permissions.utils import generate_field_permissions_for_model
+
 
 @receiver(post_migrate)
 def generate_field_permissions(sender, **kwargs):
-    """
-    After every migrate, ensure each concrete model field has a
-    view_ and change_ permission (i.e. read/write) in Django's auth system,
-    excluding auto-created and non-editable fields.
-    """
+    """Ensure view/change permissions exist for each model's fields after migrations."""
+
     for model in django_apps.get_models():
-        ct = ContentType.objects.get_for_model(model)
-        model_name = model._meta.model_name
-        verbose_name = model._meta.verbose_name.title()
+        generate_field_permissions_for_model(model)
 
-        # Iterate over concrete fields and explicit many-to-many relations.
-        # ``model._meta.many_to_many`` captures user-defined M2M fields
-        # (excluding auto-created reverse relations). Including these ensures
-        # we create field-level permissions for them just like any standard
-        # field.
-        for field in list(model._meta.fields) + list(model._meta.many_to_many):
-            if field.auto_created or not field.editable:
-                continue  # Skip auto-created or read-only fields
-            field_name = field.name
-
-            # READ permission
-            codename_r = f"view_{model_name}_{field_name}"
-            name_r = f'Can view field "{field_name}" on Model "{verbose_name}"'
-            Permission.objects.get_or_create(codename=codename_r, content_type=ct, defaults={"name": name_r})
-
-            # WRITE permission
-            codename_w = f"change_{model_name}_{field_name}"
-            name_w = f'Can change field "{field_name}" on Model "{verbose_name}"'
-            Permission.objects.get_or_create(codename=codename_w, content_type=ct, defaults={"name": name_w})
