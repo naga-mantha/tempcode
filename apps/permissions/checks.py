@@ -130,23 +130,38 @@ def _get_perm_codename(model, field_name, action):
     app_label = model._meta.app_label
     return f"{app_label}.{action}_{model_name}_{field_name}"
 
-def can_read_field(user, model, field_name, instance=None):
+def can_act_on_field(user, model, field_name, action, instance=None):
+    """Return whether ``user`` may perform ``action`` on ``field_name``.
+
+    ``action`` should be ``"view"`` or ``"change"``. When ``instance`` is
+    provided, instance-level permissions are also checked.
+    """
+
     if user.is_superuser or user.is_staff:
         return True
-    if not can_view_model(user, model):
-        return False
-    if instance and not can_view_instance(user, instance):
-        return False
-    return _cached_has_perm(user, _get_perm_codename(model, field_name, "view"))
+
+    if action == "view":
+        if not can_view_model(user, model):
+            return False
+        if instance and not can_view_instance(user, instance):
+            return False
+    elif action == "change":
+        if not can_change_model(user, model):
+            return False
+        if instance and not can_change_instance(user, instance):
+            return False
+    else:
+        raise ValueError(f"Unsupported action: {action}")
+
+    return _cached_has_perm(user, _get_perm_codename(model, field_name, action))
+
+
+def can_read_field(user, model, field_name, instance=None):
+    return can_act_on_field(user, model, field_name, "view", instance)
+
 
 def can_write_field(user, model, field_name, instance=None):
-    if user.is_superuser or user.is_staff:
-        return True
-    if not can_change_model(user, model):
-        return False
-    if instance and not can_change_instance(user, instance):
-        return False
-    return _cached_has_perm(user, _get_perm_codename(model, field_name, "change"))
+    return can_act_on_field(user, model, field_name, "change", instance)
 
 
 def _get_fields_by_action(user, model, action, instance=None):
@@ -161,27 +176,10 @@ def _get_fields_by_action(user, model, action, instance=None):
     if user.is_superuser or user.is_staff:
         return [field.name for field in fields]
 
-    if action == "view":
-        if not can_view_model(user, model):
-            return []
-        if instance is not None and not can_view_instance(user, instance):
-            return []
-    elif action == "change":
-        if not can_change_model(user, model):
-            return []
-        if instance is not None and not can_change_instance(user, instance):
-            return []
-    else:
-        raise ValueError(f"Unsupported action: {action}")
-
-    app_label = model._meta.app_label
-    model_name = model._meta.model_name
-    perm_prefix = f"{app_label}.{action}_{model_name}_"
-
     return [
         field.name
         for field in fields
-        if _cached_has_perm(user, f"{perm_prefix}{field.name}")
+        if can_act_on_field(user, model, field.name, action, instance)
     ]
 
 def get_readable_fields(user, model, instance=None):
