@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
 
 
 def generate_field_permissions_for_model(model):
@@ -28,9 +29,9 @@ def generate_field_permissions_for_model(model):
         )
 
     # Collect existing field-level permissions for this model
-    existing_qs = Permission.objects.filter(
-        content_type=ct,
-        codename__regex=rf"^(view|change)_{model_name}_.+",
+    existing_qs = Permission.objects.filter(content_type=ct).filter(
+        Q(codename__startswith=f"view_{model_name}_")
+        | Q(codename__startswith=f"change_{model_name}_")
     )
     existing_codenames = set(existing_qs.values_list("codename", flat=True))
 
