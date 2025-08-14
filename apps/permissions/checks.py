@@ -142,6 +142,14 @@ def can_delete_model(user, model):
 # INSTANCE-LEVEL CHECKS
 # ------------------------
 
+# Mapping of instance-level actions to their model check functions and
+# optional instance method names.
+_INSTANCE_ACTIONS = {
+    "view": (can_view_model, "can_user_view"),
+    "change": (can_change_model, "can_user_change"),
+    "delete": (can_delete_model, "can_user_delete"),
+}
+
 def can_act_on_instance(user, instance, action):
     """Return whether ``user`` may perform ``action`` on ``instance``.
 
@@ -158,16 +166,10 @@ def can_act_on_instance(user, instance, action):
     if user.is_superuser or user.is_staff:
         return True
 
-    checks = {
-        "view": (can_view_model, "can_user_view"),
-        "change": (can_change_model, "can_user_change"),
-        "delete": (can_delete_model, "can_user_delete"),
-    }
-
-    if action not in checks:
+    if action not in _INSTANCE_ACTIONS:
         raise ValueError(f"Unsupported action: {action}")
 
-    model_check, method_name = checks[action]
+    model_check, method_name = _INSTANCE_ACTIONS[action]
     if not model_check(user, model):
         return False
     if hasattr(instance, method_name):
