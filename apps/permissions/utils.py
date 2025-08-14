@@ -2,6 +2,7 @@ from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.utils.text import capfirst
+from django.utils.translation import gettext_lazy as _
 
 
 def generate_field_permissions_for_model(model):
@@ -25,10 +26,10 @@ def generate_field_permissions_for_model(model):
         if field.auto_created or not field.editable:
             continue
         field_name = field.name
-        expected_perms[f"view_{model_name}_{field_name}"] = (
+        expected_perms[f"view_{model_name}_{field_name}"] = _(
             f'Can view field "{field_name}" on Model "{verbose_name}"'
         )
-        expected_perms[f"change_{model_name}_{field_name}"] = (
+        expected_perms[f"change_{model_name}_{field_name}"] = _(
             f'Can change field "{field_name}" on Model "{verbose_name}"'
         )
 
