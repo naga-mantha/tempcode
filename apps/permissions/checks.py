@@ -20,7 +20,7 @@ from django.db.models import QuerySet
 # per-request user.has_perm caching
 # ---------------------------------
 
-_perm_cache_var: ContextVar[dict] = ContextVar("perm_cache", default={})
+_perm_cache_var: ContextVar[dict | None] = ContextVar("perm_cache", default=None)
 _cache_disabled_var: ContextVar[bool] = ContextVar("perm_cache_disabled", default=False)
 
 
@@ -31,6 +31,9 @@ def _cached_has_perm(user, perm: str) -> bool:
         return user.has_perm(perm)
 
     cache = _perm_cache_var.get()
+    if cache is None:
+        cache = {}
+        _perm_cache_var.set(cache)
     key = (id(user), perm)
     if key not in cache:
         cache[key] = user.has_perm(perm)
@@ -44,7 +47,7 @@ def clear_perm_cache() -> None:
     ensure fresh permission checks and prevent unbounded cache growth.
     """
 
-    _perm_cache_var.set({})
+    _perm_cache_var.set(None)
 
 
 @contextmanager
