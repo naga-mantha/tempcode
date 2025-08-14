@@ -12,8 +12,6 @@ class PermissionFormMixin:
 
         if not user:
             raise ValueError("PermissionFormMixin requires a 'user' argument")
-
-        self._permission_user = user
         model = self._meta.model
         instance = instance or getattr(self, 'instance', None)
 
