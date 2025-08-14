@@ -65,6 +65,17 @@ def disable_perm_cache():
 # --------------------
 
 def can_act_on_model(user, model, action):
+    """Return whether ``user`` may perform ``action`` on ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class to inspect.
+        action: Permission prefix such as ``"view"`` or ``"change"``.
+
+    Returns:
+        bool: ``True`` if the user has the requested model-level permission.
+    """
+
     if user.is_superuser or user.is_staff:
         return True
     model_name = model._meta.model_name
@@ -73,18 +84,58 @@ def can_act_on_model(user, model, action):
 
 
 def can_view_model(user, model):
+    """Return whether ``user`` may view instances of ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class to inspect.
+
+    Returns:
+        bool: ``True`` if the user can view the model.
+    """
+
     return can_act_on_model(user, model, "view")
 
 
 def can_add_model(user, model):
+    """Return whether ``user`` may add instances of ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class to inspect.
+
+    Returns:
+        bool: ``True`` if the user can add the model.
+    """
+
     return can_act_on_model(user, model, "add")
 
 
 def can_change_model(user, model):
+    """Return whether ``user`` may change instances of ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class to inspect.
+
+    Returns:
+        bool: ``True`` if the user can change the model.
+    """
+
     return can_act_on_model(user, model, "change")
 
 
 def can_delete_model(user, model):
+    """Return whether ``user`` may delete instances of ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class to inspect.
+
+    Returns:
+        bool: ``True`` if the user can delete the model.
+    """
+
     return can_act_on_model(user, model, "delete")
 
 # ------------------------
@@ -92,6 +143,17 @@ def can_delete_model(user, model):
 # ------------------------
 
 def can_act_on_instance(user, instance, action):
+    """Return whether ``user`` may perform ``action`` on ``instance``.
+
+    Args:
+        user: The user being checked.
+        instance: The model instance to inspect.
+        action: Permission prefix such as ``"view"`` or ``"delete"``.
+
+    Returns:
+        bool: ``True`` if the user has the requested instance-level permission.
+    """
+
     model = type(instance)
     if user.is_superuser or user.is_staff:
         return True
@@ -114,14 +176,44 @@ def can_act_on_instance(user, instance, action):
 
 
 def can_view_instance(user, instance):
+    """Return whether ``user`` may view ``instance``.
+
+    Args:
+        user: The user being checked.
+        instance: The model instance to inspect.
+
+    Returns:
+        bool: ``True`` if the user can view the instance.
+    """
+
     return can_act_on_instance(user, instance, "view")
 
 
 def can_change_instance(user, instance):
+    """Return whether ``user`` may change ``instance``.
+
+    Args:
+        user: The user being checked.
+        instance: The model instance to inspect.
+
+    Returns:
+        bool: ``True`` if the user can change the instance.
+    """
+
     return can_act_on_instance(user, instance, "change")
 
 
 def can_delete_instance(user, instance):
+    """Return whether ``user`` may delete ``instance``.
+
+    Args:
+        user: The user being checked.
+        instance: The model instance to inspect.
+
+    Returns:
+        bool: ``True`` if the user can delete the instance.
+    """
+
     return can_act_on_instance(user, instance, "delete")
 
 # --------------------
@@ -129,6 +221,17 @@ def can_delete_instance(user, instance):
 # --------------------
 
 def _get_perm_codename(model, field_name, action):
+    """Return the permission codename for acting on a model field.
+
+    Args:
+        model: The Django model class containing the field.
+        field_name: Name of the field being checked.
+        action: Permission prefix such as ``"view"`` or ``"change"``.
+
+    Returns:
+        str: The full permission codename for the field action.
+    """
+
     model_name = model._meta.model_name
     app_label = model._meta.app_label
     return f"{app_label}.{action}_{model_name}_{field_name}"
@@ -160,10 +263,34 @@ def can_act_on_field(user, model, field_name, action, instance=None):
 
 
 def can_read_field(user, model, field_name, instance=None):
+    """Return whether ``user`` may view ``field_name`` on ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class containing the field.
+        field_name: Name of the field being inspected.
+        instance: Optional model instance for instance-level checks.
+
+    Returns:
+        bool: ``True`` if the field may be viewed.
+    """
+
     return can_act_on_field(user, model, field_name, "view", instance)
 
 
 def can_write_field(user, model, field_name, instance=None):
+    """Return whether ``user`` may change ``field_name`` on ``model``.
+
+    Args:
+        user: The user being checked.
+        model: The Django model class containing the field.
+        field_name: Name of the field being inspected.
+        instance: Optional model instance for instance-level checks.
+
+    Returns:
+        bool: ``True`` if the field may be modified.
+    """
+
     return can_act_on_field(user, model, field_name, "change", instance)
 
 
