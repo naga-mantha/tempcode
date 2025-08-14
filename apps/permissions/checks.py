@@ -193,6 +193,23 @@ def get_editable_fields(user, model, instance=None):
 # INSTANCE-LEVEL QUERYSET FILTER UTILITIES
 # ----------------------------------------
 
+def _filter_queryset_by_action(user, queryset: QuerySet, check_func) -> QuerySet:
+    """Return ``queryset`` limited to objects where ``check_func`` allows action.
+
+    Objects are streamed using ``queryset.iterator()`` to avoid loading the
+    entire queryset at once. The primary keys of permitted objects are
+    collected in a list, so very large querysets may consume significant
+    memory.
+    """
+
+    if user.is_superuser or user.is_staff:
+        return queryset
+
+    allowed_ids = [
+        obj.pk for obj in queryset.iterator() if check_func(user, obj)
+    ]
+    return queryset.filter(pk__in=allowed_ids)
+
 def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only viewable objects for the user.
 
@@ -201,13 +218,7 @@ def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
     a list, so very large querysets may consume significant memory.
     """
 
-    if user.is_superuser or user.is_staff:
-        return queryset
-
-    allowed_ids = [
-        obj.pk for obj in queryset.iterator() if can_view_instance(user, obj)
-    ]
-    return queryset.filter(pk__in=allowed_ids)
+    return _filter_queryset_by_action(user, queryset, can_view_instance)
 
 def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may edit.
@@ -217,13 +228,7 @@ def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
     enormous querysets.
     """
 
-    if user.is_superuser or user.is_staff:
-        return queryset
-
-    allowed_ids = [
-        obj.pk for obj in queryset.iterator() if can_change_instance(user, obj)
-    ]
-    return queryset.filter(pk__in=allowed_ids)
+    return _filter_queryset_by_action(user, queryset, can_change_instance)
 
 def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
     """Return a QuerySet containing only objects the user may delete.
@@ -233,10 +238,4 @@ def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
     substantial for very large querysets.
     """
 
-    if user.is_superuser or user.is_staff:
-        return queryset
-
-    allowed_ids = [
-        obj.pk for obj in queryset.iterator() if can_delete_instance(user, obj)
-    ]
-    return queryset.filter(pk__in=allowed_ids)
+    return _filter_queryset_by_action(user, queryset, can_delete_instance)
