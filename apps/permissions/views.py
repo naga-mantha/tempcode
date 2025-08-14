@@ -1,11 +1,12 @@
 """View-level permission utilities.
 
 This module provides mixins and decorators to enforce permissions in
-Django views.
+Django views. Supported actions include ``"view"``, ``"add"``, ``"change"``,
+and ``"delete"``.
 
 Usage with class-based views::
 
-    from django.views.generic import DetailView, ListView
+    from django.views.generic import CreateView, DetailView, ListView
     from apps.permissions.views import (
         ModelPermissionRequiredMixin,
         InstancePermissionRequiredMixin,
@@ -15,6 +16,10 @@ Usage with class-based views::
     class ProjectListView(ModelPermissionRequiredMixin, ListView):
         model = Project
         permission_action = "view"
+
+    class ProjectCreateView(ModelPermissionRequiredMixin, CreateView):
+        model = Project
+        permission_action = "add"
 
     class ProjectDetailView(InstancePermissionRequiredMixin, DetailView):
         model = Project
@@ -36,6 +41,10 @@ Usage with function-based views::
     def project_list(request):
         ...
 
+    @model_permission_required(Project, "add")
+    def project_create(request):
+        ...
+
     @instance_permission_required(lambda request, pk: get_object_or_404(Project, pk=pk), "change")
     def project_detail(request, pk):
         ...
@@ -47,6 +56,7 @@ from typing import Callable
 from django.core.exceptions import PermissionDenied
 
 from .checks import (
+    can_add_model,
     can_change_instance,
     can_change_model,
     can_delete_instance,
@@ -58,6 +68,7 @@ from .checks import (
 # Mapping of action strings to check functions
 _MODEL_CHECKS = {
     "view": can_view_model,
+    "add": can_add_model,
     "change": can_change_model,
     "delete": can_delete_model,
 }
@@ -70,7 +81,11 @@ _INSTANCE_CHECKS = {
 
 
 class ModelPermissionRequiredMixin:
-    """Mixin enforcing model-level permissions for class-based views."""
+    """Mixin enforcing model-level permissions for class-based views.
+
+    Valid ``permission_action`` values are ``"view"``, ``"add"``, ``"change"``,
+    and ``"delete"``.
+    """
 
     permission_action = "view"
     permission_model = None
@@ -122,7 +137,15 @@ class InstancePermissionRequiredMixin:
 
 
 def model_permission_required(model, action: str = "view"):
-    """Decorator for function-based views enforcing model-level permissions."""
+    """Decorator for function-based views enforcing model-level permissions.
+
+    Parameters
+    ----------
+    model:
+        The model class to check permissions against.
+    action:
+        Permission action to check (``"view"``, ``"add"``, ``"change"``, or ``"delete"``).
+    """
 
     def decorator(view_func: Callable):
         @wraps(view_func)
