@@ -152,7 +152,11 @@ def can_write_field(user, model, field_name, instance=None):
 def _get_fields_by_action(user, model, action, instance=None):
     """Return names of model fields the user may act on for ``action``."""
 
-    fields = list(model._meta.fields) + list(model._meta.many_to_many)
+    fields = [
+        field
+        for field in list(model._meta.fields) + list(model._meta.many_to_many)
+        if not field.auto_created and field.editable
+    ]
 
     if user.is_superuser or user.is_staff:
         return [field.name for field in fields]
