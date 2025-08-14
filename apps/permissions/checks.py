@@ -150,23 +150,51 @@ def can_write_field(user, model, field_name, instance=None):
 
 def get_readable_fields(user, model, instance=None):
     """Return names of model fields the user may read, including M2M fields."""
-
     fields = list(model._meta.fields) + list(model._meta.many_to_many)
+
+    if user.is_superuser or user.is_staff:
+        return [field.name for field in fields]
+
+    # Pre-compute model and instance permissions so they aren't evaluated for
+    # every field in the loop below.
+    if not can_view_model(user, model):
+        return []
+    if instance is not None and not can_view_instance(user, instance):
+        return []
+
+    app_label = model._meta.app_label
+    model_name = model._meta.model_name
+    perm_prefix = f"{app_label}.view_{model_name}_"
+
     return [
         field.name
         for field in fields
-        if can_read_field(user, model, field.name, instance)
+        if _cached_has_perm(user, f"{perm_prefix}{field.name}")
     ]
 
 
 def get_editable_fields(user, model, instance=None):
     """Return names of model fields the user may edit, including M2M fields."""
-
     fields = list(model._meta.fields) + list(model._meta.many_to_many)
+
+    if user.is_superuser or user.is_staff:
+        return [field.name for field in fields]
+
+    # Pre-compute model and instance permissions so they aren't evaluated for
+    # every field in the loop below.
+    if not can_change_model(user, model):
+        return []
+    if instance is not None and not can_change_instance(user, instance):
+        return []
+
+    app_label = model._meta.app_label
+    model_name = model._meta.model_name
+    perm_prefix = f"{app_label}.change_{model_name}_"
+
     return [
         field.name
         for field in fields
-        if can_write_field(user, model, field.name, instance)
+        if _cached_has_perm(user, f"{perm_prefix}{field.name}")
     ]
 
 # ----------------------------------------
