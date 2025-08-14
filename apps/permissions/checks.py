@@ -91,16 +91,23 @@ def can_write_field(user, model, field_name, instance=None):
     return user.has_perm(_get_perm_codename(model, field_name, "change"))
 
 def get_readable_fields(user, model, instance=None):
+    """Return names of model fields the user may read, including M2M fields."""
+
+    fields = list(model._meta.fields) + list(model._meta.many_to_many)
     return [
         field.name
-        for field in model._meta.fields
+        for field in fields
         if can_read_field(user, model, field.name, instance)
     ]
 
+
 def get_editable_fields(user, model, instance=None):
+    """Return names of model fields the user may edit, including M2M fields."""
+
+    fields = list(model._meta.fields) + list(model._meta.many_to_many)
     return [
         field.name
-        for field in model._meta.fields
+        for field in fields
         if can_write_field(user, model, field.name, instance)
     ]
 

@@ -16,7 +16,12 @@ def generate_field_permissions(sender, **kwargs):
         model_name = model._meta.model_name
         verbose_name = model._meta.verbose_name.title()
 
-        for field in model._meta.fields:
+        # Iterate over concrete fields and explicit many-to-many relations.
+        # ``model._meta.many_to_many`` captures user-defined M2M fields
+        # (excluding auto-created reverse relations). Including these ensures
+        # we create field-level permissions for them just like any standard
+        # field.
+        for field in list(model._meta.fields) + list(model._meta.many_to_many):
             if field.auto_created or not field.editable:
                 continue  # Skip auto-created or read-only fields
             field_name = field.name
