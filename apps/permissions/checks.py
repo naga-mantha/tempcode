@@ -108,35 +108,29 @@ def get_editable_fields(user, model, instance=None):
 # INSTANCE-LEVEL QUERYSET FILTER UTILITIES
 # ----------------------------------------
 
-def filter_viewable_queryset(user, queryset: QuerySet):
-    """
-    Returns only the objects the user is allowed to view.
-    """
-    objs = list(queryset)
+def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
+    """Return a QuerySet containing only viewable objects for the user."""
 
     if user.is_superuser or user.is_staff:
-        return objs
+        return queryset
 
-    return [obj for obj in objs if can_view_instance(user, obj)]
+    allowed_ids = [obj.pk for obj in queryset if can_view_instance(user, obj)]
+    return queryset.filter(pk__in=allowed_ids)
 
-def filter_editable_queryset(user, queryset: QuerySet):
-    """
-    Returns only the objects the user is allowed to edit.
-    """
-    objs = list(queryset)
+def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
+    """Return a QuerySet containing only objects the user may edit."""
 
     if user.is_superuser or user.is_staff:
-        return objs
+        return queryset
 
-    return [obj for obj in objs if can_change_instance(user, obj)]
+    allowed_ids = [obj.pk for obj in queryset if can_change_instance(user, obj)]
+    return queryset.filter(pk__in=allowed_ids)
 
-def filter_deletable_queryset(user, queryset: QuerySet):
-    """
-    Returns only the objects the user is allowed to delete.
-    """
-    objs = list(queryset)
+def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
+    """Return a QuerySet containing only objects the user may delete."""
 
     if user.is_superuser or user.is_staff:
-        return objs
+        return queryset
 
-    return [obj for obj in objs if can_delete_instance(user, obj)]
+    allowed_ids = [obj.pk for obj in queryset if can_delete_instance(user, obj)]
+    return queryset.filter(pk__in=allowed_ids)
