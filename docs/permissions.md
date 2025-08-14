@@ -19,6 +19,22 @@ MIDDLEWARE = [
 Either the middleware or the signal hook must be enabled to prevent
 unbounded cache growth.
 
+## Temporarily disabling the cache
+
+For cases where clearing the cache is undesirable, the
+`disable_perm_cache` context manager bypasses caching within its block.
+
+```python
+from apps.permissions.checks import disable_perm_cache
+
+with disable_perm_cache():
+    user.has_perm("auth.view_user")
+```
+
+This is useful in tests or one-off scripts that require fresh permission
+checks. To remove cached results entirely, see
+[Cache clearing](#cache-clearing).
+
 ## Permission Template Tags
 
 This project exposes template tags that mirror the utilities in
@@ -113,6 +129,28 @@ def project_create(request):
 def project_detail(request, pk):
     ...
 ```
+
+## Form Permissions
+
+`PermissionFormMixin` filters form fields based on a user's permissions.
+Unreadable fields are removed and uneditable fields are disabled, similar to
+the checks provided by the [View Mixins](#view-mixins).
+
+```python
+from django import forms
+from apps.permissions.forms import PermissionFormMixin
+from myapp.models import Project
+
+class ProjectForm(PermissionFormMixin, forms.ModelForm):
+    class Meta:
+        model = Project
+        fields = "__all__"
+
+form = ProjectForm(user=request.user, instance=project)
+```
+
+This mixin applies permission logic at the form level and complements the
+view-based utilities.
 
 ## Rebuilding Field Permissions
 
