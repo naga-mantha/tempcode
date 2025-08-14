@@ -1,6 +1,7 @@
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
+from django.utils.text import capfirst
 
 
 def generate_field_permissions_for_model(model):
@@ -13,7 +14,7 @@ def generate_field_permissions_for_model(model):
 
     ct = ContentType.objects.get_for_model(model)
     model_name = model._meta.model_name
-    verbose_name = model._meta.verbose_name.title()
+    verbose_name = capfirst(model._meta.verbose_name)
 
     # Determine expected permissions for each editable field
     expected_perms = {}
