@@ -1,4 +1,19 @@
-# Permission Template Tags
+# Permissions
+
+## Cache-clearing middleware
+
+`apps.permissions.checks` caches calls to `User.has_perm` for the life of a
+request. To ensure fresh results between requests, add the middleware to your
+`MIDDLEWARE` setting:
+
+```python
+MIDDLEWARE = [
+    # ...
+    "apps.permissions.middleware.PermissionCacheMiddleware",
+]
+```
+
+## Permission Template Tags
 
 This project exposes template tags that mirror the utilities in
 `apps.permissions.checks`. They allow model-, instance-, and field-level
