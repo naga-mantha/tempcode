@@ -1,10 +1,13 @@
 # Permissions
 
-## Cache-clearing middleware
+## Cache clearing
 
 `apps.permissions.checks` caches calls to `User.has_perm` for the life of a
-request. To ensure fresh results between requests, add the middleware to your
-`MIDDLEWARE` setting:
+request. To avoid cache leakage between requests you must clear this cache
+either via Django's `request_finished` signal or by using the middleware.
+The signal hook is registered automatically when `apps.permissions` is in
+`INSTALLED_APPS`. If you prefer middleware, add it to your `MIDDLEWARE`
+setting:
 
 ```python
 MIDDLEWARE = [
@@ -12,6 +15,9 @@ MIDDLEWARE = [
     "apps.permissions.middleware.PermissionCacheMiddleware",
 ]
 ```
+
+Either the middleware or the signal hook must be enabled to prevent
+unbounded cache growth.
 
 ## Permission Template Tags
 
