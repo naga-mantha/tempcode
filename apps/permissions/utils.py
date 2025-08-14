@@ -12,7 +12,10 @@ def generate_field_permissions_for_model(model):
     of permissions created and deleted, respectively.
     """
 
-    ct = ContentType.objects.get_for_model(model)
+    if model._meta.proxy or model._meta.abstract:
+        return 0, 0
+
+    ct = ContentType.objects.get_for_model(model, for_concrete_model=False)
     model_name = model._meta.model_name
     verbose_name = capfirst(model._meta.verbose_name)
 

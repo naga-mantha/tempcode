@@ -177,3 +177,39 @@ class FieldPermissionCleanupTests(TestCase):
             ).exists()
         )
 
+
+class ProxyAndAbstractModelTests(TestCase):
+    def test_returns_zero_for_proxy_model(self):
+        class Base(models.Model):
+            name = models.CharField(max_length=10)
+
+            class Meta:
+                app_label = "tests"
+
+        class Proxy(Base):
+            class Meta:
+                app_label = "tests"
+                proxy = True
+
+        with patch(
+            "apps.permissions.utils.ContentType.objects.get_for_model"
+        ) as mock_get_for_model:
+            created, deleted = generate_field_permissions_for_model(Proxy)
+        self.assertEqual((created, deleted), (0, 0))
+        mock_get_for_model.assert_not_called()
+
+    def test_returns_zero_for_abstract_model(self):
+        class Abstract(models.Model):
+            name = models.CharField(max_length=10)
+
+            class Meta:
+                app_label = "tests"
+                abstract = True
+
+        with patch(
+            "apps.permissions.utils.ContentType.objects.get_for_model"
+        ) as mock_get_for_model:
+            created, deleted = generate_field_permissions_for_model(Abstract)
+        self.assertEqual((created, deleted), (0, 0))
+        mock_get_for_model.assert_not_called()
+
