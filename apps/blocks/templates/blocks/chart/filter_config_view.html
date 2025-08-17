@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load dict_extras %}
+
+{% block content %}
+  <div class="main-container">
+    <h1 class="page-title">Customize Filters for '{{ block.name }}'</h1>
+
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="mx-auto" style="max-width: 720px;">
+
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <form method="get" action="{% url 'chart_filter_config' route_block_name  %}">
+          <div class="input-group">
+            <label for="filter-select" class="input-group-text">Saved Filter:</label>
+            <select id="filter-select" name="id" class="form-select" onchange="this.form.submit()">
+              <option value="">-- New Filter --</option>
+              {% for f in user_filters %}
+                <option value="{{ f.id }}" {% if editing and editing.id == f.id %}selected{% endif %}>
+                  {{ f.name }}{% if f.is_default %} (default){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+
+        {% if editing %}
+          <form method="post" action="{% url 'chart_filter_delete' route_block_name editing.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete</button>
+          </form>
+        {% endif %}
+      </div>
+
+      <hr>
+
+      <form id="viewForm" method="post" action="{% url 'chart_filter_config' route_block_name %}" novalidate>
+        {% csrf_token %}
+        {% if editing %}
+          <input type="hidden" name="id" value="{{ editing.id }}">
+        {% endif %}
+
+        <div class="row mb-3">
+          <label for="filter-name" class="col-2 col-form-label">Name</label>
+          <div class="col-sm-10">
+            <input type="text" class="form-control" id="filter-name" name="name" value="{{ editing.name|default:'' }}" required />
+          </div>
+        </div>
+
+        <div class="form-check mb-3">
+          <input id="filter-default" class="form-check-input" type="checkbox" name="is_default" {% if editing and editing.is_default %}checked{% endif %}>
+          <label class="form-check-label" for="filter-default">Set as Default</label>
+        </div>
+
+        <details class="border rounded mb-3" open>
+          <summary class="p-2 bg-light" style="cursor: pointer; font-weight: bold;">Filter Conditions</summary>
+          <div class="p-3">
+            {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values %}
+          </div>
+        </details>
+
+        <button type="submit" class="btn btn-success">
+          {% if editing %}Save Changes{% else %}Create Filter{% endif %}
+        </button>
+        <a class="btn btn-secondary" href="{% url 'chart_filter_config' route_block_name %}">Cancel</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('viewForm').addEventListener('submit', function (e) {
+    const name = document.getElementById('filter-name').value.trim();
+    if (!name) {
+      e.preventDefault();
+      alert('Please enter a name for this filter.');
+    }
+  });
+</script>
+{% endblock %}
+
