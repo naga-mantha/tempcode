@@ -8,6 +8,7 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.block_types.chart.chart_block import DonutChartBlock
 
 
 class BlockFilterConfigTests(TestCase):
@@ -68,6 +69,54 @@ class FilterConfigViewTests(TestCase):
         )
         response = self.client.post(
             reverse("table_filter_config", args=[self.block_name]),
+            {"name": "existing"},
+            follow=True,
+        )
+        messages = [m.message for m in get_messages(response.wsgi_request)]
+        self.assertTrue(
+            any("name already taken" in m.lower() for m in messages),
+            messages,
+        )
+        self.assertEqual(
+            BlockFilterConfig.objects.filter(
+                block=self.block, user=self.user, name="existing"
+            ).count(),
+            1,
+        )
+
+
+class ChartFilterConfigViewTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create(username="user2")
+        self.block_name = "chart_block"
+        self.block = Block.objects.create(name=self.block_name)
+
+        class DummyChart(DonutChartBlock):
+            def get_chart_data(self, user, filters):
+                return {"labels": ["A"], "values": [1]}
+
+            def get_filter_schema(self, request):
+                return {}
+
+        self.block_impl = DummyChart(self.block_name)
+        if not block_registry.get(self.block_name):
+            block_registry.register(self.block_name, self.block_impl)
+
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        block_registry._blocks.pop(self.block_name, None)
+        block_registry._metadata.pop(self.block_name, None)
+
+    def test_duplicate_name_shows_error_message(self):
+        BlockFilterConfig.objects.create(
+            block=self.block,
+            user=self.user,
+            name="existing",
+            values={},
+        )
+        response = self.client.post(
+            reverse("chart_filter_config", args=[self.block_name]),
             {"name": "existing"},
             follow=True,
         )

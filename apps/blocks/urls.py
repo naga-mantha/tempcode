@@ -1,8 +1,9 @@
 from django.urls import path
 from apps.blocks.views import table as table_views
+from apps.blocks.views import chart as chart_views
 from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
-from apps.blocks.views.filter_config import FilterConfigView
+from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
 
 urlpatterns = [
     path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
@@ -17,5 +18,16 @@ urlpatterns = [
         "table/<str:block_name>/filters/<int:config_id>/delete/",
         table_views.filter_delete_view,
         name="table_filter_delete",
+    ),
+    path("chart/<str:block_name>/", chart_views.render_chart_block, name="render_chart_block"),
+    path(
+        "chart/<str:block_name>/filters/",
+        ChartFilterConfigView.as_view(),
+        name="chart_filter_config",
+    ),
+    path(
+        "chart/<str:block_name>/filters/<int:config_id>/delete/",
+        chart_views.filter_delete_view,
+        name="chart_filter_delete",
     ),
 ]

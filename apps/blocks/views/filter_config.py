@@ -25,6 +25,7 @@ class FilterConfigForm(forms.Form):
 class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
     template_name = "blocks/table/filter_config_view.html"
     form_class = FilterConfigForm
+    filter_config_url_name = "table_filter_config"
 
     def dispatch(self, request, block_name, *args, **kwargs):
         self.block_name = block_name
@@ -69,7 +70,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         is_default = form.cleaned_data.get("is_default", False)
         if not name:
             messages.error(self.request, "Please provide a name.")
-            return redirect("table_filter_config", block_name=self.block_name)
+            return redirect(self.filter_config_url_name, block_name=self.block_name)
 
         values = self._collect_filters(self.request.POST, self.filter_schema, base={})
 
@@ -91,7 +92,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             )
             if cfg.id:
                 return redirect(f"{self.request.path}?id={cfg.id}")
-            return redirect("table_filter_config", block_name=self.block_name)
+            return redirect(self.filter_config_url_name, block_name=self.block_name)
         messages.success(self.request, "Filter saved.")
         return redirect(f"{self.request.path}?id={cfg.id}")
 
@@ -110,3 +111,8 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             }
         )
         return context
+
+
+class ChartFilterConfigView(FilterConfigView):
+    template_name = "blocks/chart/filter_config_view.html"
+    filter_config_url_name = "chart_filter_config"

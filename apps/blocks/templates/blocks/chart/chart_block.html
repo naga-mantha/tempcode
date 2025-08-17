@@ -1,0 +1,53 @@
+{% load static %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<div class="card">
+  <div class="card-body">
+    <div class="d-flex justify-content-end mb-3">
+      <label class="me-2">Filter:</label>
+      <select id="filter-config-select" class="form-select d-inline-block w-auto">
+        <option value="">-- None --</option>
+        {% for f in filter_configs %}
+          <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+            {{ f.name }}{% if f.is_default %} (default){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-link p-0 ms-2" href="{% url 'chart_filter_config' block_name %}">Manage Filters</a>
+    </div>
+
+    <form method="get" id="dynamic-filters-form" class="mb-3">
+      {% if active_filter_config_id %}
+        <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
+      {% endif %}
+
+      <details class="border rounded">
+        <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
+          Filter Conditions
+        </summary>
+        <div class="p-3">
+          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values %}
+          <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+        </div>
+      </details>
+    </form>
+
+    <div id="chart-{{ block_name }}"></div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const fig = {{ figure|safe }};
+    Plotly.newPlot('chart-{{ block_name }}', fig.data, fig.layout);
+
+    document.getElementById('filter-config-select')?.addEventListener('change', function() {
+      const params = new URLSearchParams(window.location.search);
+      if (this.value) params.set('filter_config_id', this.value); else params.delete('filter_config_id');
+      window.location.search = params.toString();
+    });
+  });
+</script>
+{% endblock %}
+
