@@ -5,7 +5,7 @@
   <div class="card-body">
     <div class="d-flex justify-content-end mb-3">
       <label class="me-2">Filter:</label>
-      <select id="filter-config-select" class="form-select d-inline-block w-auto">
+      <select id="filter-config-select-{{ block_name }}" class="form-select d-inline-block w-auto">
         <option value="">-- None --</option>
         {% for f in filter_configs %}
           <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
@@ -16,9 +16,9 @@
       <a class="btn btn-link p-0 ms-2" href="{% url 'chart_filter_config' block_name %}">Manage Filters</a>
     </div>
 
-    <form method="get" id="dynamic-filters-form" class="mb-3">
+    <form method="get" id="dynamic-filters-form-{{ block_name }}" class="mb-3">
       {% if active_filter_config_id %}
-        <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
+        <input type="hidden" name="{{ block_name }}__filter_config_id" value="{{ active_filter_config_id }}">
       {% endif %}
 
       <details class="border rounded">
@@ -26,7 +26,7 @@
           Filter Conditions
         </summary>
         <div class="p-3">
-          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values %}
+          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__filters." id_prefix=block_name %}
           <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
         </div>
       </details>
@@ -42,9 +42,11 @@
     const fig = {{ figure|safe }};
     Plotly.newPlot('chart-{{ block_name }}', fig.data, fig.layout);
 
-    document.getElementById('filter-config-select')?.addEventListener('change', function() {
+    const filtSelect = document.getElementById('filter-config-select-{{ block_name }}');
+    filtSelect?.addEventListener('change', function() {
       const params = new URLSearchParams(window.location.search);
-      if (this.value) params.set('filter_config_id', this.value); else params.delete('filter_config_id');
+      const key = '{{ block_name }}__filter_config_id';
+      if (this.value) params.set(key, this.value); else params.delete(key);
       window.location.search = params.toString();
     });
   });

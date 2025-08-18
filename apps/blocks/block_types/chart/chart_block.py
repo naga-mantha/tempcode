@@ -39,7 +39,7 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
     def block(self):
         if self._block is None:
             try:
-                self._block = Block.objects.get(name=self.block_name)
+                self._block = Block.objects.get(code=self.block_name)
             except Block.DoesNotExist as exc:  # pragma: no cover - defensive
                 raise Exception(
                     f"Block '{self.block_name}' not registered in admin."
@@ -69,7 +69,8 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
 
     def _select_filter_config(self, request):
         user = request.user
-        filter_config_id = request.GET.get("filter_config_id")
+        ns = f"{self.block_name}__"
+        filter_config_id = request.GET.get(f"{ns}filter_config_id") or request.GET.get("filter_config_id")
         filter_configs = self.get_filter_config_queryset(user)
         active_filter_config = None
         if filter_config_id:
@@ -89,8 +90,9 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             raw_schema = self.get_filter_schema(user)
         filter_schema = self._resolve_filter_schema(raw_schema, user)
         base_values = active_filter_config.values if active_filter_config else {}
+        ns_prefix = f"{self.block_name}__filters."
         selected_filter_values = self._collect_filters(
-            request.GET, filter_schema, base=base_values
+            request.GET, filter_schema, base=base_values, prefix=ns_prefix, allow_flat=False
         )
         return filter_schema, selected_filter_values
 

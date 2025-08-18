@@ -1,9 +1,26 @@
 <h1>Your Layouts</h1>
+
+<h2>Private</h2>
 <ul>
-{% for layout in layouts %}
-    <li><a href="{% url 'layout_detail' slug=layout.slug %}">{{ layout.name }}</a></li>
+{% for layout in private_layouts %}
+    <li>
+        <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
+    </li>
 {% empty %}
-    <li>No layouts</li>
+    <li>No private layouts</li>
 {% endfor %}
 </ul>
+
+<h2>Public</h2>
+<ul>
+{% for layout in public_layouts %}
+    <li>
+        <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
+        <small>by {{ layout.user.username }}</small>
+    </li>
+{% empty %}
+    <li>No public layouts</li>
+{% endfor %}
+</ul>
+
 <a href="{% url 'layout_create' %}">Create Layout</a>

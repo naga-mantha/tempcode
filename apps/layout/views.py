@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -10,18 +11,36 @@ from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.blocks.models.block import Block
 from apps.layout.models import Layout, LayoutBlock, LayoutFilterConfig
-from apps.layout.forms import LayoutForm, AddBlockForm, LayoutFilterConfigForm
+from django.forms import modelformset_factory
+
+from apps.layout.forms import (
+    LayoutForm,
+    AddBlockForm,
+    LayoutFilterConfigForm,
+    LayoutBlockForm,
+)
 
 
 class LayoutCreateView(LoginRequiredMixin, FormView):
     template_name = "layout/layout_form.html"
     form_class = LayoutForm
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         layout = form.save(commit=False)
         layout.user = self.request.user
-        layout.save()
-        return redirect("layout_detail", slug=layout.slug)
+        if not self.request.user.is_staff:
+            layout.visibility = Layout.VISIBILITY_PRIVATE
+        try:
+            layout.save()
+        except IntegrityError:
+            form.add_error("name", "You already have a layout with this name.")
+            return self.form_invalid(form)
+        return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
 
 
 class LayoutDeleteView(LoginRequiredMixin, DeleteView):
@@ -32,7 +51,11 @@ class LayoutDeleteView(LoginRequiredMixin, DeleteView):
     template_name = "layout/layout_confirm_delete.html"
 
     def get_queryset(self):
-        return Layout.objects.filter(user=self.request.user)
+        username = self.kwargs.get("username")
+        base = Layout.objects.filter(user__username=username)
+        if self.request.user.is_staff:
+            return base
+        return base.filter(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE)
 
 
 class LayoutListView(LoginRequiredMixin, TemplateView):
@@ -40,15 +63,22 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["layouts"] = Layout.objects.filter(user=self.request.user)
+        qs = Layout.objects.filter(
+            Q(visibility=Layout.VISIBILITY_PUBLIC)
+            | Q(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE)
+        )
+        context["public_layouts"] = qs.filter(visibility=Layout.VISIBILITY_PUBLIC)
+        context["private_layouts"] = qs.filter(
+            visibility=Layout.VISIBILITY_PRIVATE, user=self.request.user
+        )
         return context
 
 
 class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
     template_name = "layout/layout_detail.html"
 
-    def dispatch(self, request, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug)
+    def dispatch(self, request, username, slug, *args, **kwargs):
+        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
         if self.layout.visibility == Layout.VISIBILITY_PRIVATE and self.layout.user != request.user:
             raise Http404()
         self.filter_configs = LayoutFilterConfig.objects.filter(
@@ -68,7 +98,7 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
     def _build_filter_schema(self, request):
         raw_schema = {}
         for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.name)
+            block_impl = block_registry.get(lb.block.code)
             if block_impl and hasattr(block_impl, "get_filter_schema"):
                 try:
                     schema = block_impl.get_filter_schema(request)
@@ -84,19 +114,44 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
         selected_filter_values = self._collect_filters(
             self.request.GET, filter_schema, base=base_values
         )
-        rendered_blocks = []
+        # Build rows of rendered blocks using Bootstrap grid semantics
+        rows = {}
         for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.name)
-            if block_impl:
-                rendered_blocks.append(block_impl.render(self.request))
+            block_impl = block_registry.get(lb.block.code)
+            if not block_impl:
+                continue
+            response = block_impl.render(self.request)
+            try:
+                html = response.content.decode(response.charset or "utf-8")
+            except Exception:
+                html = response.content.decode("utf-8", errors="ignore")
+            rows.setdefault(lb.row, []).append({
+                "col": lb.col,
+                "html": html,
+                "block_name": lb.block.name,
+            })
         context.update(
             {
                 "layout": self.layout,
-                "rendered_blocks": rendered_blocks,
+                "rows": rows,
                 "filter_schema": filter_schema,
                 "selected_filter_values": selected_filter_values,
                 "filter_configs": self.filter_configs,
                 "active_filter_config_id": self.active_filter_config.id if self.active_filter_config else None,
+                "can_edit": (
+                    self.request.user.is_staff
+                    or (
+                        self.layout.visibility == Layout.VISIBILITY_PRIVATE
+                        and self.layout.user == self.request.user
+                    )
+                ),
+                "can_delete": (
+                    self.request.user.is_staff
+                    or (
+                        self.layout.visibility == Layout.VISIBILITY_PRIVATE
+                        and self.layout.user == self.request.user
+                    )
+                ),
             }
         )
         return context
@@ -106,13 +161,17 @@ class AddBlockView(LoginRequiredMixin, FormView):
     template_name = "layout/add_block.html"
     form_class = AddBlockForm
 
-    def dispatch(self, request, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug, user=request.user)
-        return super().dispatch(request, slug, *args, **kwargs)
+    def dispatch(self, request, username, slug, *args, **kwargs):
+        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        if self.layout.visibility == Layout.VISIBILITY_PUBLIC and not request.user.is_staff:
+            raise Http404()
+        if not request.user.is_staff and self.layout.user != request.user:
+            raise Http404()
+        return super().dispatch(request, username, slug, *args, **kwargs)
 
     def form_valid(self, form):
-        block_name = form.cleaned_data["block"]
-        block_obj = get_object_or_404(Block, name=block_name)
+        # 'block' is a Block instance thanks to ModelChoiceField in the form
+        block_obj = form.cleaned_data["block"]
         LayoutBlock.objects.create(
             layout=self.layout,
             block=block_obj,
@@ -121,15 +180,62 @@ class AddBlockView(LoginRequiredMixin, FormView):
             width=form.cleaned_data["width"],
             height=form.cleaned_data["height"],
         )
-        return redirect("layout_detail", slug=self.layout.slug)
+        return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
+
+
+class LayoutEditView(LoginRequiredMixin, TemplateView):
+    template_name = "layout/layout_edit.html"
+
+    def dispatch(self, request, username, slug, *args, **kwargs):
+        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        if self.layout.visibility == Layout.VISIBILITY_PUBLIC and not request.user.is_staff:
+            raise Http404()
+        if not request.user.is_staff and self.layout.user != request.user:
+            raise Http404()
+        # Limit queryset to this layout's blocks
+        self.qs = self.layout.blocks.select_related("block").all()
+        # Formset for editing row/col, allow deletion of rows
+        self.FormSet = modelformset_factory(
+            LayoutBlock,
+            form=LayoutBlockForm,
+            fields=("row", "col"),
+            extra=0,
+            can_delete=True,
+        )
+        return super().dispatch(request, username, slug, *args, **kwargs)
+
+    def get(self, request, username, slug):
+        formset = self.FormSet(queryset=self.qs)
+        return self.render_to_response({"layout": self.layout, "formset": formset})
+
+    def post(self, request, username, slug):
+        # Handle single-row delete actions triggered by per-row buttons
+        delete_id = request.POST.get("delete")
+        if delete_id:
+            try:
+                lb = self.qs.get(pk=delete_id)
+                lb.delete()
+                messages.success(request, "Block removed from layout.")
+            except LayoutBlock.DoesNotExist:
+                messages.error(request, "Block not found or already deleted.")
+            return redirect("layout_edit", username=self.layout.user.username, slug=self.layout.slug)
+
+        formset = self.FormSet(request.POST, queryset=self.qs)
+        if formset.is_valid():
+            # Save changes and process deletions via can_delete
+            formset.save()
+            messages.success(request, "Layout updated.")
+            return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
+        messages.error(request, "Please correct the errors below.")
+        return self.render_to_response({"layout": self.layout, "formset": formset})
 
 
 class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
     template_name = "layout/layout_filter_config.html"
     form_class = LayoutFilterConfigForm
 
-    def dispatch(self, request, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug)
+    def dispatch(self, request, username, slug, *args, **kwargs):
+        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
         if self.layout.user != request.user and self.layout.visibility == Layout.VISIBILITY_PRIVATE:
             raise Http404()
         self.user_filters = LayoutFilterConfig.objects.filter(
@@ -143,12 +249,12 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
                     LayoutFilterConfig, id=edit_id, layout=self.layout, user=request.user
                 )
         self.filter_schema = self._build_filter_schema(request)
-        return super().dispatch(request, slug, *args, **kwargs)
+        return super().dispatch(request, username, slug, *args, **kwargs)
 
     def _build_filter_schema(self, request):
         raw_schema = {}
         for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.name)
+            block_impl = block_registry.get(lb.block.code)
             if block_impl and hasattr(block_impl, "get_filter_schema"):
                 try:
                     schema = block_impl.get_filter_schema(request)
@@ -180,14 +286,14 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
         is_default = form.cleaned_data.get("is_default", False)
         if not name:
             messages.error(self.request, "Please provide a name.")
-            return redirect("layout_filter_config", slug=self.layout.slug)
+            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
         if "delete" in self.request.POST and edit_id:
             cfg = get_object_or_404(
                 LayoutFilterConfig, id=edit_id, layout=self.layout, user=self.request.user
             )
             cfg.delete()
             messages.success(self.request, "Filter deleted.")
-            return redirect("layout_filter_config", slug=self.layout.slug)
+            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
         values = self._collect_filters(self.request.POST, self.filter_schema, base={})
         if edit_id:
             cfg = get_object_or_404(
@@ -207,7 +313,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
             )
             if cfg.id:
                 return redirect(f"{self.request.path}?id={cfg.id}")
-            return redirect("layout_filter_config", slug=self.layout.slug)
+            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
         messages.success(self.request, "Filter saved.")
         return redirect(f"{self.request.path}?id={cfg.id}")
 

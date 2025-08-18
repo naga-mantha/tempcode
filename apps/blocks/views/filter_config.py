@@ -32,7 +32,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         self.block_impl = block_registry.get(block_name)
         if not self.block_impl:
             raise Http404("Invalid block")
-        self.db_block = get_object_or_404(Block, name=block_name)
+        self.db_block = get_object_or_404(Block, code=block_name)
         self.user_filters = BlockFilterConfig.objects.filter(
             block=self.db_block, user=request.user
         ).order_by("-is_default", "name")

@@ -3,8 +3,8 @@ from .models import *
 
 @admin.register(Block)
 class WorkflowAdmin(admin.ModelAdmin):
-    list_display = ("name", "description", )
-    search_fields = ("name", "description",)
+    list_display = ("code", "name", "description", )
+    search_fields = ("code", "name", "description",)
 
 @admin.register(BlockColumnConfig)
 class BlockColumnConfigAdmin(admin.ModelAdmin):

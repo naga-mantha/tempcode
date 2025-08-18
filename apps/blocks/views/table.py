@@ -16,8 +16,8 @@ def render_table_block(request, block_name):
 
 
 def _get_db_block_or_404(block_name):
-    # If your Block model uses slug instead of name, switch to slug=block_name
-    return get_object_or_404(Block, name=block_name)
+    # Use 'code' as the stable identifier
+    return get_object_or_404(Block, code=block_name)
 
 
 @login_required

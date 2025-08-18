@@ -16,26 +16,31 @@ class Layout(models.Model):
     ]
 
     name = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True, blank=True)
+    # Slug is auto-derived from name; unique per-user
+    slug = models.SlugField(blank=True)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="layouts")
     visibility = models.CharField(
         max_length=10, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
     )
 
     def save(self, *args, **kwargs):  # noqa: D401 - override to auto-slugify
-        """Persist the layout ensuring a unique slug is generated."""
-        if not self.slug:
-            base = slugify(self.name)
-            slug = base
-            counter = 1
-            while Layout.objects.filter(slug=slug).exists():
-                counter += 1
-                slug = f"{base}-{counter}"
-            self.slug = slug
+        """Persist the layout ensuring slug is derived from name."""
+        # Derive slug deterministically from name (lowercase, hyphens)
+        self.slug = slugify(self.name or "")
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"], name="unique_layout_name_per_user"
+            ),
+            models.UniqueConstraint(
+                fields=["user", "slug"], name="unique_layout_slug_per_user"
+            ),
+        ]
 
 
 class LayoutBlock(models.Model):

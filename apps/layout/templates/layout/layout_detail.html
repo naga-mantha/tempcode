@@ -1,14 +1,30 @@
-<h1>{{ layout.name }}</h1>
-<form method="get">
-    {% for key, cfg in filter_schema.items %}
-        <label>{{ cfg.label|default:key }}</label>
-        <input type="text" name="filters.{{ key }}">
-    {% endfor %}
-    <button type="submit">Apply</button>
-</form>
-<a href="{% url 'layout_add_block' slug=layout.slug %}">Add block</a>
-<ul>
-{% for block in rendered_blocks %}
-    <li>{{ block|safe }}</li>
-{% endfor %}
-</ul>
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>{{ layout.name }}</h1>
+  <p>
+    {% if can_edit %}
+      <a href="{% url 'layout_add_block' username=layout.user.username slug=layout.slug %}">Add block</a>
+      |
+      <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
+      |
+    {% endif %}
+    <a href="{% url 'layout_list' %}">All layouts</a>
+    |
+    <a href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Filters</a>
+    {% if can_delete %}
+      |
+      <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
+    {% endif %}
+  </p>
+
+  {% for row_num, blocks in rows.items %}
+    <div class="row mb-3">
+      {% for b in blocks %}
+        <div class="col-{{ b.col }}">
+          {{ b.html|safe }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endblock %}

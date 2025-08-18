@@ -20,7 +20,7 @@ def filter_delete_view(request, block_name, config_id):
     block_impl = block_registry.get(block_name)
     if not block_impl:
         raise Http404("Invalid block")
-    db_block = get_object_or_404(Block, name=block_name)
+    db_block = get_object_or_404(Block, code=block_name)
 
     cfg = get_object_or_404(
         BlockFilterConfig, id=config_id, block=db_block, user=request.user

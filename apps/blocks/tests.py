@@ -14,7 +14,7 @@ from apps.blocks.block_types.chart.chart_block import DonutChartBlock
 class BlockFilterConfigTests(TestCase):
     def setUp(self):
         self.user = CustomUser.objects.create(username="user")
-        self.block = Block.objects.create(name="block")
+        self.block = Block.objects.create(code="block", name="Block")
 
     def test_unique_constraint_on_block_user_name(self):
         BlockFilterConfig.objects.create(
@@ -37,7 +37,7 @@ class FilterConfigViewTests(TestCase):
     def setUp(self):
         self.user = CustomUser.objects.create(username="user")
         self.block_name = "test_block"
-        self.block = Block.objects.create(name=self.block_name)
+        self.block = Block.objects.create(code=self.block_name, name="Test Block")
 
         class DummyBlock(BaseBlock):
             def get_config(self, request):
@@ -89,7 +89,7 @@ class ChartFilterConfigViewTests(TestCase):
     def setUp(self):
         self.user = CustomUser.objects.create(username="user2")
         self.block_name = "chart_block"
-        self.block = Block.objects.create(name=self.block_name)
+        self.block = Block.objects.create(code=self.block_name, name="Chart Block")
 
         class DummyChart(DonutChartBlock):
             def get_chart_data(self, user, filters):

@@ -40,7 +40,8 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
     form_class = ColumnConfigForm
 
     def dispatch(self, request, block_name, *args, **kwargs):
-        self.block = get_object_or_404(Block, name=block_name)
+        # block_name in URL represents the Block.code
+        self.block = get_object_or_404(Block, code=block_name)
         self.block_instance = block_registry.get(block_name)
         if not self.block_instance:
             raise Http404(f"Block '{block_name}' not found.")
@@ -90,4 +91,4 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             config = BlockColumnConfig.objects.get(id=config_id, user=self.user, block=self.block)
             config.is_default = True
             config.save()
-        return redirect("column_config_view", block_name=self.block.name)
+        return redirect("column_config_view", block_name=self.block.code)

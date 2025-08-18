@@ -33,7 +33,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
     def block(self):
         if self._block is None:
             try:
-                self._block = Block.objects.get(name=self.block_name)
+                self._block = Block.objects.get(code=self.block_name)
             except Block.DoesNotExist:
                 raise Exception(f"Block '{self.block_name}' not registered in admin.")
         return self._block
@@ -125,8 +125,10 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
 
     def _select_configs(self, request):
         user = request.user
-        column_config_id = request.GET.get("column_config_id")
-        filter_config_id = request.GET.get("filter_config_id")
+        # Support namespaced params so multiple tables on a page can be independent
+        ns = f"{self.block_name}__"
+        column_config_id = request.GET.get(f"{ns}column_config_id") or request.GET.get("column_config_id")
+        filter_config_id = request.GET.get(f"{ns}filter_config_id") or request.GET.get("filter_config_id")
         column_configs = self.get_column_config_queryset(user)
         filter_configs = self.get_filter_config_queryset(user)
         active_column_config = None
@@ -162,8 +164,10 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             raw_schema = self.get_filter_schema(user)
         filter_schema = self._resolve_filter_schema(raw_schema, user)
         base_values = active_filter_config.values if active_filter_config else {}
+        # Use namespaced filter params to avoid collisions across blocks
+        ns_prefix = f"{self.block_name}__filters."
         selected_filter_values = self._collect_filters(
-            request.GET, filter_schema, base=base_values
+            request.GET, filter_schema, base=base_values, prefix=ns_prefix, allow_flat=False
         )
         return filter_schema, selected_filter_values
 

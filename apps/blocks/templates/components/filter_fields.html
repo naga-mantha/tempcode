@@ -10,7 +10,7 @@
     <label class="form-label">{{ cfg.label }}</label>
 
     {% if cfg.type == 'select' %}
-      <select class="form-select" name="filters.{{ key }}">
+      <select class="form-select" name="{{ name_prefix|default:'filters.' }}{{ key }}">
         <option value="">-- Any --</option>
         {% for v, lbl in cfg.choices %}
           <option value="{{ v }}" {% if val|stringformat:"s" == v|stringformat:"s" %}selected{% endif %}>
@@ -20,7 +20,7 @@
       </select>
 
     {% elif cfg.type == 'multiselect' %}
-      <select class="form-select" name="filters.{{ key }}" multiple>
+      <select class="form-select" name="{{ name_prefix|default:'filters.' }}{{ key }}" multiple>
         {% for v, lbl in cfg.choices %}
           <option value="{{ v }}" {% if val and v in val %}selected{% endif %}>
             {{ lbl }}
@@ -30,21 +30,21 @@
       <div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
 
     {% elif cfg.type == 'number' %}
-      <input type="number" class="form-control" name="filters.{{ key }}" value="{{ val|default:'' }}"/>
+      <input type="number" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
 
     {% elif cfg.type == 'date' %}
-      <input type="date" class="form-control" name="filters.{{ key }}" value="{{ val|default:'' }}"/>
+      <input type="date" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
 
     {% elif cfg.type == 'boolean' %}
       <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="filters_{{ key }}"
-               name="filters.{{ key }}" value="1" {% if val %}checked{% endif %}>
-        <label class="form-check-label" for="filters_{{ key }}">Yes</label>
+        <input type="checkbox" class="form-check-input" id="{{ id_prefix|default:'' }}-filters_{{ key }}"
+               name="{{ name_prefix|default:'filters.' }}{{ key }}" value="1" {% if val %}checked{% endif %}>
+        <label class="form-check-label" for="{{ id_prefix|default:'' }}-filters_{{ key }}">Yes</label>
       </div>
 
     {% else %}
       {# default to text #}
-      <input type="text" class="form-control" name="filters.{{ key }}" value="{{ val|default:'' }}"/>
+      <input type="text" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
     {% endif %}
 
     {% if cfg.help %}

@@ -29,9 +29,24 @@ class BlockRegistry:
         if block_id in self._blocks:
             raise ValueError(f"Block '{block_id}' is already registered")
         self._blocks[block_id] = block_instance
+        # Derive app name at registration time for reliable labeling later
+        # Resolve app name once by matching the block class module
+        from django.apps import apps as django_apps
+        module = getattr(block_instance.__class__, "__module__", "")
+        cfg = None
+        for candidate in django_apps.get_app_configs():
+            mod_name = getattr(candidate.module, "__name__", "")
+            if module.startswith(mod_name):
+                cfg = candidate
+                break
+        app_label = cfg.label if cfg else None
+        app_name = (getattr(cfg, "verbose_name", None) or app_label) if cfg else None
+
         self._metadata[block_id] = {
             "supported_features": getattr(block_instance, "supported_features", []),
             "class": block_instance.__class__.__name__,
+            "app_name": app_name,
+            "app_label": app_label,
         }
 
     def get(self, block_id):
