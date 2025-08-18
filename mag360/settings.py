@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.blocks',
     'apps.production',
+    'apps.layout',
     'apps.workflow',
     'apps.permissions',
     'django_extensions',

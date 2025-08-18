@@ -1,0 +1,14 @@
+<h1>{{ layout.name }}</h1>
+<form method="get">
+    {% for key, cfg in filter_schema.items %}
+        <label>{{ cfg.label|default:key }}</label>
+        <input type="text" name="filters.{{ key }}">
+    {% endfor %}
+    <button type="submit">Apply</button>
+</form>
+<a href="{% url 'layout_add_block' slug=layout.slug %}">Add block</a>
+<ul>
+{% for block in rendered_blocks %}
+    <li>{{ block|safe }}</li>
+{% endfor %}
+</ul>

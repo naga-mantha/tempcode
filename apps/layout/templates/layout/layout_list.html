@@ -1,0 +1,9 @@
+<h1>Your Layouts</h1>
+<ul>
+{% for layout in layouts %}
+    <li><a href="{% url 'layout_detail' slug=layout.slug %}">{{ layout.name }}</a></li>
+{% empty %}
+    <li>No layouts</li>
+{% endfor %}
+</ul>
+<a href="{% url 'layout_create' %}">Create Layout</a>

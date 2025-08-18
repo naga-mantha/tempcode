@@ -1,0 +1,16 @@
+<h1>Layout Filters for {{ layout.name }}</h1>
+<ul>
+{% for cfg in user_filters %}
+    <li>{% if editing and editing.id == cfg.id %}<strong>{{ cfg.name }}</strong>{% else %}{{ cfg.name }}{% endif %}</li>
+{% empty %}
+    <li>No saved filters</li>
+{% endfor %}
+</ul>
+<form method="post">{% csrf_token %}{{ form.as_p }}
+    {% for key, cfg in filter_schema.items %}
+        <label>{{ cfg.label|default:key }}</label>
+        <input type="text" name="filters.{{ key }}">
+    {% endfor %}
+    <button type="submit">Save</button>
+    {% if editing %}<button type="submit" name="delete" value="1">Delete</button>{% endif %}
+</form>
