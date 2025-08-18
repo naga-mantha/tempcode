@@ -44,7 +44,7 @@ def generate_field_permissions_for_model(model):
     to_delete = existing_codenames - expected_perms.keys()
     deleted_count = 0
     if to_delete:
-        deleted_count, _ = Permission.objects.filter(
+        deleted_count, _unused = Permission.objects.filter(
             content_type=ct, codename__in=to_delete
         ).delete()
 
