@@ -59,7 +59,6 @@ class LayoutBlockForm(forms.ModelForm):
 
 
 class LayoutFilterConfigForm(forms.Form):
-    id = forms.IntegerField(required=False)
     name = forms.CharField()
     is_default = forms.BooleanField(required=False)
 

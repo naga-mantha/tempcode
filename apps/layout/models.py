@@ -76,12 +76,37 @@ class LayoutFilterConfig(models.Model):
         ]
 
     def save(self, *args, **kwargs):  # noqa: D401 - behaviour documented here
-        """Persist the configuration ensuring a single default per layout/user."""
+        """Persist the configuration ensuring a single default per layout/user.
+
+        - If creating the first configuration for this layout+user, mark it
+          as default.
+        - When marking one as default, ensure all others are unset.
+        """
+        model = self.__class__
         if not self.pk:
-            if not LayoutFilterConfig.objects.filter(layout=self.layout, user=self.user).exists():
+            if not model.objects.filter(layout=self.layout, user=self.user).exists():
                 self.is_default = True
         elif self.is_default:
-            LayoutFilterConfig.objects.filter(layout=self.layout, user=self.user).exclude(
-                pk=self.pk
-            ).update(is_default=False)
+            model.objects.filter(layout=self.layout, user=self.user).exclude(pk=self.pk).update(
+                is_default=False
+            )
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):  # noqa: D401 - behaviour documented here
+        """Delete the configuration while maintaining a default.
+
+        - Prevent deleting the last remaining configuration for a layout+user.
+        - If the deleted configuration was default, promote another to default.
+        """
+        model = self.__class__
+        qs = model.objects.filter(layout=self.layout, user=self.user)
+        if qs.count() <= 1:
+            raise Exception("At least one configuration must exist.")
+        was_default = self.is_default
+        pk = self.pk
+        super().delete(*args, **kwargs)
+        if was_default:
+            new_default = qs.exclude(pk=pk).order_by("pk").first()
+            if new_default:
+                new_default.is_default = True
+                new_default.save()

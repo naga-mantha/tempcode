@@ -273,6 +273,30 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
         self.filter_schema = self._build_filter_schema(request)
         return super().dispatch(request, username, slug, *args, **kwargs)
 
+    def post(self, request, username, slug, *args, **kwargs):
+        # Handle deletes before validating the form (since 'name' isn't posted on delete)
+        if "delete" in request.POST:
+            edit_id = request.POST.get("id")
+            if edit_id:
+                cfg = get_object_or_404(
+                    LayoutFilterConfig,
+                    id=edit_id,
+                    layout=self.layout,
+                    user=request.user,
+                )
+                try:
+                    cfg.delete()
+                except Exception as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, "Filter deleted.")
+            return redirect(
+                "layout_filter_config",
+                username=self.layout.user.username,
+                slug=self.layout.slug,
+            )
+        return super().post(request, username, slug, *args, **kwargs)
+
     def _build_filter_schema(self, request):
         raw_schema = {}
         for lb in self.layout.blocks.select_related("block"):
@@ -295,7 +319,6 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
         if self.editing:
             initial.update(
                 {
-                    "id": self.editing.id,
                     "name": self.editing.name,
                     "is_default": self.editing.is_default,
                 }
@@ -303,7 +326,8 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
         return initial
 
     def form_valid(self, form):
-        edit_id = form.cleaned_data.get("id")
+        # We no longer include 'id' in the form; read from POST if present
+        edit_id = self.request.POST.get("id")
         name = form.cleaned_data["name"].strip()
         is_default = form.cleaned_data.get("is_default", False)
         if not name:

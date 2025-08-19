@@ -18,6 +18,19 @@
     {% endif %}
   </p>
 
+  <div class="d-flex justify-content-end align-items-center mb-3">
+    <label class="me-2">Layout Filter:</label>
+    <select id="layout-filter-select" class="form-select d-inline-block w-auto">
+      <option value="">-- None --</option>
+      {% for f in filter_configs %}
+        <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+          {{ f.name }}{% if f.is_default %} (default){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
+  </div>
+
   <div class="row g-3">
     {% for b in blocks %}
       <div class="col-{{ b.col }}">
@@ -25,4 +38,19 @@
       </div>
     {% endfor %}
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const sel = document.getElementById('layout-filter-select');
+    if (!sel) return;
+    sel.addEventListener('change', function(){
+      const url = new URL(window.location.href);
+      const v = this.value || '';
+      if (v) url.searchParams.set('filter_config_id', v); else url.searchParams.delete('filter_config_id');
+      window.location.href = url.toString();
+    });
+  });
+  </script>
 {% endblock %}
