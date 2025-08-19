@@ -127,4 +127,10 @@ class ProductionOrderOperationTableBlock(TableBlock):
                 "type": "text",
                 "handler": lambda qs, val: qs.filter(operation__icontains=val),
             },
+
+            "production_order": {
+                "label": "Order",
+                "type": "text",
+                "handler": lambda qs, val: qs.filter(production_order__production_order__icontains=val),
+            },
         }

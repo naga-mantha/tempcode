@@ -1,42 +1,60 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h1>{{ layout.name }}</h1>
-  <p>
-    {% if can_edit %}
-      <a href="{% url 'layout_add_block' username=layout.user.username slug=layout.slug %}">Add block</a>
-      |
-      <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
-      |
-    {% endif %}
-    <a href="{% url 'layout_list' %}">All layouts</a>
-    |
-    <a href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Filters</a>
-    {% if can_delete %}
-      |
-      <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
-    {% endif %}
-  </p>
+  <div class="main-container-fluid">
+    <h1>{{ layout.name }}</h1>
+    <p>
+      {% if can_edit %}
+        <a href="{% url 'layout_add_block' username=layout.user.username slug=layout.slug %}">Add block</a>
+        |
+        <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
+        |
+      {% endif %}
+      <a href="{% url 'layout_list' %}">All layouts</a>
+      {% if can_delete %}
+        |
+        <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
+      {% endif %}
+    </p>
 
-  <div class="d-flex justify-content-end align-items-center mb-3">
-    <label class="me-2">Layout Filter:</label>
-    <select id="layout-filter-select" class="form-select d-inline-block w-auto">
-      <option value="">-- None --</option>
-      {% for f in filter_configs %}
-        <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
-          {{ f.name }}{% if f.is_default %} (default){% endif %}
-        </option>
+    <div class="d-flex justify-content-end align-items-center mb-3">
+      <label class="me-2">Layout Filter:</label>
+      <select id="layout-filter-select" class="form-select d-inline-block w-auto">
+        <option value="">-- None --</option>
+        {% for f in filter_configs %}
+          <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+            {{ f.name }}{% if f.is_default %} (default){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
+      <a class="btn btn-link p-0 ms-2" href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Reset</a>
+    </div>
+
+    {# Live (non-persistent) layout-level filter overrides #}
+    <form method="get" class="mb-3">
+      {% if active_filter_config_id %}
+        <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
+      {% endif %}
+
+      <details class="border rounded">
+        <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
+          Filter Conditions
+        </summary>
+        <div class="p-3">
+          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values id_prefix="layout" %}
+          <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+        </div>
+      </details>
+    </form>
+
+    <div class="row g-3">
+      {% for b in blocks %}
+        <div class="col-{{ b.col }}">
+          {{ b.html|safe }}
+        </div>
       {% endfor %}
-    </select>
-    <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
-  </div>
-
-  <div class="row g-3">
-    {% for b in blocks %}
-      <div class="col-{{ b.col }}">
-        {{ b.html|safe }}
-      </div>
-    {% endfor %}
+    </div>
   </div>
 {% endblock %}
 
@@ -48,6 +66,13 @@
     sel.addEventListener('change', function(){
       const url = new URL(window.location.href);
       const v = this.value || '';
+      // When switching saved filters, clear any live overrides so
+      // the selected saved values populate the collapsible and apply.
+      const toDelete = [];
+      url.searchParams.forEach((val, key) => {
+        if (key.startsWith('filters.')) toDelete.push(key);
+      });
+      toDelete.forEach(k => url.searchParams.delete(k));
       if (v) url.searchParams.set('filter_config_id', v); else url.searchParams.delete('filter_config_id');
       window.location.href = url.toString();
     });
