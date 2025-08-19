@@ -28,7 +28,8 @@ class AddBlockForm(forms.ModelForm):
 
     class Meta:
         model = LayoutBlock
-        fields = ["block", "row", "col", "width", "height"]
+        # Only expose block and column width; ordering is set automatically to the end.
+        fields = ["block", "col"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -53,7 +54,8 @@ class LayoutBlockForm(forms.ModelForm):
 
     class Meta:
         model = LayoutBlock
-        fields = ["row", "col"]
+        # Only allow editing of column width in the editor; ordering is via drag/drop.
+        fields = ["col"]
 
 
 class LayoutFilterConfigForm(forms.Form):

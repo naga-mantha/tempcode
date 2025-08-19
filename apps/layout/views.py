@@ -114,26 +114,28 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
         selected_filter_values = self._collect_filters(
             self.request.GET, filter_schema, base=base_values
         )
-        # Build rows of rendered blocks using Bootstrap grid semantics
-        rows = {}
-        for lb in self.layout.blocks.select_related("block"):
+        # Render blocks sequentially; Bootstrap will wrap columns
+        blocks_list = []
+        for lb in self.layout.blocks.select_related("block").order_by("position", "id"):
             block_impl = block_registry.get(lb.block.code)
             if not block_impl:
                 continue
-            response = block_impl.render(self.request)
+            # Pass a stable per-instance id based on the LayoutBlock id
+            response = block_impl.render(self.request, instance_id=str(lb.id))
             try:
                 html = response.content.decode(response.charset or "utf-8")
             except Exception:
                 html = response.content.decode("utf-8", errors="ignore")
-            rows.setdefault(lb.row, []).append({
+            blocks_list.append({
                 "col": lb.col,
                 "html": html,
                 "block_name": lb.block.name,
+                "id": lb.id,
             })
         context.update(
             {
                 "layout": self.layout,
-                "rows": rows,
+                "blocks": blocks_list,
                 "filter_schema": filter_schema,
                 "selected_filter_values": selected_filter_values,
                 "filter_configs": self.filter_configs,
@@ -172,13 +174,18 @@ class AddBlockView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         # 'block' is a Block instance thanks to ModelChoiceField in the form
         block_obj = form.cleaned_data["block"]
+        # Position new block at the end
+        last = (
+            LayoutBlock.objects.filter(layout=self.layout)
+            .order_by("-position")
+            .first()
+        )
+        next_pos = (last.position + 1) if last else 0
         LayoutBlock.objects.create(
             layout=self.layout,
             block=block_obj,
-            row=form.cleaned_data["row"],
             col=form.cleaned_data["col"],
-            width=form.cleaned_data["width"],
-            height=form.cleaned_data["height"],
+            position=next_pos,
         )
         return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
 
@@ -193,14 +200,15 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
         if not request.user.is_staff and self.layout.user != request.user:
             raise Http404()
         # Limit queryset to this layout's blocks
-        self.qs = self.layout.blocks.select_related("block").all()
-        # Formset for editing row/col, allow deletion of rows
+        self.qs = self.layout.blocks.select_related("block").order_by("position", "id")
+        # Formset for editing col; allow deletion and ordering
         self.FormSet = modelformset_factory(
             LayoutBlock,
             form=LayoutBlockForm,
-            fields=("row", "col"),
+            fields=("col",),
             extra=0,
             can_delete=True,
+            can_order=True,
         )
         return super().dispatch(request, username, slug, *args, **kwargs)
 
@@ -222,7 +230,21 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
 
         formset = self.FormSet(request.POST, queryset=self.qs)
         if formset.is_valid():
-            # Save changes and process deletions via can_delete
+            # Update ordering from ORDER field (provided by can_order)
+            order_counter = 0
+            for form in formset.ordered_forms:
+                inst = form.instance
+                inst.position = order_counter
+                inst.save(update_fields=["position"])
+                order_counter += 1
+            # Append any forms not in ordered_forms preserving current order
+            for form in formset.forms:
+                if form not in formset.ordered_forms and not form.cleaned_data.get("DELETE"):
+                    inst = form.instance
+                    inst.position = order_counter
+                    inst.save(update_fields=["position"])
+                    order_counter += 1
+            # Save column width changes and process deletions
             formset.save()
             messages.success(request, "Layout updated.")
             return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)

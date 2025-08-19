@@ -10,6 +10,7 @@ from apps.blocks.helpers.field_rules import get_field_display_rules
 from django.db import models
 import json
 from .filter_utils import FilterResolutionMixin
+import uuid
 
 
 class TableBlock(BaseBlock, FilterResolutionMixin):
@@ -23,11 +24,11 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         # while still preventing duplicate work within a single request.
         self._context_cache = {}
 
-    def render(self, request):
+    def render(self, request, instance_id=None):
         """Clear cached context and render the block."""
         # Ensure previous request data is discarded before rendering.
         self._context_cache.clear()
-        return super().render(request)
+        return super().render(request, instance_id=instance_id)
 
     @property
     def block(self):
@@ -73,7 +74,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
     def get_filter_config_queryset(self, user):
         return BlockFilterConfig.objects.filter(user=user, block=self.block)
 
-    def _build_context(self, request):
+    def _build_context(self, request, instance_id):
         user = request.user
         (
             column_configs,
@@ -81,9 +82,9 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             active_column_config,
             active_filter_config,
             selected_fields,
-        ) = self._select_configs(request)
+        ) = self._select_configs(request, instance_id)
         filter_schema, selected_filter_values = self._resolve_filters(
-            request, active_filter_config
+            request, active_filter_config, instance_id
         )
         queryset, sample_obj = self._build_queryset(
             user, selected_filter_values, active_column_config
@@ -92,8 +93,11 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             user, selected_fields, active_column_config, sample_obj
         )
         data = self._serialize_rows(queryset, selected_fields)
+        # Ensure we have an instance_id (for standalone renders)
+        instance_id = instance_id or uuid.uuid4().hex[:8]
         return {
             "block_name": self.block_name,
+            "instance_id": instance_id,
             "fields": fields,
             "tabulator_options": self.get_tabulator_options(user),
             "column_configs": column_configs,
@@ -106,29 +110,36 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             "selected_filter_values": selected_filter_values,
         }
 
-    def _get_context(self, request):
-        cache_key = id(request)
+    def _get_context(self, request, instance_id):
+        cache_key = (id(request), instance_id)
         if cache_key not in self._context_cache:
-            # Replace any existing cached context with the current request's
-            # context to keep the cache per-request.
-            self._context_cache = {cache_key: self._build_context(request)}
+            # Replace cache for this (request, instance) pair.
+            self._context_cache[cache_key] = self._build_context(request, instance_id)
         return self._context_cache[cache_key]
 
-    def get_config(self, request):
-        context = dict(self._get_context(request))
+    def get_config(self, request, instance_id=None):
+        context = dict(self._get_context(request, instance_id))
         context.pop("data", None)
         return context
 
-    def get_data(self, request):
-        context = self._get_context(request)
+    def get_data(self, request, instance_id=None):
+        context = self._get_context(request, instance_id)
         return {"data": context.get("data")}
 
-    def _select_configs(self, request):
+    def _select_configs(self, request, instance_id=None):
         user = request.user
-        # Support namespaced params so multiple tables on a page can be independent
-        ns = f"{self.block_name}__"
-        column_config_id = request.GET.get(f"{ns}column_config_id") or request.GET.get("column_config_id")
-        filter_config_id = request.GET.get(f"{ns}filter_config_id") or request.GET.get("filter_config_id")
+        # Namespaced params by block and (optional) instance
+        ns = f"{self.block_name}__{instance_id}__" if instance_id else f"{self.block_name}__"
+        column_config_id = (
+            request.GET.get(f"{ns}column_config_id")
+            or (request.GET.get(f"{self.block_name}__column_config_id") if instance_id else None)
+            or request.GET.get("column_config_id")
+        )
+        filter_config_id = (
+            request.GET.get(f"{ns}filter_config_id")
+            or (request.GET.get(f"{self.block_name}__filter_config_id") if instance_id else None)
+            or request.GET.get("filter_config_id")
+        )
         column_configs = self.get_column_config_queryset(user)
         filter_configs = self.get_filter_config_queryset(user)
         active_column_config = None
@@ -156,7 +167,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             selected_fields,
         )
 
-    def _resolve_filters(self, request, active_filter_config):
+    def _resolve_filters(self, request, active_filter_config, instance_id=None):
         user = request.user
         try:
             raw_schema = self.get_filter_schema(request)
@@ -164,8 +175,12 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             raw_schema = self.get_filter_schema(user)
         filter_schema = self._resolve_filter_schema(raw_schema, user)
         base_values = active_filter_config.values if active_filter_config else {}
-        # Use namespaced filter params to avoid collisions across blocks
-        ns_prefix = f"{self.block_name}__filters."
+        # Use namespaced filter params to avoid collisions across blocks and instances
+        ns_prefix = (
+            f"{self.block_name}__{instance_id}__filters."
+            if instance_id
+            else f"{self.block_name}__filters."
+        )
         selected_filter_values = self._collect_filters(
             request.GET, filter_schema, base=base_values, prefix=ns_prefix, allow_flat=False
         )

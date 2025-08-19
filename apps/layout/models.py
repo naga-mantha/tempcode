@@ -48,13 +48,14 @@ class LayoutBlock(models.Model):
 
     layout = models.ForeignKey(Layout, on_delete=models.CASCADE, related_name="blocks")
     block = models.ForeignKey(Block, on_delete=models.CASCADE)
-    row = models.PositiveIntegerField(default=0)
-    col = models.PositiveIntegerField(default=0)
-    width = models.PositiveIntegerField(default=12)
-    height = models.PositiveIntegerField(default=1)
+    # Absolute sequence of this block within the layout. Lower numbers appear first.
+    position = models.PositiveIntegerField(default=0)
+    # Bootstrap column span (1..12). We will validate via forms to allowed values.
+    col = models.PositiveIntegerField(default=12)
+    # Note: vertical sizing not currently used; remove old width/height fields
 
     class Meta:
-        ordering = ["row", "col"]
+        ordering = ["position", "id"]
 
 
 class LayoutFilterConfig(models.Model):

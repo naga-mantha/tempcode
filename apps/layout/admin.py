@@ -8,5 +8,10 @@ class LayoutAdmin(admin.ModelAdmin):
 
 @admin.register(LayoutBlock)
 class LayoutBlockAdmin(admin.ModelAdmin):
-    list_display = ("layout", "block", "row", "col", "width", "height")
-    search_fields = ("row", "col", "width", "height",)
+    list_display = ("layout", "block","col",)
+    search_fields = ("col",)
+
+@admin.register(LayoutFilterConfig)
+class LayoutFilterConfigAdmin(admin.ModelAdmin):
+    list_display = ("layout", "user", "name", "is_default")
+    search_fields = ("name",)

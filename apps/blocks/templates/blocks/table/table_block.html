@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <label class="me-2">View:</label>
-    <select id="column-config-select-{{ block_name }}" class="form-select d-inline-block w-auto me-2">
+    <select id="column-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto me-2">
       {% for cfg in column_configs %}
         <option value="{{ cfg.id }}" {% if cfg.id == active_column_config_id %}selected{% endif %}>
           {{ cfg.name }}
@@ -16,7 +16,7 @@
   </div>
 <div>
     <label class="me-2">Filter:</label>
-    <select id="filter-config-select-{{ block_name }}" class="form-select d-inline-block w-auto">
+    <select id="filter-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto">
       <option value="">-- None --</option>
       {% for f in filter_configs %}
         <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
@@ -30,13 +30,13 @@
 </div>
 
 {# Live (non-persistent) filter fields; pre-populated from selected saved filter #}
-<form method="get" id="dynamic-filters-form-{{ block_name }}" class="mb-3">
+<form method="get" id="dynamic-filters-form-{{ block_name }}-{{ instance_id }}" class="mb-3">
   {# preserve current selections when applying live overrides #}
   {% if active_column_config_id %}
-    <input type="hidden" name="{{ block_name }}__column_config_id" value="{{ active_column_config_id }}">
+    <input type="hidden" name="{{ block_name }}__{{ instance_id }}__column_config_id" value="{{ active_column_config_id }}">
   {% endif %}
   {% if active_filter_config_id %}
-    <input type="hidden" name="{{ block_name }}__filter_config_id" value="{{ active_filter_config_id }}">
+    <input type="hidden" name="{{ block_name }}__{{ instance_id }}__filter_config_id" value="{{ active_filter_config_id }}">
   {% endif %}
 
   <details class="border rounded">
@@ -45,19 +45,20 @@
     </summary>
     <div class="p-3">
       {# Renders actual inputs based on your schema #}
-      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__filters." id_prefix=block_name %}
+      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
       <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
     </div>
   </details>
 </form>
 
-<div id="table-{{ block_name }}"></div>
+<div id="table-{{ block_name }}-{{ instance_id }}"></div>
 
 {% block scripts %}
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     // 1) Initialize the table
-    const table = new Tabulator("#table-{{ block_name }}", {
+    const tableEl = document.getElementById("table-{{ block_name }}-{{ instance_id }}");
+    const table = new Tabulator(tableEl, {
       layout: "fitColumns",
       data:{{ data|safe }},
       columns:{{ columns|safe }},
@@ -75,16 +76,16 @@
     }
 
     // 2) Keep both selections when switching either dropdown
-    const colSelect = document.getElementById("column-config-select-{{ block_name }}");
-    const filtSelect = document.getElementById("filter-config-select-{{ block_name }}");
+    const colSelect = document.getElementById("column-config-select-{{ block_name }}-{{ instance_id }}");
+    const filtSelect = document.getElementById("filter-config-select-{{ block_name }}-{{ instance_id }}");
     colSelect?.addEventListener("change", function() {
       const filterId = filtSelect?.value || "";
-      setSearchParams({ "{{ block_name }}__column_config_id": this.value, "{{ block_name }}__filter_config_id": filterId });
+      setSearchParams({ "{{ block_name }}__{{ instance_id }}__column_config_id": this.value, "{{ block_name }}__{{ instance_id }}__filter_config_id": filterId });
     });
 
     filtSelect?.addEventListener("change", function() {
       const columnId = colSelect?.value || "";
-      setSearchParams({ "{{ block_name }}__column_config_id": columnId, "{{ block_name }}__filter_config_id": this.value });
+      setSearchParams({ "{{ block_name }}__{{ instance_id }}__column_config_id": columnId, "{{ block_name }}__{{ instance_id }}__filter_config_id": this.value });
     });
   });
 </script>

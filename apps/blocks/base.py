@@ -16,17 +16,17 @@ class BaseBlock(ABC):
     supported_features: list[str] = []
 
     @abstractmethod
-    def get_config(self, request):
+    def get_config(self, request, instance_id=None):
         """Return configuration metadata for this block."""
 
     @abstractmethod
-    def get_data(self, request):
+    def get_data(self, request, instance_id=None):
         """Return the data required to render this block."""
 
-    def render(self, request):
+    def render(self, request, instance_id=None):
         """Render the block using its template and context."""
-        config = self.get_config(request) or {}
-        data = self.get_data(request) or {}
+        config = self.get_config(request, instance_id=instance_id) or {}
+        data = self.get_data(request, instance_id=instance_id) or {}
         context = {}
         if isinstance(config, dict):
             context.update(config)

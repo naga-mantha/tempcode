@@ -2,6 +2,7 @@
 
 import json
 from abc import ABC, abstractmethod
+import uuid
 
 import plotly.graph_objects as go
 
@@ -30,10 +31,10 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         self._block = None
         self._context_cache = {}
 
-    def render(self, request):
+    def render(self, request, instance_id=None):
         """Clear cached context and render the block."""
         self._context_cache.clear()
-        return super().render(request)
+        return super().render(request, instance_id=instance_id)
 
     @property
     def block(self):
@@ -67,10 +68,14 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
     def get_filter_config_queryset(self, user):
         return BlockFilterConfig.objects.filter(user=user, block=self.block)
 
-    def _select_filter_config(self, request):
+    def _select_filter_config(self, request, instance_id=None):
         user = request.user
-        ns = f"{self.block_name}__"
-        filter_config_id = request.GET.get(f"{ns}filter_config_id") or request.GET.get("filter_config_id")
+        ns = f"{self.block_name}__{instance_id}__" if instance_id else f"{self.block_name}__"
+        filter_config_id = (
+            request.GET.get(f"{ns}filter_config_id")
+            or (request.GET.get(f"{self.block_name}__filter_config_id") if instance_id else None)
+            or request.GET.get("filter_config_id")
+        )
         filter_configs = self.get_filter_config_queryset(user)
         active_filter_config = None
         if filter_config_id:
@@ -82,7 +87,7 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             active_filter_config = filter_configs.filter(is_default=True).first()
         return filter_configs, active_filter_config
 
-    def _resolve_filters(self, request, active_filter_config):
+    def _resolve_filters(self, request, active_filter_config, instance_id=None):
         user = request.user
         try:
             raw_schema = self.get_filter_schema(request)
@@ -90,21 +95,25 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             raw_schema = self.get_filter_schema(user)
         filter_schema = self._resolve_filter_schema(raw_schema, user)
         base_values = active_filter_config.values if active_filter_config else {}
-        ns_prefix = f"{self.block_name}__filters."
+        ns_prefix = (
+            f"{self.block_name}__{instance_id}__filters."
+            if instance_id
+            else f"{self.block_name}__filters."
+        )
         selected_filter_values = self._collect_filters(
             request.GET, filter_schema, base=base_values, prefix=ns_prefix, allow_flat=False
         )
         return filter_schema, selected_filter_values
 
     # ----- context building -----------------------------------------------------
-    def _build_context(self, request):
+    def _build_context(self, request, instance_id):
         user = request.user
         if not self.has_view_permission(user):
             raise PermissionDenied
 
-        filter_configs, active_filter_config = self._select_filter_config(request)
+        filter_configs, active_filter_config = self._select_filter_config(request, instance_id)
         filter_schema, selected_filter_values = self._resolve_filters(
-            request, active_filter_config
+            request, active_filter_config, instance_id
         )
         figure = self.get_figure(user, selected_filter_values)
         # ensure layout defaults are applied
@@ -115,8 +124,11 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         else:
             figure_dict = dict(figure)
             figure_dict.setdefault("layout", {}).update(layout)
+        # Ensure we have an instance_id for DOM ids
+        instance_id = instance_id or uuid.uuid4().hex[:8]
         return {
             "block_name": self.block_name,
+            "instance_id": instance_id,
             "filter_configs": filter_configs,
             "active_filter_config_id": active_filter_config.id
             if active_filter_config
@@ -126,19 +138,19 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             "figure": figure_dict,
         }
 
-    def _get_context(self, request):
-        cache_key = id(request)
+    def _get_context(self, request, instance_id):
+        cache_key = (id(request), instance_id)
         if cache_key not in self._context_cache:
-            self._context_cache = {cache_key: self._build_context(request)}
+            self._context_cache[cache_key] = self._build_context(request, instance_id)
         return self._context_cache[cache_key]
 
-    def get_config(self, request):
-        context = dict(self._get_context(request))
+    def get_config(self, request, instance_id=None):
+        context = dict(self._get_context(request, instance_id))
         context.pop("figure", None)
         return context
 
-    def get_data(self, request):
-        context = self._get_context(request)
+    def get_data(self, request, instance_id=None):
+        context = self._get_context(request, instance_id)
         figure = context.get("figure", {})
         return {"figure": json.dumps(figure)}
 

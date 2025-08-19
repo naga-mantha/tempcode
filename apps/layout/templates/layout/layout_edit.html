@@ -1,66 +1,87 @@
-<h1>Edit Layout: {{ layout.name }}</h1>
-<p>
-  <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
-</p>
+{% extends "base.html" %}
 
-<form method="post">
-  {% csrf_token %}
-  {{ formset.management_form }}
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Block</th>
-        <th>Row</th>
-        <th>Col (width)</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for form in formset %}
+{% block content %}
+  <h1>Edit Layout: {{ layout.name }}</h1>
+  <p>
+    <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
+    <span class="text-muted ms-2">Drag rows to reorder. Set column width per block.</span>
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    <table class="table" id="layout-edit-table">
+      <thead>
         <tr>
-          <td>
-            {{ form.instance.block.name }}
-            {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-          </td>
-          <td>{{ form.row }}</td>
-          <td>{{ form.col }}</td>
-          <td>
-            {# Render DELETE field (from can_delete) and hide it visually #}
-            <span style="display:none;">{{ form.DELETE }}</span>
-            <button type="button" class="btn btn-sm btn-outline-danger"
-                    onclick="(function(btn){
-                      if(!confirm('Delete this block from layout?')) return;
-                      const tr = btn.closest('tr');
-                      const del = tr && tr.querySelector('input[type=checkbox][name$="-DELETE"]');
-                      if(del){ del.checked = true; }
-                      btn.form.submit();
-                    })(this)">
-              Delete
-            </button>
-          </td>
+          <th style="width: 40px;"></th>
+          <th>Block</th>
+          <th style="width: 160px;">Col (1,2,3,4,6,12)</th>
+          <th style="width: 120px;">Actions</th>
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <button type="submit" class="btn btn-primary">Save</button>
-</form>
+      </thead>
+      <tbody id="layout-rows">
+        {% for form in formset %}
+          <tr class="layout-row" data-index="{{ forloop.counter0 }}">
+            <td class="text-muted align-middle" style="cursor:grab">≡</td>
+            <td class="align-middle">
+              {{ form.instance.block.name }}
+              {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+              {# ORDER field from can_order; keep hidden but present #}
+              <span style="display:none;">{{ form.ORDER }}</span>
+            </td>
+            <td>{{ form.col }}</td>
+            <td>
+              <span style="display:none;">{{ form.DELETE }}</span>
+              <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+{% endblock %}
+
+{% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const table = document.querySelector('table');
-    if (!table) return;
-    const buttons = table.querySelectorAll('button[onclick]');
-    buttons.forEach(function(btn){
-      if ((btn.textContent || '').trim() !== 'Delete') return;
-      // Replace brittle inline handler with a safe listener
-      btn.removeAttribute('onclick');
-      btn.addEventListener('click', function(e){
-        e.preventDefault();
-        if(!confirm('Delete this block from layout?')) return;
-        const tr = btn.closest('tr');
-        const del = tr && tr.querySelector('input[type=checkbox][name$="-DELETE"]');
-        if (del) { del.checked = true; }
-        btn.form && btn.form.submit();
-      });
+    const tbody = document.getElementById('layout-rows');
+    if (!tbody) return;
+
+    // Hook delete buttons
+    tbody.addEventListener('click', function(e){
+      const btn = e.target.closest('.js-delete-row');
+      if (!btn) return;
+      e.preventDefault();
+      if(!confirm('Delete this block from layout?')) return;
+      const tr = btn.closest('tr');
+      const del = tr && tr.querySelector('input[type=checkbox][name$="-DELETE"]');
+      if (del) { del.checked = true; }
+      btn.form && btn.form.submit();
     });
+
+    // Initialize Sortable for drag/drop ordering
+    if (window.Sortable) {
+      const sortable = Sortable.create(tbody, {
+        handle: 'td:first-child',
+        animation: 150,
+        onSort: function(){
+          // Re-number ORDER fields 1..n based on current row order
+          const rows = tbody.querySelectorAll('tr');
+          rows.forEach(function(tr, idx){
+            const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
+            if (orderInput) orderInput.value = idx + 1; // Django expects 1-based order
+          });
+        }
+      });
+      // Initialize ORDER fields on load
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(function(tr, idx){
+        const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
+        if (orderInput) orderInput.value = idx + 1;
+      });
+    }
   });
-  </script>
+</script>
+{% endblock %}
+

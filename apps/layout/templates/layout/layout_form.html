@@ -1,2 +1,6 @@
-<h1>Create Layout</h1>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Save</button></form>
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Create Layout</h1>
+    <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Save</button></form>
+{% endblock %}
