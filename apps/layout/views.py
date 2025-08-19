@@ -4,13 +4,11 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from django.views.generic import TemplateView, FormView, DeleteView
-from django.http import QueryDict
 
 from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
-from apps.blocks.models.block import Block
 from apps.layout.models import Layout, LayoutBlock, LayoutFilterConfig
 from django.forms import modelformset_factory
 
@@ -20,6 +18,8 @@ from apps.layout.forms import (
     LayoutFilterConfigForm,
     LayoutBlockForm,
 )
+
+from apps.layout.mixins import LayoutFilterSchemaMixin, LayoutAccessMixin
 
 
 
@@ -77,13 +77,12 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
         return self.render_to_response(ctx)
 
 
-class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
+class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMixin, TemplateView):
     template_name = "layout/layout_detail.html"
 
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
-        if self.layout.visibility == Layout.VISIBILITY_PRIVATE and self.layout.user != request.user:
-            raise Http404()
+        self.ensure_detail_access(request, self.layout)
         self.filter_configs = LayoutFilterConfig.objects.filter(
             layout=self.layout, user=request.user
         ).order_by("-is_default", "name")
@@ -96,19 +95,7 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
                 pass
         if not self.active_filter_config:
             self.active_filter_config = self.filter_configs.filter(is_default=True).first()
-        return super().dispatch(request, slug, *args, **kwargs)
-
-    def _build_filter_schema(self, request):
-        raw_schema = {}
-        for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.code)
-            if block_impl and hasattr(block_impl, "get_filter_schema"):
-                try:
-                    schema = block_impl.get_filter_schema(request)
-                except TypeError:
-                    schema = block_impl.get_filter_schema(request.user)
-                raw_schema.update(schema or {})
-        return self._resolve_filter_schema(raw_schema, request.user)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -155,6 +142,7 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
                 "block_name": lb.block.name,
                 "id": lb.id,
             })
+        can_manage = self.can_manage(self.request.user, self.layout)
         context.update(
             {
                 "layout": self.layout,
@@ -163,33 +151,18 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
                 "selected_filter_values": selected_filter_values,
                 "filter_configs": self.filter_configs,
                 "active_filter_config_id": self.active_filter_config.id if self.active_filter_config else None,
-                "can_edit": (
-                    self.request.user.is_staff
-                    or (
-                        self.layout.visibility == Layout.VISIBILITY_PRIVATE
-                        and self.layout.user == self.request.user
-                    )
-                ),
-                "can_delete": (
-                    self.request.user.is_staff
-                    or (
-                        self.layout.visibility == Layout.VISIBILITY_PRIVATE
-                        and self.layout.user == self.request.user
-                    )
-                ),
+                "can_edit": can_manage,
+                "can_delete": can_manage,
             }
         )
         return context
 
-class LayoutEditView(LoginRequiredMixin, TemplateView):
+class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
     template_name = "layout/layout_edit.html"
 
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
-        if self.layout.visibility == Layout.VISIBILITY_PUBLIC and not request.user.is_staff:
-            raise Http404()
-        if not request.user.is_staff and self.layout.user != request.user:
-            raise Http404()
+        self.ensure_edit_access(request, self.layout)
         # Limit queryset to this layout's blocks
         self.qs = self.layout.blocks.select_related("block").order_by("position", "id")
         # Formset for editing col; allow deletion and ordering
@@ -201,7 +174,7 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
             can_delete=True,
             can_order=True,
         )
-        return super().dispatch(request, username, slug, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, username, slug):
         formset = self.FormSet(queryset=self.qs)
@@ -268,7 +241,7 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
         return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
 
 
-class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
+class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormView):
     template_name = "layout/layout_filter_config.html"
     form_class = LayoutFilterConfigForm
 
@@ -287,7 +260,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
                     LayoutFilterConfig, id=edit_id, layout=self.layout, user=request.user
                 )
         self.filter_schema = self._build_filter_schema(request)
-        return super().dispatch(request, username, slug, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def post(self, request, username, slug, *args, **kwargs):
         # Handle deletes before validating the form (since 'name' isn't posted on delete)
@@ -312,18 +285,6 @@ class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView
                 slug=self.layout.slug,
             )
         return super().post(request, username, slug, *args, **kwargs)
-
-    def _build_filter_schema(self, request):
-        raw_schema = {}
-        for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.code)
-            if block_impl and hasattr(block_impl, "get_filter_schema"):
-                try:
-                    schema = block_impl.get_filter_schema(request)
-                except TypeError:
-                    schema = block_impl.get_filter_schema(request.user)
-                raw_schema.update(schema or {})
-        return self._resolve_filter_schema(raw_schema, request.user)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

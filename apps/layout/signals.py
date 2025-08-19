@@ -1,8 +1,11 @@
+import logging
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from apps.layout.models import Layout, LayoutFilterConfig
 from apps.accounts.models.custom_user import CustomUser
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Layout)
@@ -30,8 +33,8 @@ def create_default_layout_filter(sender, instance: Layout, created: bool, **kwar
                     is_default=(not qs.exists()),
                 )
     except Exception:
-        # Be defensive during migrations/startup; it's safe to no-op here.
-        pass
+        # Be defensive during migrations/startup; log and no-op.
+        logger.exception("Error creating default layout filters on layout creation")
 
 @receiver(post_save, sender=CustomUser)
 def create_default_layout_filters_for_new_user(sender, instance: CustomUser, created: bool, **kwargs):
@@ -50,7 +53,7 @@ def create_default_layout_filters_for_new_user(sender, instance: CustomUser, cre
                     is_default=(not qs.exists()),
                 )
     except Exception:
-        pass
+        logger.exception("Error creating default layout filters for new user")
 
 
 @receiver(pre_save, sender=Layout)
@@ -96,5 +99,5 @@ def handle_visibility_change(sender, instance: Layout, created: bool, **kwargs):
         elif old_vis == Layout.VISIBILITY_PUBLIC and new_vis == Layout.VISIBILITY_PRIVATE:
             LayoutFilterConfig.objects.filter(layout=instance).exclude(user=instance.user).delete()
     except Exception:
-        # Defensive no-op
-        pass
+        # Defensive no-op with logging
+        logger.exception("Error handling layout visibility change")

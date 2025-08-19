@@ -3,6 +3,7 @@ from django import forms
 from apps.layout.models import Layout, LayoutBlock
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
+from apps.layout.constants import ALLOWED_COLS
 
 
 class LayoutForm(forms.ModelForm):
@@ -20,8 +21,6 @@ class LayoutForm(forms.ModelForm):
 class AddBlockForm(forms.ModelForm):
     # Use ModelChoiceField so cleaned_data['block'] is a Block instance.
     block = forms.ModelChoiceField(queryset=Block.objects.none(), to_field_name="code")
-    # Restrict allowed Bootstrap column widths
-    ALLOWED_COLS = (1, 2, 3, 4, 6, 12)
     col = forms.TypedChoiceField(
         choices=[(c, str(c)) for c in ALLOWED_COLS], coerce=int
     )
@@ -46,8 +45,6 @@ class AddBlockForm(forms.ModelForm):
 
 
 class LayoutBlockForm(forms.ModelForm):
-    # Reuse the same allowed column choices for editing
-    ALLOWED_COLS = (1, 2, 3, 4, 6, 12)
     col = forms.TypedChoiceField(
         choices=[(c, str(c)) for c in ALLOWED_COLS], coerce=int
     )

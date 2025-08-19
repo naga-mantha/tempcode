@@ -26,11 +26,10 @@ Models (apps/layout/models.py)
 - LayoutFilterConfig
   - Fields: layout (FK), user (FK), name (str), values (JSON), is_default (bool).
   - Constraints: unique (layout, user, name).
-  - save(): if first for (layout,user) becomes default; when marked default, unsets others.
+  - save(): if first for (layout,user) becomes default; when marked default, unsets others; if it is the only config, it remains default (cannot unset when only one exists).
   - delete(): prevents deleting last config; if deleting a default, promotes another to default.
   - Auto-creation of "None":
     - On Layout creation, a per-owner default filter named "None" with empty values is created (signals).
-    - On first visit to a layout (detail view), if the current user has no filters for that layout, one is lazily created named "None" with empty values and set as default.
 
 Forms (apps/layout/forms.py)
 
@@ -118,13 +117,14 @@ Block Integration Details
 - Per-instance UI: Table/Chart templates use IDs suffixed by `instance_id` so multiple instances coexist (no duplicate DOM IDs). Column/filter config selectors and Tabulator/Plotly initialization are bound per instance.
 - Default "None" block filters:
   - On new user creation, a signal creates a "None" filter (empty values) for every existing block for that user (first marked default).
-  - Lazy creation: When a user first interacts with a TableBlock or ChartBlock and no block filters exist yet for that block+user, the block code creates a default "None" for that user on the fly.
+  - If a user has only one saved block filter for a block, it remains default (cannot unset when only one exists).
 
 Design Decisions
 
 - No row management: Only `position` is used; Bootstrap’s grid wraps `col-XX` items into rows responsively.
 - Column control: Users pick from allowed `col` sizes (1,2,3,4,6,12) for consistent grid behavior.
 - Merge of pages: Add Block merged into Edit Layout; Create Layout merged into Your Layouts for simpler workflows.
+ - Slugs reflect layout names. Renaming a layout updates its slug, changing the URL.
 
 Query Parameters (Layout page)
 

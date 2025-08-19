@@ -40,10 +40,14 @@ class BaseUserConfig(models.Model):
         if not self.pk:
             if not model.objects.filter(block=self.block, user=self.user).exists():
                 self.is_default = True
-        elif self.is_default:
-            model.objects.filter(block=self.block, user=self.user).exclude(pk=self.pk).update(
-                is_default=False
-            )
+        else:
+            if self.is_default:
+                model.objects.filter(block=self.block, user=self.user).exclude(pk=self.pk).update(
+                    is_default=False
+                )
+            # If this is the only config, it must remain default
+            if model.objects.filter(block=self.block, user=self.user).count() == 1:
+                self.is_default = True
 
         super().save(*args, **kwargs)
 

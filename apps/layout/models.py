@@ -1,8 +1,10 @@
 from django.db import models
+from django.db.models import Q
 from django.utils.text import slugify
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.models.block import Block
+from .constants import ALLOWED_COLS
 
 
 class Layout(models.Model):
@@ -56,6 +58,14 @@ class LayoutBlock(models.Model):
 
     class Meta:
         ordering = ["position", "id"]
+        constraints = [
+            models.CheckConstraint(
+                check=Q(col__in=ALLOWED_COLS), name="layoutblock_col_allowed_values"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["layout", "position"], name="layout_pos_idx")
+        ]
 
 
 class LayoutFilterConfig(models.Model):
@@ -86,10 +96,15 @@ class LayoutFilterConfig(models.Model):
         if not self.pk:
             if not model.objects.filter(layout=self.layout, user=self.user).exists():
                 self.is_default = True
-        elif self.is_default:
-            model.objects.filter(layout=self.layout, user=self.user).exclude(pk=self.pk).update(
-                is_default=False
-            )
+        else:
+            # If marking as default, unset others
+            if self.is_default:
+                model.objects.filter(layout=self.layout, user=self.user).exclude(pk=self.pk).update(
+                    is_default=False
+                )
+            # If this is the only config, it must remain default
+            if model.objects.filter(layout=self.layout, user=self.user).count() == 1:
+                self.is_default = True
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):  # noqa: D401 - behaviour documented here
