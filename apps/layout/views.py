@@ -6,6 +6,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, FormView, DeleteView
+from django.http import QueryDict
 
 from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
@@ -120,8 +121,28 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
             block_impl = block_registry.get(lb.block.code)
             if not block_impl:
                 continue
+            # Build a per-block namespaced GET overlay from selected layout filters
+            ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
+            qd = self.request.GET.copy()
+            for k, v in (selected_filter_values or {}).items():
+                name = f"{ns}{k}"
+                if isinstance(v, (list, tuple)):
+                    qd.setlist(name, [str(x) for x in v])
+                elif isinstance(v, bool):
+                    qd[name] = "1" if v else "0"
+                elif v is not None:
+                    qd[name] = str(v)
+
+            class _ReqProxy:
+                def __init__(self, req, get):
+                    self._req = req
+                    self.GET = get
+                def __getattr__(self, item):
+                    return getattr(self._req, item)
+
+            proxy_request = _ReqProxy(self.request, qd)
             # Pass a stable per-instance id based on the LayoutBlock id
-            response = block_impl.render(self.request, instance_id=str(lb.id))
+            response = block_impl.render(proxy_request, instance_id=str(lb.id))
             try:
                 html = response.content.decode(response.charset or "utf-8")
             except Exception:
