@@ -1,45 +1,73 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h1>Edit Layout: {{ layout.name }}</h1>
-  <p>
-    <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
-    <span class="text-muted ms-2">Drag rows to reorder. Set column width per block.</span>
-  </p>
+  <div class="main-container-fluid">
+    <h1>Edit Layout: {{ layout.name }}</h1>
+    <p>
+      <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
+      <span class="text-muted ms-2">Drag rows to reorder. Set column width per block.</span>
+    </p>
 
-  <form method="post">
-    {% csrf_token %}
-    {{ formset.management_form }}
-    <table class="table" id="layout-edit-table">
-      <thead>
-        <tr>
-          <th style="width: 40px;"></th>
-          <th>Block</th>
-          <th style="width: 160px;">Col (1,2,3,4,6,12)</th>
-          <th style="width: 120px;">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="layout-rows">
-        {% for form in formset %}
-          <tr class="layout-row" data-index="{{ forloop.counter0 }}">
-            <td class="text-muted align-middle" style="cursor:grab">≡</td>
-            <td class="align-middle">
-              {{ form.instance.block.name }}
-              {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-              {# ORDER field from can_order; keep hidden but present #}
-              <span style="display:none;">{{ form.ORDER }}</span>
-            </td>
-            <td>{{ form.col }}</td>
-            <td>
-              <span style="display:none;">{{ form.DELETE }}</span>
-              <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button type="submit" class="btn btn-primary">Save</button>
-  </form>
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Add Block</h5>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="add_block" value="1">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Block</label>
+              {{ add_form.block }}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Col (1,2,3,4,6,12)</label>
+              {{ add_form.col }}
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-primary">Add</button>
+            </div>
+          </div>
+          {% if add_form.errors %}
+            <div class="text-danger mt-2">{{ add_form.errors }}</div>
+          {% endif %}
+        </form>
+      </div>
+     </div>
+
+    <form method="post">
+      {% csrf_token %}
+      {{ formset.management_form }}
+      <table class="table" id="layout-edit-table">
+        <thead>
+            <tr>
+              <th style="width: 40px;"></th>
+              <th>Block</th>
+              <th style="width: 160px;">Col (1,2,3,4,6,12)</th>
+              <th style="width: 120px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="layout-rows">
+            {% for form in formset %}
+              <tr class="layout-row" data-index="{{ forloop.counter0 }}">
+                <td class="text-muted align-middle" style="cursor:grab">≡</td>
+                <td class="align-middle">
+                  {{ form.instance.block.name }}
+                  {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                  {# ORDER field from can_order; keep hidden but present #}
+                  <span style="display:none;">{{ form.ORDER }}</span>
+                </td>
+                <td>{{ form.col }}</td>
+                <td>
+                  <span style="display:none;">{{ form.DELETE }}</span>
+                  <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </form>
+  </div>
 {% endblock %}
 
 {% block scripts %}
@@ -84,4 +112,3 @@
   });
 </script>
 {% endblock %}
-

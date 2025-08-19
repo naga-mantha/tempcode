@@ -4,12 +4,10 @@
   <div class="main-container-fluid">
     <h1>{{ layout.name }}</h1>
     <p>
-      {% if can_edit %}
-        <a href="{% url 'layout_add_block' username=layout.user.username slug=layout.slug %}">Add block</a>
-        |
-        <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
-        |
-      {% endif %}
+    {% if can_edit %}
+      <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
+      |
+    {% endif %}
       <a href="{% url 'layout_list' %}">All layouts</a>
       {% if can_delete %}
         |

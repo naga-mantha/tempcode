@@ -22,26 +22,6 @@ from apps.layout.forms import (
 )
 
 
-class LayoutCreateView(LoginRequiredMixin, FormView):
-    template_name = "layout/layout_form.html"
-    form_class = LayoutForm
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user
-        return kwargs
-
-    def form_valid(self, form):
-        layout = form.save(commit=False)
-        layout.user = self.request.user
-        if not self.request.user.is_staff:
-            layout.visibility = Layout.VISIBILITY_PRIVATE
-        try:
-            layout.save()
-        except IntegrityError:
-            form.add_error("name", "You already have a layout with this name.")
-            return self.form_invalid(form)
-        return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
 
 
 class LayoutDeleteView(LoginRequiredMixin, DeleteView):
@@ -72,7 +52,29 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
         context["private_layouts"] = qs.filter(
             visibility=Layout.VISIBILITY_PRIVATE, user=self.request.user
         )
+        # Provide create form inline on this page
+        context["form"] = LayoutForm(user=self.request.user)
         return context
+
+    def post(self, request, *args, **kwargs):
+        # Handle create layout inline
+        form = LayoutForm(request.POST, user=request.user)
+        if form.is_valid():
+            layout = form.save(commit=False)
+            layout.user = request.user
+            if not request.user.is_staff:
+                layout.visibility = Layout.VISIBILITY_PRIVATE
+            try:
+                layout.save()
+            except IntegrityError:
+                form.add_error("name", "You already have a layout with this name.")
+                ctx = self.get_context_data()
+                ctx["form"] = form
+                return self.render_to_response(ctx)
+            return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
+        ctx = self.get_context_data()
+        ctx["form"] = form
+        return self.render_to_response(ctx)
 
 
 class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
@@ -179,38 +181,6 @@ class LayoutDetailView(LoginRequiredMixin, FilterResolutionMixin, TemplateView):
         )
         return context
 
-
-class AddBlockView(LoginRequiredMixin, FormView):
-    template_name = "layout/add_block.html"
-    form_class = AddBlockForm
-
-    def dispatch(self, request, username, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
-        if self.layout.visibility == Layout.VISIBILITY_PUBLIC and not request.user.is_staff:
-            raise Http404()
-        if not request.user.is_staff and self.layout.user != request.user:
-            raise Http404()
-        return super().dispatch(request, username, slug, *args, **kwargs)
-
-    def form_valid(self, form):
-        # 'block' is a Block instance thanks to ModelChoiceField in the form
-        block_obj = form.cleaned_data["block"]
-        # Position new block at the end
-        last = (
-            LayoutBlock.objects.filter(layout=self.layout)
-            .order_by("-position")
-            .first()
-        )
-        next_pos = (last.position + 1) if last else 0
-        LayoutBlock.objects.create(
-            layout=self.layout,
-            block=block_obj,
-            col=form.cleaned_data["col"],
-            position=next_pos,
-        )
-        return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
-
-
 class LayoutEditView(LoginRequiredMixin, TemplateView):
     template_name = "layout/layout_edit.html"
 
@@ -235,9 +205,33 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
 
     def get(self, request, username, slug):
         formset = self.FormSet(queryset=self.qs)
-        return self.render_to_response({"layout": self.layout, "formset": formset})
+        add_form = AddBlockForm()
+        return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
 
     def post(self, request, username, slug):
+        # Adding a new block from the combined page
+        if request.POST.get("add_block"):
+            add_form = AddBlockForm(request.POST)
+            if add_form.is_valid():
+                block_obj = add_form.cleaned_data["block"]
+                last = (
+                    LayoutBlock.objects.filter(layout=self.layout)
+                    .order_by("-position")
+                    .first()
+                )
+                next_pos = (last.position + 1) if last else 0
+                LayoutBlock.objects.create(
+                    layout=self.layout,
+                    block=block_obj,
+                    col=add_form.cleaned_data["col"],
+                    position=next_pos,
+                )
+                messages.success(request, "Block added to layout.")
+                return redirect("layout_edit", username=self.layout.user.username, slug=self.layout.slug)
+            # if invalid, fall through to render with errors alongside formset
+            formset = self.FormSet(queryset=self.qs)
+            return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
+
         # Handle single-row delete actions triggered by per-row buttons
         delete_id = request.POST.get("delete")
         if delete_id:
@@ -270,7 +264,8 @@ class LayoutEditView(LoginRequiredMixin, TemplateView):
             messages.success(request, "Layout updated.")
             return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
         messages.error(request, "Please correct the errors below.")
-        return self.render_to_response({"layout": self.layout, "formset": formset})
+        add_form = AddBlockForm()
+        return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
 
 
 class LayoutFilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):

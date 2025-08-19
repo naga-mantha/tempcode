@@ -11,6 +11,12 @@ class BlocksConfig(AppConfig):
     name = "apps.blocks"
 
     def ready(self):
+        # Register signal handlers
+        try:
+            from . import signals  # noqa: F401
+        except Exception:
+            # Signals are best-effort at startup to avoid migration-time errors
+            pass
         # Load any block entry points defined in settings.BLOCKS.  Each entry
         # can be either a module path that performs registration on import or a
         # "module:callable" string where the callable accepts the registry

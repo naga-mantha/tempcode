@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
+  <div class="main-container-fluid">
     <h1>Delete Layout {{ object.name }}</h1>
     <form method="post">{% csrf_token %}<button type="submit">Confirm</button></form>
+  </div>
 {% endblock %}

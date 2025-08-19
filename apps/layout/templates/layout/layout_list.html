@@ -1,7 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+  <div class="main-container-fluid">
     <h1>Your Layouts</h1>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Create Layout</h5>
+        <form method="post">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+      </div>
+    </div>
 
     <h2>Private</h2>
     <ul>
@@ -25,6 +37,6 @@
         <li>No public layouts</li>
     {% endfor %}
     </ul>
-
-    <a href="{% url 'layout_create' %}">Create Layout</a>
+    
+  </div>
 {% endblock %}
