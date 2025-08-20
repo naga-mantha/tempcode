@@ -5,31 +5,20 @@
     <h1>Edit Layout: {{ layout.name }}</h1>
     <p>
       <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
-      <span class="text-muted ms-2">Drag rows to reorder. Set column width per block.</span>
+      <span class="text-muted ms-2">Drag to reorder (auto-saves). Change widths (auto-saves).</span>
     </p>
 
     <div class="card mb-4">
       <div class="card-body">
         <h5 class="card-title">Add Block</h5>
-        <form method="post">
+        <form method="post" id="add-block-form">
           {% csrf_token %}
-          <input type="hidden" name="add_block" value="1">
           <div class="row g-2 align-items-end">
-            <div class="col-md-6">
+            <div class="col-md-8">
               <label class="form-label">Block</label>
               {{ add_form.block }}
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Col (1,2,3,4,6,12)</label>
-              {{ add_form.col }}
-            </div>
-            <div class="col-md-3">
-              <button type="submit" class="btn btn-primary">Add</button>
-            </div>
           </div>
-          {% if add_form.errors %}
-            <div class="text-danger mt-2">{{ add_form.errors }}</div>
-          {% endif %}
         </form>
       </div>
      </div>
@@ -42,30 +31,15 @@
             <tr>
               <th style="width: 40px;"></th>
               <th>Block</th>
-              <th style="width: 160px;">Col (1,2,3,4,6,12)</th>
+              <th style="width: 420px;">Cols (sm, md, lg, xl, xxl)</th>
               <th style="width: 120px;">Actions</th>
             </tr>
           </thead>
           <tbody id="layout-rows">
-            {% for form in formset %}
-              <tr class="layout-row" data-index="{{ forloop.counter0 }}">
-                <td class="text-muted align-middle" style="cursor:grab">≡</td>
-                <td class="align-middle">
-                  {{ form.instance.block.name }}
-                  {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-                  {# ORDER field from can_order; keep hidden but present #}
-                  <span style="display:none;">{{ form.ORDER }}</span>
-                </td>
-                <td>{{ form.col }}</td>
-                <td>
-                  <span style="display:none;">{{ form.DELETE }}</span>
-                  <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
-                </td>
-              </tr>
-            {% endfor %}
+            {% include 'layout/_layout_rows.html' %}
           </tbody>
         </table>
-        <button type="submit" class="btn btn-primary">Save</button>
+        <!-- No Save button needed: changes auto-save -->
       </form>
   </div>
 {% endblock %}
@@ -75,6 +49,52 @@
   document.addEventListener('DOMContentLoaded', function() {
     const tbody = document.getElementById('layout-rows');
     if (!tbody) return;
+    const reorderUrl = "{% url 'layout_reorder' username=layout.user.username slug=layout.slug %}";
+    const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
+    const deleteUrlBase = updateUrlBase;
+    const addUrl = "{% url 'layout_block_add' username=layout.user.username slug=layout.slug %}";
+
+    // CSRF helper
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    function getCsrfToken() {
+      return getCookie('csrftoken') || (document.querySelector('input[name="csrfmiddlewaretoken"]') || {}).value || '';
+    }
+    const csrftoken = getCsrfToken();
+
+    // Simple toast for error/success messages
+    function showToast(message, variant) {
+      const id = 'js-toast-container';
+      let c = document.getElementById(id);
+      if (!c) {
+        c = document.createElement('div');
+        c.id = id;
+        c.style.position = 'fixed';
+        c.style.right = '16px';
+        c.style.bottom = '16px';
+        c.style.zIndex = '1080';
+        c.style.display = 'flex';
+        c.style.flexDirection = 'column';
+        c.style.gap = '8px';
+        document.body.appendChild(c);
+      }
+      const el = document.createElement('div');
+      el.textContent = message || 'An error occurred';
+      el.style.padding = '10px 14px';
+      el.style.borderRadius = '4px';
+      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+      el.style.color = '#fff';
+      el.style.fontSize = '14px';
+      el.style.opacity = '0';
+      el.style.transition = 'opacity .2s ease';
+      el.style.background = (variant === 'success') ? '#198754' : (variant === 'warning' ? '#fd7e14' : '#dc3545');
+      c.appendChild(el);
+      requestAnimationFrame(function(){ el.style.opacity = '1'; });
+      setTimeout(function(){ el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 200); }, 3000);
+    }
 
     // Hook delete buttons
     tbody.addEventListener('click', function(e){
@@ -83,32 +103,138 @@
       e.preventDefault();
       if(!confirm('Delete this block from layout?')) return;
       const tr = btn.closest('tr');
-      const del = tr && tr.querySelector('input[type=checkbox][name$="-DELETE"]');
-      if (del) { del.checked = true; }
-      btn.form && btn.form.submit();
+      const id = tr && parseInt(tr.getAttribute('data-id'), 10);
+      if (!id) return;
+      fetch(`${deleteUrlBase}${id}/delete/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrftoken || ''
+        }
+      }).then(function(resp){
+        if (resp.ok) {
+          tr.remove();
+        } else {
+          showToast('Failed to delete block', 'error');
+        }
+      }).catch(function(){ showToast('Failed to delete block', 'error'); });
     });
 
-    // Initialize Sortable for drag/drop ordering
-    if (window.Sortable) {
-      const sortable = Sortable.create(tbody, {
-        handle: 'td:first-child',
-        animation: 150,
-        onSort: function(){
-          // Re-number ORDER fields 1..n based on current row order
-          const rows = tbody.querySelectorAll('tr');
-          rows.forEach(function(tr, idx){
-            const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
-            if (orderInput) orderInput.value = idx + 1; // Django expects 1-based order
-          });
-        }
-      });
-      // Initialize ORDER fields on load
+    function initOrderFields() {
       const rows = tbody.querySelectorAll('tr');
       rows.forEach(function(tr, idx){
         const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
         if (orderInput) orderInput.value = idx + 1;
       });
     }
+    function initSortable() {
+      if (!window.Sortable) return;
+      Sortable.create(tbody, {
+        handle: 'td:first-child',
+        animation: 150,
+        onSort: function(){
+          const rows = tbody.querySelectorAll('tr');
+          rows.forEach(function(tr, idx){
+            const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
+            if (orderInput) orderInput.value = idx + 1;
+          });
+          const ids = Array.from(rows).map(function(tr){
+            return parseInt(tr.getAttribute('data-id'), 10);
+          }).filter(function(x){ return !isNaN(x); });
+          if (ids.length) {
+            fetch(reorderUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken || ''
+              },
+              body: JSON.stringify({ordered_ids: ids})
+            }).then(function(resp){
+              if (!resp.ok) showToast('Failed to save order', 'error');
+            }).catch(function(){ showToast('Failed to save order', 'error'); });
+          }
+        }
+      });
+      initOrderFields();
+    }
+    initSortable();
+
+    // Auto-save column width changes per row
+    function collectRowPayload(tr) {
+      const pick = function(name){
+        const el = tr.querySelector(`[name$="-${name}"]`);
+        if (!el) return undefined;
+        const v = (el.value || '').trim();
+        return v === '' ? null : parseInt(v, 10);
+      };
+      return {
+        col_sm: pick('col_sm'),
+        col_md: pick('col_md'),
+        col_lg: pick('col_lg'),
+        col_xl: pick('col_xl'),
+        col_xxl: pick('col_xxl')
+      };
+    }
+    // Listen to select changes for auto-save
+    tbody.addEventListener('change', function(e){
+      const control = e.target.closest('select');
+      if (!control) return;
+      const tr = control.closest('tr');
+      const id = tr && parseInt(tr.getAttribute('data-id'), 10);
+      if (!id) return;
+      const payload = collectRowPayload(tr);
+      fetch(`${updateUrlBase}${id}/update/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrftoken || ''
+        },
+        body: JSON.stringify(payload)
+      }).then(function(resp){
+        if (!resp.ok) showToast('Failed to save changes', 'error');
+      }).catch(function(){ showToast('Failed to save changes', 'error'); });
+    });
+
+    // Remove dropdown-specific handlers
+
+    // AJAX Add Block on select change
+    (function(){
+      const addForm = document.getElementById('add-block-form');
+      if (!addForm) return;
+      const sel = addForm.querySelector('select[name="block"]');
+      if (!sel) return;
+      sel.addEventListener('change', function(){
+        const val = sel.value;
+        if (!val) return;
+        sel.disabled = true;
+        fetch(addUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken || ''
+          },
+          body: JSON.stringify({block: val})
+        }).then(function(resp){ return resp.json(); })
+          .then(function(data){
+            if (!data || !data.ok) { showToast('Failed to add block', 'error'); return; }
+            if (data.tbody_html) {
+              tbody.innerHTML = data.tbody_html;
+              initSortable();
+            }
+          })
+          .catch(function(){ showToast('Failed to add block', 'error'); })
+          .finally(function(){ sel.disabled = false; sel.value = ''; });
+      });
+    })();
   });
 </script>
+<style>
+  /* no custom controls; keep table compact */
+  #layout-edit-table td .row > [class^="col-"] { min-width: 140px; }
+  @media (max-width: 576px) { #layout-edit-table td .row > [class^="col-"] { min-width: auto; } }
+  .js-toast-container { z-index: 1080; }
+  /* optional: size down selects */
+  #layout-edit-table select { padding: .25rem .5rem; font-size: .875rem; }
+  #layout-edit-table .form-select { height: calc(1.5em + .5rem + 2px); }
+</style>
 {% endblock %}

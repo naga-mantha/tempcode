@@ -54,6 +54,12 @@ class LayoutBlock(models.Model):
     position = models.PositiveIntegerField(default=0)
     # Bootstrap column span (1..12). We will validate via forms to allowed values.
     col = models.PositiveIntegerField(default=12)
+    # Optional responsive overrides per breakpoint; when null, inherit from smaller breakpoint
+    col_sm = models.PositiveIntegerField(null=True, blank=True)
+    col_md = models.PositiveIntegerField(null=True, blank=True)
+    col_lg = models.PositiveIntegerField(null=True, blank=True)
+    col_xl = models.PositiveIntegerField(null=True, blank=True)
+    col_xxl = models.PositiveIntegerField(null=True, blank=True)
     # Note: vertical sizing not currently used; remove old width/height fields
 
     class Meta:
@@ -61,11 +67,45 @@ class LayoutBlock(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=Q(col__in=ALLOWED_COLS), name="layoutblock_col_allowed_values"
-            )
+            ),
+            models.CheckConstraint(
+                check=(Q(col_sm__isnull=True) | Q(col_sm__in=ALLOWED_COLS)),
+                name="layoutblock_col_sm_allowed_values",
+            ),
+            models.CheckConstraint(
+                check=(Q(col_md__isnull=True) | Q(col_md__in=ALLOWED_COLS)),
+                name="layoutblock_col_md_allowed_values",
+            ),
+            models.CheckConstraint(
+                check=(Q(col_lg__isnull=True) | Q(col_lg__in=ALLOWED_COLS)),
+                name="layoutblock_col_lg_allowed_values",
+            ),
+            models.CheckConstraint(
+                check=(Q(col_xl__isnull=True) | Q(col_xl__in=ALLOWED_COLS)),
+                name="layoutblock_col_xl_allowed_values",
+            ),
+            models.CheckConstraint(
+                check=(Q(col_xxl__isnull=True) | Q(col_xxl__in=ALLOWED_COLS)),
+                name="layoutblock_col_xxl_allowed_values",
+            ),
         ]
         indexes = [
             models.Index(fields=["layout", "position"], name="layout_pos_idx")
         ]
+
+    def bootstrap_col_classes(self) -> str:
+        parts = [f"col-{self.col}"]
+        if self.col_sm:
+            parts.append(f"col-sm-{self.col_sm}")
+        if self.col_md:
+            parts.append(f"col-md-{self.col_md}")
+        if self.col_lg:
+            parts.append(f"col-lg-{self.col_lg}")
+        if self.col_xl:
+            parts.append(f"col-xl-{self.col_xl}")
+        if self.col_xxl:
+            parts.append(f"col-xxl-{self.col_xxl}")
+        return " ".join(parts)
 
 
 class LayoutFilterConfig(models.Model):

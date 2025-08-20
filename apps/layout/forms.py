@@ -21,14 +21,11 @@ class LayoutForm(forms.ModelForm):
 class AddBlockForm(forms.ModelForm):
     # Use ModelChoiceField so cleaned_data['block'] is a Block instance.
     block = forms.ModelChoiceField(queryset=Block.objects.none(), to_field_name="code")
-    col = forms.TypedChoiceField(
-        choices=[(c, str(c)) for c in ALLOWED_COLS], coerce=int
-    )
 
     class Meta:
         model = LayoutBlock
-        # Only expose block and column width; ordering is set automatically to the end.
-        fields = ["block", "col"]
+        # Only choose the block when adding; columns default to inherit.
+        fields = ["block"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,16 +40,62 @@ class AddBlockForm(forms.ModelForm):
             return f"{app_name}>{obj.name}"
         field.label_from_instance = _label
 
+    # No responsive fields on add; all inherit by default
+
 
 class LayoutBlockForm(forms.ModelForm):
-    col = forms.TypedChoiceField(
-        choices=[(c, str(c)) for c in ALLOWED_COLS], coerce=int
+    _inherit_choice = [("", "— inherit —")]
+    col_sm = forms.TypedChoiceField(
+        required=False,
+        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
+        coerce=lambda v: int(v) if str(v).isdigit() else None,
+    )
+    col_md = forms.TypedChoiceField(
+        required=False,
+        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
+        coerce=lambda v: int(v) if str(v).isdigit() else None,
+    )
+    col_lg = forms.TypedChoiceField(
+        required=False,
+        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
+        coerce=lambda v: int(v) if str(v).isdigit() else None,
+    )
+    col_xl = forms.TypedChoiceField(
+        required=False,
+        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
+        coerce=lambda v: int(v) if str(v).isdigit() else None,
+    )
+    col_xxl = forms.TypedChoiceField(
+        required=False,
+        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
+        coerce=lambda v: int(v) if str(v).isdigit() else None,
     )
 
     class Meta:
         model = LayoutBlock
-        # Only allow editing of column width in the editor; ordering is via drag/drop.
-        fields = ["col"]
+        # Allow editing base and responsive cols; ordering is via drag/drop.
+        fields = ["col_sm", "col_md", "col_lg", "col_xl", "col_xxl"]
+
+    # Explicitly normalize optional responsive cols: '' -> None
+    def clean_col_sm(self):
+        v = self.cleaned_data.get("col_sm")
+        return v if isinstance(v, int) else None
+
+    def clean_col_md(self):
+        v = self.cleaned_data.get("col_md")
+        return v if isinstance(v, int) else None
+
+    def clean_col_lg(self):
+        v = self.cleaned_data.get("col_lg")
+        return v if isinstance(v, int) else None
+
+    def clean_col_xl(self):
+        v = self.cleaned_data.get("col_xl")
+        return v if isinstance(v, int) else None
+
+    def clean_col_xxl(self):
+        v = self.cleaned_data.get("col_xxl")
+        return v if isinstance(v, int) else None
 
 
 class LayoutFilterConfigForm(forms.Form):

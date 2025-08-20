@@ -2,10 +2,12 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
 from django.db.models import Q
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import TemplateView, FormView, DeleteView
+from django.views import View
+from django.template.loader import render_to_string
 
 from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
@@ -137,7 +139,7 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             except Exception:
                 html = response.content.decode("utf-8", errors="ignore")
             blocks_list.append({
-                "col": lb.col,
+                "col_classes": lb.bootstrap_col_classes(),
                 "html": html,
                 "block_name": lb.block.name,
                 "id": lb.id,
@@ -165,11 +167,11 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
         self.ensure_edit_access(request, self.layout)
         # Limit queryset to this layout's blocks
         self.qs = self.layout.blocks.select_related("block").order_by("position", "id")
-        # Formset for editing col; allow deletion and ordering
+        # Formset for editing cols; allow deletion and ordering
         self.FormSet = modelformset_factory(
             LayoutBlock,
             form=LayoutBlockForm,
-            fields=("col",),
+            fields=("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"),
             extra=0,
             can_delete=True,
             can_order=True,
@@ -179,66 +181,12 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         formset = self.FormSet(queryset=self.qs)
         add_form = AddBlockForm()
-        return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
+        return self.render_to_response({
+            "layout": self.layout,
+            "formset": formset,
+            "add_form": add_form,
+        })
 
-    def post(self, request, *args, **kwargs):
-        # Adding a new block from the combined page
-        if request.POST.get("add_block"):
-            add_form = AddBlockForm(request.POST)
-            if add_form.is_valid():
-                block_obj = add_form.cleaned_data["block"]
-                last = (
-                    LayoutBlock.objects.filter(layout=self.layout)
-                    .order_by("-position")
-                    .first()
-                )
-                next_pos = (last.position + 1) if last else 0
-                LayoutBlock.objects.create(
-                    layout=self.layout,
-                    block=block_obj,
-                    col=add_form.cleaned_data["col"],
-                    position=next_pos,
-                )
-                messages.success(request, "Block added to layout.")
-                return redirect("layout_edit", username=self.layout.user.username, slug=self.layout.slug)
-            # if invalid, fall through to render with errors alongside formset
-            formset = self.FormSet(queryset=self.qs)
-            return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
-
-        # Handle single-row delete actions triggered by per-row buttons
-        delete_id = request.POST.get("delete")
-        if delete_id:
-            try:
-                lb = self.qs.get(pk=delete_id)
-                lb.delete()
-                messages.success(request, "Block removed from layout.")
-            except LayoutBlock.DoesNotExist:
-                messages.error(request, "Block not found or already deleted.")
-            return redirect("layout_edit", username=self.layout.user.username, slug=self.layout.slug)
-
-        formset = self.FormSet(request.POST, queryset=self.qs)
-        if formset.is_valid():
-            # Update ordering from ORDER field (provided by can_order)
-            order_counter = 0
-            for form in formset.ordered_forms:
-                inst = form.instance
-                inst.position = order_counter
-                inst.save(update_fields=["position"])
-                order_counter += 1
-            # Append any forms not in ordered_forms preserving current order
-            for form in formset.forms:
-                if form not in formset.ordered_forms and not form.cleaned_data.get("DELETE"):
-                    inst = form.instance
-                    inst.position = order_counter
-                    inst.save(update_fields=["position"])
-                    order_counter += 1
-            # Save column width changes and process deletions
-            formset.save()
-            messages.success(request, "Layout updated.")
-            return redirect("layout_detail", username=self.layout.user.username, slug=self.layout.slug)
-        messages.error(request, "Please correct the errors below.")
-        add_form = AddBlockForm()
-        return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
 
 
 class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormView):
@@ -353,3 +301,125 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
             }
         )
         return context
+
+
+class LayoutReorderView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, *args, **kwargs):
+        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.ensure_edit_access(request, layout)
+        # Accept JSON payload: {"ordered_ids": [id1, id2, ...]}
+        try:
+            import json
+            payload = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except Exception:
+            payload = {}
+        ordered_ids = payload.get("ordered_ids") or request.POST.getlist("ordered_ids[]")
+        if not ordered_ids:
+            return JsonResponse({"ok": False, "error": "No ordering provided."}, status=400)
+        # Coerce to ints and validate all belong to this layout
+        try:
+            ordered_ids = [int(x) for x in ordered_ids]
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Invalid id in list."}, status=400)
+        qs = list(layout.blocks.filter(id__in=ordered_ids).only("id", "position"))
+        if len(qs) != len(ordered_ids):
+            return JsonResponse({"ok": False, "error": "One or more blocks not found."}, status=404)
+        # Assign positions in the provided order
+        from django.db import transaction
+        with transaction.atomic():
+            for idx, bid in enumerate(ordered_ids):
+                # Use update to avoid race when many rows
+                LayoutBlock.objects.filter(layout=layout, id=bid).update(position=idx)
+        return JsonResponse({"ok": True})
+
+
+class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, id, *args, **kwargs):
+        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.ensure_edit_access(request, layout)
+        lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
+        try:
+            import json
+            data = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except Exception:
+            data = {}
+        # Only allow known fields; normalize to None or int in ALLOWED_COLS
+        from apps.layout.constants import ALLOWED_COLS
+        def _norm(v):
+            if v in (None, "", "null"): return None
+            try:
+                iv = int(v)
+            except (TypeError, ValueError):
+                return object()  # invalid sentinel
+            return iv if iv in ALLOWED_COLS else object()
+        updates = {}
+        for key in ("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"):
+            if key in data:
+                norm = _norm(data.get(key))
+                if norm is object():
+                    return JsonResponse({"ok": False, "error": f"Invalid value for {key}."}, status=400)
+                updates[key] = norm
+        if not updates:
+            return JsonResponse({"ok": False, "error": "No updatable fields provided."}, status=400)
+        for k, v in updates.items():
+            setattr(lb, k, v)
+        lb.save(update_fields=list(updates.keys()))
+        return JsonResponse({"ok": True})
+
+
+class LayoutBlockDeleteView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, id, *args, **kwargs):
+        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.ensure_edit_access(request, layout)
+        lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
+        lb.delete()
+        return JsonResponse({"ok": True})
+
+
+class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, *args, **kwargs):
+        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.ensure_edit_access(request, layout)
+        # Accept JSON or form POST; expect 'block' by code or id
+        try:
+            import json
+            payload = json.loads(request.body.decode("utf-8")) if request.body and request.content_type == 'application/json' else {}
+        except Exception:
+            payload = {}
+        block_code = payload.get("block") or request.POST.get("block")
+        if not block_code:
+            return JsonResponse({"ok": False, "error": "Missing block."}, status=400)
+        from apps.blocks.models.block import Block
+        try:
+            block_obj = Block.objects.get(code=block_code)
+        except Block.DoesNotExist:
+            return JsonResponse({"ok": False, "error": "Invalid block."}, status=400)
+        # Append at the end
+        last = (
+            LayoutBlock.objects.filter(layout=layout)
+            .order_by("-position")
+            .first()
+        )
+        next_pos = (last.position + 1) if last else 0
+        LayoutBlock.objects.create(
+            layout=layout,
+            block=block_obj,
+            position=next_pos,
+        )
+        # Rebuild formset for updated tbody
+        qs = layout.blocks.select_related("block").order_by("position", "id")
+        FormSet = modelformset_factory(
+            LayoutBlock,
+            form=LayoutBlockForm,
+            fields=("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"),
+            extra=0,
+            can_delete=True,
+            can_order=True,
+        )
+        formset = FormSet(queryset=qs)
+        tbody_html = render_to_string(
+            "layout/_layout_rows.html",
+            {"formset": formset},
+            request=request,
+        )
+        return JsonResponse({"ok": True, "tbody_html": tbody_html})

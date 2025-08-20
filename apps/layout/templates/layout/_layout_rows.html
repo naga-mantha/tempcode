@@ -1,0 +1,23 @@
+{% for form in formset %}
+  <tr class="layout-row" data-index="{{ forloop.counter0 }}" data-id="{{ form.instance.id }}">
+    <td class="text-muted align-middle" style="cursor:grab">≡</td>
+    <td class="align-middle">
+      {{ form.instance.block.name }}
+      {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+      <span style="display:none;">{{ form.ORDER }}</span>
+    </td>
+    <td>
+      <div class="row g-2">
+        <div class="col-6 col-md-2">{{ form.col_sm }}</div>
+        <div class="col-6 col-md-2">{{ form.col_md }}</div>
+        <div class="col-6 col-md-2">{{ form.col_lg }}</div>
+        <div class="col-6 col-md-2">{{ form.col_xl }}</div>
+        <div class="col-6 col-md-2">{{ form.col_xxl }}</div>
+      </div>
+    </td>
+    <td>
+      <span style="display:none;">{{ form.DELETE }}</span>
+      <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
+    </td>
+  </tr>
+{% endfor %}

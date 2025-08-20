@@ -48,7 +48,7 @@
 
     <div class="row g-3">
       {% for b in blocks %}
-        <div class="col-{{ b.col }}">
+        <div class="{{ b.col_classes }}">
           {{ b.html|safe }}
         </div>
       {% endfor %}

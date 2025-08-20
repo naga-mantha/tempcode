@@ -19,9 +19,10 @@ Models (apps/layout/models.py)
   - save(): derives slug from name.
 
 - LayoutBlock
-  - Fields: layout (FK), block (FK to apps.blocks.models.Block), position (int, absolute order), col (int, Bootstrap column span: 1,2,3,4,6,12).
+  - Fields: layout (FK), block (FK to apps.blocks.models.Block), position (int, absolute order), base `col` (int, Bootstrap span: 1,2,3,4,6,12; default 12), optional responsive overrides: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`.
   - Meta: ordering by (position, id).
   - Notes: We removed row/width/height; wrapping handled by Bootstrap.
+  - Responsive cols: When a breakpoint value is set, we emit `col-{breakpoint}-{n}` (e.g., `col-sm-6`, `col-xxl-4`) in addition to the base `col-{col}`. If left blank, it inherits from the next smaller breakpoint.
 
 - LayoutFilterConfig
   - Fields: layout (FK), user (FK), name (str), values (JSON), is_default (bool).
@@ -34,8 +35,8 @@ Models (apps/layout/models.py)
 Forms (apps/layout/forms.py)
 
 - LayoutForm: Create layout (fields: name, visibility; visibility hidden for non-staff).
-- AddBlockForm: Add block to layout (fields: block, col). `col` choices enforced: 1,2,3,4,6,12.
-- LayoutBlockForm: Edit block width (field: col). Reordering handled via drag-and-drop.
+- AddBlockForm: Add block to layout (field: `block` only). All widths default to inherit (base remains 12 by default). User adjusts widths later on the edit table.
+- LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`). Base `col` remains at its model value and is not edited in the UI.
 - LayoutFilterConfigForm: Manage layout filter presets (fields: name, is_default). Filter values are collected from request via FilterResolutionMixin helpers.
 
 Views (apps/layout/views.py)
@@ -63,10 +64,10 @@ Views (apps/layout/views.py)
 - LayoutEditView
   - URL: /layouts/<username>/<slug>/edit/
   - Combined editor: add blocks and edit/reorder/delete blocks on one page.
-  - Add block: top card with AddBlockForm; appends new block at `position = max+1`.
-  - Edit block widths: table with one row per block; `col` field is validated choices.
-  - Drag/drop ordering: powered by SortableJS (already included by base), writes to hidden ORDER fields; server maps ORDER → sequential `position`.
-  - Delete block: per-row button toggles DELETE in the formset and posts.
+  - Add block: top card with a block picker; selecting a block immediately adds it via AJAX and updates the table (no Add button). Appends at `position = max+1`. All responsive cols default to inherit; base remains default 12.
+  - Edit block widths: table with one row per block; edit `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`.
+  - Drag/drop ordering: powered by SortableJS. Reordering auto-saves via AJAX to `/reorder/` without a page postback.
+  - Delete block: per-row Delete triggers AJAX call and removes the row instantly.
 
 - LayoutDeleteView
   - Confirms and deletes an entire layout. Template: layout_confirm_delete.html.
@@ -86,14 +87,18 @@ URLs (apps/layout/urls.py)
 - GET /layouts/<username>/<slug>/ → `layout_detail`
 - GET/POST /layouts/<username>/<slug>/edit/ → `layout_edit`
 - POST /layouts/<username>/<slug>/delete/ → `layout_delete`
-- GET/POST /layouts/<username>/<slug>/filters/ → `layout_filter_config`
-- Note: /add-block/ now routes to the edit page (kept for compatibility).
+ - GET/POST /layouts/<username>/<slug>/filters/ → `layout_filter_config`
+  - POST /layouts/<username>/<slug>/reorder/ → `layout_reorder` (AJAX endpoint to persist block order)
+  - POST /layouts/<username>/<slug>/block/<id>/update/ → `layout_block_update` (AJAX update of responsive widths)
+  - POST /layouts/<username>/<slug>/block/<id>/delete/ → `layout_block_delete` (AJAX delete of a block)
+  - POST /layouts/<username>/<slug>/block/add/ → `layout_block_add` (AJAX add block and return updated table body)
 
 Templates (apps/layout/templates/layout/)
 
 - layout_list.html: Lists layouts and includes the create form.
 - layout_detail.html: Renders layout header, Layout Filter dropdown, live Filter Conditions (collapsible), and block grid.
-- layout_edit.html: Combined Add Block card + drag/drop table for ordering and width edits.
+- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop table for ordering and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for reordering and width changes.
+ - _layout_rows.html: Partial used to render the table rows; returned by AJAX add.
 - layout_filter_config.html: Saved filters management UI, similar to table filter config.
 - layout_confirm_delete.html: Simple delete confirmation.
 
@@ -136,8 +141,8 @@ Query Parameters (Layout page)
 Typical Workflows
 
 - Create a layout: Go to /layouts/, use the Create Layout form. You’re redirected to the layout.
-- Add blocks: Open Edit Layout, pick a block and col width, click Add. Repeat as needed.
-- Reorder/resize: Drag rows to change order; update col width selects; Save.
+- Add blocks: Open Edit Layout, pick a block from the dropdown; it adds immediately via AJAX. Widths inherit initially; adjust below.
+ - Reorder/resize: Drag rows to change order (auto-saves). Changing any width dropdown auto-saves.
 - Manage layout filters: Use Layout Filter dropdown to select a preset; expand Filter Conditions to apply live overrides across all blocks; Manage Filters to edit or create presets.
 - Reset: Click Reset to clear all query params and return to default view.
 

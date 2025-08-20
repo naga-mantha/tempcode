@@ -7,6 +7,9 @@ urlpatterns = [
     path("<str:username>/<slug:slug>/", views.LayoutDetailView.as_view(), name="layout_detail"),
     path("<str:username>/<slug:slug>/delete/", views.LayoutDeleteView.as_view(), name="layout_delete"),
     path("<str:username>/<slug:slug>/edit/", views.LayoutEditView.as_view(), name="layout_edit"),
-    path("<str:username>/<slug:slug>/add-block/", views.LayoutEditView.as_view(), name="layout_add_block"),
     path("<str:username>/<slug:slug>/filters/", views.LayoutFilterConfigView.as_view(), name="layout_filter_config"),
+    path("<str:username>/<slug:slug>/reorder/", views.LayoutReorderView.as_view(), name="layout_reorder"),
+    path("<str:username>/<slug:slug>/block/<int:id>/update/", views.LayoutBlockUpdateView.as_view(), name="layout_block_update"),
+    path("<str:username>/<slug:slug>/block/<int:id>/delete/", views.LayoutBlockDeleteView.as_view(), name="layout_block_delete"),
+    path("<str:username>/<slug:slug>/block/add/", views.LayoutBlockAddView.as_view(), name="layout_block_add"),
 ]
