@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import *
+from .models import Layout, LayoutBlock, LayoutFilterConfig
 
 @admin.register(Layout)
 class LayoutAdmin(admin.ModelAdmin):

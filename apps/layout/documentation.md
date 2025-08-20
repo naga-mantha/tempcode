@@ -25,9 +25,9 @@ Models (apps/layout/models.py)
 
 - LayoutFilterConfig
   - Fields: layout (FK), user (FK), name (str), values (JSON), is_default (bool).
-  - Constraints: unique (layout, user, name).
-  - save(): if first for (layout,user) becomes default; when marked default, unsets others; if it is the only config, it remains default (cannot unset when only one exists).
-  - delete(): prevents deleting last config; if deleting a default, promotes another to default.
+  - Constraints: unique (layout, user, name); plus a conditional unique constraint enforcing a single default per (layout, user).
+  - save(): wrapped in a transaction — if first for (layout,user) becomes default; when marked default, unsets others atomically; if it is the only config, it remains default (cannot unset when only one exists).
+  - delete(): wrapped in a transaction — prevents deleting last config; if deleting a default, promotes another to default atomically.
   - Auto-creation of "None":
     - On Layout creation, a per-owner default filter named "None" with empty values is created (signals).
 
@@ -110,6 +110,7 @@ Filter Mechanics
 - Blocks: On block creation — for all existing users. On new user creation — for all existing blocks.
 - Live overrides: Provided via GET under `filters.<key>`; merged with saved values using FilterResolutionMixin._collect_filters.
 - Propagation to blocks: For each block, the merged values are namespaced and injected into the block’s GET (`{block_name}__{layout_block_id}__filters.<key>`). Blocks consume these instance-scoped filters and render accordingly.
+ - Single-default invariant is enforced at the database level to avoid race conditions under concurrent updates.
 
 Block Integration Details
 

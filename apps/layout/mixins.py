@@ -17,18 +17,39 @@ class LayoutAccessMixin:
         )
 
     @staticmethod
-    def ensure_detail_access(request, layout: Layout) -> None:
-        # Public layouts are viewable by any authenticated user; private only by owner.
-        if layout.visibility == Layout.VISIBILITY_PRIVATE and layout.user_id != request.user.id:
+    def can_view(user, layout: Layout) -> bool:
+        # Public layouts viewable by any authenticated user; private only by owner.
+        return bool(
+            layout.visibility == Layout.VISIBILITY_PUBLIC
+            or layout.user_id == getattr(user, "id", None)
+        )
+
+    @classmethod
+    def ensure_access(cls, request, layout: Layout, action: str) -> None:
+        """Unified authorization check.
+
+        - action="view": public or owner may view
+        - action="edit": staff, or owner when private
+        """
+        if action == "view":
+            if not cls.can_view(request.user, layout):
+                raise Http404()
+        elif action == "edit":
+            if not cls.can_manage(request.user, layout):
+                raise Http404()
+        else:
+            # Unknown action; default to deny
             raise Http404()
 
-    @staticmethod
-    def ensure_edit_access(request, layout: Layout) -> None:
-        # Public layouts editable by staff only; private layouts editable by owner or staff.
-        if layout.visibility == Layout.VISIBILITY_PUBLIC and not request.user.is_staff:
-            raise Http404()
-        if not request.user.is_staff and layout.user_id != request.user.id:
-            raise Http404()
+    @classmethod
+    def ensure_detail_access(cls, request, layout: Layout) -> None:
+        # Backward-compatible wrapper using unified check
+        cls.ensure_access(request, layout, action="view")
+
+    @classmethod
+    def ensure_edit_access(cls, request, layout: Layout) -> None:
+        # Backward-compatible wrapper using unified check
+        cls.ensure_access(request, layout, action="edit")
 
 
 class LayoutFilterSchemaMixin(FilterResolutionMixin):
@@ -46,4 +67,3 @@ class LayoutFilterSchemaMixin(FilterResolutionMixin):
                     schema = block_impl.get_filter_schema(request.user)
                 raw_schema.update(schema or {})
         return self._resolve_filter_schema(raw_schema, request.user)
-

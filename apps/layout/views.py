@@ -176,12 +176,12 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
         )
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self, request, username, slug):
+    def get(self, request, *args, **kwargs):
         formset = self.FormSet(queryset=self.qs)
         add_form = AddBlockForm()
         return self.render_to_response({"layout": self.layout, "formset": formset, "add_form": add_form})
 
-    def post(self, request, username, slug):
+    def post(self, request, *args, **kwargs):
         # Adding a new block from the combined page
         if request.POST.get("add_block"):
             add_form = AddBlockForm(request.POST)
@@ -247,8 +247,8 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
 
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
-        if self.layout.user != request.user and self.layout.visibility == Layout.VISIBILITY_PRIVATE:
-            raise Http404()
+        # Use unified access check for view authorization
+        LayoutAccessMixin.ensure_access(request, self.layout, action="view")
         self.user_filters = LayoutFilterConfig.objects.filter(
             layout=self.layout, user=request.user
         ).order_by("-is_default", "name")
@@ -262,7 +262,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
         self.filter_schema = self._build_filter_schema(request)
         return super().dispatch(request, *args, **kwargs)
 
-    def post(self, request, username, slug, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         # Handle deletes before validating the form (since 'name' isn't posted on delete)
         if "delete" in request.POST:
             edit_id = request.POST.get("id")

@@ -3,6 +3,10 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from apps.layout.models import Layout, LayoutFilterConfig
+from apps.layout.helpers.filter_config import (
+    ensure_default_none_filter,
+    ensure_default_none_filters_for_users,
+)
 from apps.accounts.models.custom_user import CustomUser
 
 logger = logging.getLogger(__name__)
@@ -22,16 +26,7 @@ def create_default_layout_filter(sender, instance: Layout, created: bool, **kwar
             users = CustomUser.objects.all()
         else:
             users = [instance.user]
-        for user in users:
-            qs = LayoutFilterConfig.objects.filter(layout=instance, user=user)
-            if not qs.filter(name="None").exists():
-                LayoutFilterConfig.objects.create(
-                    layout=instance,
-                    user=user,
-                    name="None",
-                    values={},
-                    is_default=(not qs.exists()),
-                )
+        ensure_default_none_filters_for_users(instance, users)
     except Exception:
         # Be defensive during migrations/startup; log and no-op.
         logger.exception("Error creating default layout filters on layout creation")
@@ -43,15 +38,7 @@ def create_default_layout_filters_for_new_user(sender, instance: CustomUser, cre
         return
     try:
         for layout in Layout.objects.filter(visibility=Layout.VISIBILITY_PUBLIC):
-            qs = LayoutFilterConfig.objects.filter(layout=layout, user=instance)
-            if not qs.filter(name="None").exists():
-                LayoutFilterConfig.objects.create(
-                    layout=layout,
-                    user=instance,
-                    name="None",
-                    values={},
-                    is_default=(not qs.exists()),
-                )
+            ensure_default_none_filter(layout, instance)
     except Exception:
         logger.exception("Error creating default layout filters for new user")
 
@@ -85,16 +72,7 @@ def handle_visibility_change(sender, instance: Layout, created: bool, **kwargs):
             return
         # Private -> Public
         if old_vis == Layout.VISIBILITY_PRIVATE and new_vis == Layout.VISIBILITY_PUBLIC:
-            for user in CustomUser.objects.all():
-                qs = LayoutFilterConfig.objects.filter(layout=instance, user=user)
-                if not qs.filter(name="None").exists():
-                    LayoutFilterConfig.objects.create(
-                        layout=instance,
-                        user=user,
-                        name="None",
-                        values={},
-                        is_default=(not qs.exists()),
-                    )
+            ensure_default_none_filters_for_users(instance, CustomUser.objects.all())
         # Public -> Private
         elif old_vis == Layout.VISIBILITY_PUBLIC and new_vis == Layout.VISIBILITY_PRIVATE:
             LayoutFilterConfig.objects.filter(layout=instance).exclude(user=instance.user).delete()

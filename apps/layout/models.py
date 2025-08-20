@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils.text import slugify
 
@@ -82,7 +82,13 @@ class LayoutFilterConfig(models.Model):
             models.UniqueConstraint(
                 fields=["layout", "user", "name"],
                 name="unique_layout_filter_per_user",
-            )
+            ),
+            # Ensure at most one default config per (layout, user)
+            models.UniqueConstraint(
+                fields=["layout", "user"],
+                condition=models.Q(is_default=True),
+                name="unique_default_layout_filter_per_user",
+            ),
         ]
 
     def save(self, *args, **kwargs):  # noqa: D401 - behaviour documented here
@@ -93,19 +99,24 @@ class LayoutFilterConfig(models.Model):
         - When marking one as default, ensure all others are unset.
         """
         model = self.__class__
-        if not self.pk:
-            if not model.objects.filter(layout=self.layout, user=self.user).exists():
-                self.is_default = True
-        else:
-            # If marking as default, unset others
-            if self.is_default:
-                model.objects.filter(layout=self.layout, user=self.user).exclude(pk=self.pk).update(
-                    is_default=False
+        with transaction.atomic():
+            if not self.pk:
+                # Lock existing configs for this (layout, user) to avoid races
+                existing_qs = model.objects.select_for_update().filter(
+                    layout=self.layout, user=self.user
                 )
-            # If this is the only config, it must remain default
-            if model.objects.filter(layout=self.layout, user=self.user).count() == 1:
-                self.is_default = True
-        super().save(*args, **kwargs)
+                if not existing_qs.exists():
+                    self.is_default = True
+            else:
+                # If marking as default, unset others within the same transaction
+                if self.is_default:
+                    model.objects.select_for_update().filter(
+                        layout=self.layout, user=self.user
+                    ).exclude(pk=self.pk).update(is_default=False)
+                # If this is the only config, it must remain default
+                if model.objects.filter(layout=self.layout, user=self.user).count() == 1:
+                    self.is_default = True
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):  # noqa: D401 - behaviour documented here
         """Delete the configuration while maintaining a default.
@@ -114,14 +125,15 @@ class LayoutFilterConfig(models.Model):
         - If the deleted configuration was default, promote another to default.
         """
         model = self.__class__
-        qs = model.objects.filter(layout=self.layout, user=self.user)
-        if qs.count() <= 1:
-            raise Exception("At least one configuration must exist.")
-        was_default = self.is_default
-        pk = self.pk
-        super().delete(*args, **kwargs)
-        if was_default:
-            new_default = qs.exclude(pk=pk).order_by("pk").first()
-            if new_default:
-                new_default.is_default = True
-                new_default.save()
+        with transaction.atomic():
+            qs = model.objects.select_for_update().filter(layout=self.layout, user=self.user)
+            if qs.count() <= 1:
+                raise Exception("At least one configuration must exist.")
+            was_default = self.is_default
+            pk = self.pk
+            super().delete(*args, **kwargs)
+            if was_default:
+                new_default = qs.exclude(pk=pk).order_by("pk").first()
+                if new_default:
+                    new_default.is_default = True
+                    new_default.save()
