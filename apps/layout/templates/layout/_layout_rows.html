@@ -1,23 +1,40 @@
 {% for form in formset %}
-  <tr class="layout-row" data-index="{{ forloop.counter0 }}" data-id="{{ form.instance.id }}">
-    <td class="text-muted align-middle" style="cursor:grab">≡</td>
-    <td class="align-middle">
-      {{ form.instance.block.name }}
-      {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-      <span style="display:none;">{{ form.ORDER }}</span>
-    </td>
-    <td>
-      <div class="row g-2">
-        <div class="col-6 col-md-2">{{ form.col_sm }}</div>
-        <div class="col-6 col-md-2">{{ form.col_md }}</div>
-        <div class="col-6 col-md-2">{{ form.col_lg }}</div>
-        <div class="col-6 col-md-2">{{ form.col_xl }}</div>
-        <div class="col-6 col-md-2">{{ form.col_xxl }}</div>
+  <div class="col-12 layout-item" data-index="{{ forloop.counter0 }}" data-id="{{ form.instance.id }}">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted js-drag-handle">≡</span>
+          <strong>{{ form.instance.block.name }}</strong>
+        </div>
+        <div>
+          <span style="display:none;">{{ form.ORDER }}</span>
+          {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+          <span style="display:none;">{{ form.DELETE }}</span>
+          <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
+        </div>
       </div>
-    </td>
-    <td>
-      <span style="display:none;">{{ form.DELETE }}</span>
-      <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
-    </td>
-  </tr>
+      <div class="row g-2 mt-2">
+        <div class="col-12 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_sm.id_for_label }}">Small</label>
+          {{ form.col_sm }}
+        </div>
+        <div class="col-12 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_md.id_for_label }}">Medium</label>
+          {{ form.col_md }}
+        </div>
+        <div class="col-12 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_lg.id_for_label }}">Large</label>
+          {{ form.col_lg }}
+        </div>
+        <div class="col-12 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_xl.id_for_label }}">Extra Large</label>
+          {{ form.col_xl }}
+        </div>
+        <div class="col-12 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_xxl.id_for_label }}">Extra Extra Large</label>
+          {{ form.col_xxl }}
+        </div>
+      </div>
+    </div>
+  </div>
 {% endfor %}

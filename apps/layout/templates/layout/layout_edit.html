@@ -1,14 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <div class="main-container-fluid">
-    <h1>Edit Layout: {{ layout.name }}</h1>
+  <div class="main-container">
+    <h1 class="page-title">Edit Layout: {{ layout.name }}</h1>
     <p>
       <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
-      <span class="text-muted ms-2">Drag to reorder (auto-saves). Change widths (auto-saves).</span>
     </p>
 
-    <div class="card mb-4">
+    <div class="card mb-5">
       <div class="card-body">
         <h5 class="card-title">Add Block</h5>
         <form method="post" id="add-block-form">
@@ -23,32 +22,24 @@
       </div>
      </div>
 
+    <h2>Blocks</h2>
+
     <form method="post">
       {% csrf_token %}
       {{ formset.management_form }}
-      <table class="table" id="layout-edit-table">
-        <thead>
-            <tr>
-              <th style="width: 40px;"></th>
-              <th>Block</th>
-              <th style="width: 420px;">Cols (sm, md, lg, xl, xxl)</th>
-              <th style="width: 120px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="layout-rows">
-            {% include 'layout/_layout_rows.html' %}
-          </tbody>
-        </table>
-        <!-- No Save button needed: changes auto-save -->
-      </form>
+      <div id="layout-rows" class="row g-3">
+        {% include 'layout/_layout_rows.html' %}
+      </div>
+      <!-- No Save button needed: changes auto-save -->
+    </form>
   </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const tbody = document.getElementById('layout-rows');
-    if (!tbody) return;
+    const container = document.getElementById('layout-rows');
+    if (!container) return;
     const reorderUrl = "{% url 'layout_reorder' username=layout.user.username slug=layout.slug %}";
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
@@ -97,12 +88,12 @@
     }
 
     // Hook delete buttons
-    tbody.addEventListener('click', function(e){
+    container.addEventListener('click', function(e){
       const btn = e.target.closest('.js-delete-row');
       if (!btn) return;
       e.preventDefault();
       if(!confirm('Delete this block from layout?')) return;
-      const tr = btn.closest('tr');
+      const tr = btn.closest('.layout-item');
       const id = tr && parseInt(tr.getAttribute('data-id'), 10);
       if (!id) return;
       fetch(`${deleteUrlBase}${id}/delete/`, {
@@ -121,7 +112,7 @@
     });
 
     function initOrderFields() {
-      const rows = tbody.querySelectorAll('tr');
+      const rows = container.querySelectorAll('.layout-item');
       rows.forEach(function(tr, idx){
         const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
         if (orderInput) orderInput.value = idx + 1;
@@ -129,11 +120,11 @@
     }
     function initSortable() {
       if (!window.Sortable) return;
-      Sortable.create(tbody, {
-        handle: 'td:first-child',
+      Sortable.create(container, {
+        handle: '.js-drag-handle',
         animation: 150,
         onSort: function(){
-          const rows = tbody.querySelectorAll('tr');
+          const rows = container.querySelectorAll('.layout-item');
           rows.forEach(function(tr, idx){
             const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
             if (orderInput) orderInput.value = idx + 1;
@@ -176,10 +167,10 @@
       };
     }
     // Listen to select changes for auto-save
-    tbody.addEventListener('change', function(e){
+    container.addEventListener('change', function(e){
       const control = e.target.closest('select');
       if (!control) return;
-      const tr = control.closest('tr');
+      const tr = control.closest('.layout-item');
       const id = tr && parseInt(tr.getAttribute('data-id'), 10);
       if (!id) return;
       const payload = collectRowPayload(tr);
@@ -218,7 +209,7 @@
           .then(function(data){
             if (!data || !data.ok) { showToast('Failed to add block', 'error'); return; }
             if (data.tbody_html) {
-              tbody.innerHTML = data.tbody_html;
+              container.innerHTML = data.tbody_html;
               initSortable();
             }
           })
@@ -229,12 +220,10 @@
   });
 </script>
 <style>
-  /* no custom controls; keep table compact */
-  #layout-edit-table td .row > [class^="col-"] { min-width: 140px; }
-  @media (max-width: 576px) { #layout-edit-table td .row > [class^="col-"] { min-width: auto; } }
+  /* Card/grid layout spacing */
+  .layout-item .js-drag-handle { cursor: grab; }
   .js-toast-container { z-index: 1080; }
   /* optional: size down selects */
-  #layout-edit-table select { padding: .25rem .5rem; font-size: .875rem; }
-  #layout-edit-table .form-select { height: calc(1.5em + .5rem + 2px); }
+  .layout-item select { padding: .25rem .5rem; font-size: .875rem; height: calc(1.5em + .5rem + 2px); }
 </style>
 {% endblock %}
