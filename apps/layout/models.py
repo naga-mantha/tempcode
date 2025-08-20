@@ -4,7 +4,7 @@ from django.utils.text import slugify
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.models.block import Block
-from .constants import ALLOWED_COLS
+from .constants import ALLOWED_COLS, RESPONSIVE_COL_FIELDS
 
 
 class Layout(models.Model):
@@ -24,6 +24,7 @@ class Layout(models.Model):
     visibility = models.CharField(
         max_length=10, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
     )
+    description = models.TextField(blank=True, default="")
 
     def save(self, *args, **kwargs):  # noqa: D401 - override to auto-slugify
         """Persist the layout ensuring slug is derived from name."""
@@ -60,6 +61,9 @@ class LayoutBlock(models.Model):
     col_lg = models.PositiveIntegerField(null=True, blank=True)
     col_xl = models.PositiveIntegerField(null=True, blank=True)
     col_xxl = models.PositiveIntegerField(null=True, blank=True)
+    # Optional display metadata
+    title = models.CharField(max_length=255, blank=True, default="")
+    note = models.TextField(blank=True, default="")
     # Note: vertical sizing not currently used; remove old width/height fields
 
     class Meta:
@@ -95,16 +99,11 @@ class LayoutBlock(models.Model):
 
     def bootstrap_col_classes(self) -> str:
         parts = [f"col-{self.col}"]
-        if self.col_sm:
-            parts.append(f"col-sm-{self.col_sm}")
-        if self.col_md:
-            parts.append(f"col-md-{self.col_md}")
-        if self.col_lg:
-            parts.append(f"col-lg-{self.col_lg}")
-        if self.col_xl:
-            parts.append(f"col-xl-{self.col_xl}")
-        if self.col_xxl:
-            parts.append(f"col-xxl-{self.col_xxl}")
+        for fname in RESPONSIVE_COL_FIELDS:
+            val = getattr(self, fname, None)
+            if val:
+                bp = fname.split("_", 1)[1]
+                parts.append(f"col-{bp}-{val}")
         return " ".join(parts)
 
 

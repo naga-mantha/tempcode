@@ -2,10 +2,16 @@ from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.layout.models import Layout
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 
 
 class LayoutAccessMixin:
     """Shared access helpers for layout views."""
+
+    @staticmethod
+    def get_layout(*, username: str, slug: str) -> Layout:
+        qs = Layout.objects.prefetch_related("blocks__block", "filter_configs")
+        return get_object_or_404(qs, slug=slug, user__username=username)
 
     @staticmethod
     def can_manage(user, layout: Layout) -> bool:

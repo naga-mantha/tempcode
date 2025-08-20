@@ -1,0 +1,60 @@
+{001} DONE - Remove unused imports in apps/layout/views.py (e.g., modelformset_factory, LayoutBlockForm) to reduce noise and speed imports.
+
+{002} DONE - Drop can_delete=True and can_order=True from the formset factory in apps/layout/helpers/formsets.py (or stop rendering the unused fields) since
+delete/order are handled via dedicated AJAX endpoints and the related form fields aren’t posted.
+
+{003} DONE - Centralize responsive field names once (e.g., RESPONSIVE_COL_FIELDS = ("col_sm","col_md","col_lg","col_xl","col_xxl")) in apps/layout/constants.py and
+import it in both forms.py, views.py, and templates to avoid duplicated literals.
+
+{004} DONE - DRY up LayoutBlockForm by creating the five identical TypedChoiceFields programmatically in __init__ using RESPONSIVE_COL_FIELDS, shared choices, and
+a shared widget factory.
+
+{005} DONE - Simplify LayoutBlock.bootstrap_col_classes() by iterating over breakpoints instead of repeating if-blocks; keeps logic consistent with
+RESPONSIVE_COL_FIELDS.
+
+{006} DONE - Extract the “filter GET namespacing” logic in LayoutDetailView into a helper (e.g., helpers/filters.py: build_namespaced_get(request, ns, values)) to
+make it reusable and testable.
+
+{011} DONE - Add “Rename layout”. Model already supports slug re-derivation.
+
+{014} DONE - Add optional description field on Layout for user-facing context; show on detail page.
+
+{015} DONE - Allow per-block titles/notes at the LayoutBlock level to differentiate multiple instances of the same block visually.
+
+{017} DONE - Improve resilience on block render failures: wrap per-block render with try/except and show a compact error card with block name and error message;
+currently non-existent registry entries are skipped silently.
+
+{019} DONE - Optimize queries on detail/edit pages with prefetch_related('blocks__block') when appropriate; currently select_related('block') is good, but repeated
+loops over blocks + registry could be cached per request.
+
+{024} DONE - Document that _layout_rows.html intentionally doesn’t render ORDER/DELETE formset fields since reordering/deleting are AJAX-only; or remove can_order/
+can_delete from the formset.      (User comments: You can remove them, if its not used)
+
+{025} DONE - Minor: catch and log JSON parse errors with context in helpers/json.py (e.g., body length) to aid debugging, while still returning {}.
+
+{027} DONE - Minor: enforce ALLOWED_COLS via form validators too (you already do) and include choices in UI labels clarifying breakpoints (e.g., “Small ≥576px”).
+
+{028} DONE - Add a soft-delete pattern or confirmation step with more detail for deleting layouts (lists impacted users for public layouts).
+
+{036} DONE - Update apps/layout/documentation.md to explicitly state that the edit page itself is GET-only; all edits happen via AJAX endpoints (/reorder/, /block/
+<id>/update/, /block/<id>/delete/, /block/add/).
+
+{037} DONE - Update docs to call out current permission rules clearly: owners cannot edit or delete public layouts unless staff (as per
+LayoutAccessMixin.can_manage()); and layout delete queryset restricts non-staff to private layouts.
+
+{038} DONE - Complete or remove the dangling “Query Parameters (Layout page)” section header; it appears incomplete/interrupted.
+
+{039} DONE - Add a note in docs that base column (col) isn’t editable via UI yet (defaults to 12), and that responsive behavior is controlled via sm/md/lg/xl/xxl.
+Recommend adding a “Base (xs)” control or clarify the design choice.
+
+{040} DONE - Document visibility change behavior handled by signals: when switching private→public, create “None” filters for all users; when public→private,
+remove non-owner filter configs.
+
+{041} DONE - Confirm in docs that SortableJS must be present for drag/drop; note the graceful fallback when absent.
+
+{042} DONE - Add a “Typical Workflows” section (already present) with a step clarifying that “Manage Filters” saves presets, while the collapsible on detail
+applies live, non-persistent overrides.
+
+{043} DONE - Cross-link to blocks documentation where it describes per-block “None” filters and how block-level and layout-level filters interact.
+
+{044} DONE - Verify URLs section indentation and fix mixed hyphen levels to improve readability.

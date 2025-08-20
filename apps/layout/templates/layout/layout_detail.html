@@ -46,9 +46,15 @@
       </details>
     </form>
 
+    {% if layout.description %}
+      <div class="alert alert-info">{{ layout.description|linebreaksbr }}</div>
+    {% endif %}
+
     <div class="row g-3">
       {% for b in blocks %}
         <div class="{{ b.col_classes }}">
+          {% if b.title %}<div class="mb-2 fw-bold">{{ b.title }}</div>{% endif %}
+          {% if b.note %}<div class="mb-2 text-muted small">{{ b.note|linebreaksbr }}</div>{% endif %}
           {{ b.html|safe }}
         </div>
       {% endfor %}

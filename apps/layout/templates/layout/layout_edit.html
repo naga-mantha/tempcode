@@ -7,6 +7,25 @@
       <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
     </p>
 
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Layout Details</h5>
+        <form id="layout-details-form" method="post" action="{% url 'layout_rename' username=layout.user.username slug=layout.slug %}">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Name</label>
+              <input type="text" class="form-control" name="name" value="{{ layout.name }}" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea class="form-control" name="description" rows="3">{{ layout.description }}</textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div class="card mb-5">
       <div class="card-body">
         <h5 class="card-title">Add Block</h5>
@@ -39,7 +58,7 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('layout-rows');
-    if (!container) return;
+    const detailsForm = document.getElementById('layout-details-form');
     const reorderUrl = "{% url 'layout_reorder' username=layout.user.username slug=layout.slug %}";
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
@@ -86,6 +105,52 @@
       requestAnimationFrame(function(){ el.style.opacity = '1'; });
       setTimeout(function(){ el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 200); }, 3000);
     }
+
+    // Auto-save layout name/description via AJAX with debounce
+    (function(){
+      if (!detailsForm) return;
+      const nameEl = detailsForm.querySelector('input[name="name"]');
+      const descEl = detailsForm.querySelector('textarea[name="description"]');
+      let timer = null;
+      function scheduleSave(){
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(doSave, 400);
+      }
+      function doSave(){
+        const payload = {
+          name: (nameEl && nameEl.value || '').trim(),
+          description: (descEl && descEl.value || '').trim()
+        };
+        fetch(detailsForm.action, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': csrftoken || ''
+          },
+          body: JSON.stringify(payload)
+        }).then(function(resp){ return resp.json().catch(function(){ return { ok:false }; }); })
+          .then(function(data){
+            if (!data || !data.ok) { showToast('Failed to save layout details', 'error'); return; }
+            // If slug changed, reload to the new Edit URL to refresh dependent URLs
+            const currentPath = window.location.pathname;
+            if (data.edit_url && currentPath !== data.edit_url) {
+              window.location.href = data.edit_url;
+              return;
+            }
+            // Update page title
+            const h1 = document.querySelector('h1.page-title');
+            if (h1 && data.name) h1.textContent = 'Edit Layout: ' + data.name;
+            // Update back link if provided
+            const backLink = document.querySelector('a[href*="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}"]');
+            if (backLink && data.detail_url) backLink.setAttribute('href', data.detail_url);
+            showToast('Saved', 'success');
+          })
+          .catch(function(){ showToast('Failed to save layout details', 'error'); });
+      }
+      if (nameEl) nameEl.addEventListener('input', scheduleSave);
+      if (descEl) descEl.addEventListener('input', scheduleSave);
+    })();
 
     // Hook delete buttons
     container.addEventListener('click', function(e){
@@ -152,23 +217,30 @@
 
     // Auto-save column width changes per row
     function collectRowPayload(tr) {
-      const pick = function(name){
+      const pickInt = function(name){
         const el = tr.querySelector(`[name$="-${name}"]`);
         if (!el) return undefined;
         const v = (el.value || '').trim();
         return v === '' ? null : parseInt(v, 10);
       };
+      const pickStr = function(name){
+        const el = tr.querySelector(`[name$="-${name}"]`);
+        if (!el) return undefined;
+        return (el.value || '').trim();
+      };
       return {
-        col_sm: pick('col_sm'),
-        col_md: pick('col_md'),
-        col_lg: pick('col_lg'),
-        col_xl: pick('col_xl'),
-        col_xxl: pick('col_xxl')
+        col_sm: pickInt('col_sm'),
+        col_md: pickInt('col_md'),
+        col_lg: pickInt('col_lg'),
+        col_xl: pickInt('col_xl'),
+        col_xxl: pickInt('col_xxl'),
+        title: pickStr('title'),
+        note: pickStr('note')
       };
     }
-    // Listen to select changes for auto-save
+    // Listen to select/input/textarea changes for auto-save
     container.addEventListener('change', function(e){
-      const control = e.target.closest('select');
+      const control = e.target.closest('select, input[type="text"], textarea');
       if (!control) return;
       const tr = control.closest('.layout-item');
       const id = tr && parseInt(tr.getAttribute('data-id'), 10);
@@ -224,6 +296,7 @@
   .layout-item .js-drag-handle { cursor: grab; }
   .js-toast-container { z-index: 1080; }
   /* optional: size down selects */
-  .layout-item select { padding: .25rem .5rem; font-size: .875rem; height: calc(1.5em + .5rem + 2px); }
+  .layout-item select { padding: .25rem .5rem; font-size: .875rem; height: calc(1.5em + .5rem + 2px); width: 100%; }
+  .layout-item .form-label { display: block; margin-bottom: .25rem; font-size: .8rem; color: #6c757d; }
 </style>
 {% endblock %}

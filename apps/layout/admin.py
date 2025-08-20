@@ -5,6 +5,7 @@ from .models import Layout, LayoutBlock, LayoutFilterConfig
 class LayoutAdmin(admin.ModelAdmin):
     list_display = ("name", "user", "visibility", )
     search_fields = ("name", "visibility",)
+    list_filter = ("visibility",)
 
 @admin.register(LayoutBlock)
 class LayoutBlockAdmin(admin.ModelAdmin):

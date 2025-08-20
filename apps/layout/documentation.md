@@ -35,7 +35,7 @@ Models (apps/layout/models.py)
 Forms (apps/layout/forms.py)
 
 - LayoutForm: Create layout (fields: name, visibility; visibility hidden for non-staff).
-- AddBlockForm: Add block to layout (field: `block` only). All widths default to inherit (base remains 12 by default). User adjusts widths later on the edit table.
+- AddBlockForm: Add block to layout (field: `block` only). All widths default to inherit (base remains 12 by default). User adjusts widths later on the edit page.
 - LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`). Base `col` remains at its model value and is not edited in the UI.
 - LayoutFilterConfigForm: Manage layout filter presets (fields: name, is_default). Filter values are collected from request via FilterResolutionMixin helpers.
 
@@ -64,10 +64,11 @@ Views (apps/layout/views.py)
 - LayoutEditView
   - URL: /layouts/<username>/<slug>/edit/
   - Combined editor: add blocks and edit/reorder/delete blocks on one page.
-  - Add block: top card with a block picker; selecting a block immediately adds it via AJAX and updates the table (no Add button). Appends at `position = max+1`. All responsive cols default to inherit; base remains default 12.
-  - Edit block widths: table with one row per block; edit `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`.
-  - Drag/drop ordering: powered by SortableJS. Reordering auto-saves via AJAX to `/reorder/` without a page postback.
-  - Delete block: per-row Delete triggers AJAX call and removes the row instantly.
+  - Add block: top card with a block picker; selecting a block immediately adds it via AJAX and updates the grid (no Add button). Appends at `position = max+1`. All responsive cols default to inherit; base remains default 12.
+  - Edit block widths: responsive grid of cards (one card per block). Each card shows five dropdowns for `sm`, `md`, `lg`, `xl`, `xxl` (labels above the fields). Changing any dropdown auto-saves.
+  - Drag/drop ordering: powered by SortableJS using the card drag handle. Reordering auto-saves via AJAX to `/reorder/` without a page postback.
+  - Delete block: Delete button on each card triggers an AJAX call and removes the card instantly.
+  - Edit layout details: Name and Description auto-save via AJAX (no save button). If the name changes, slug and URLs update automatically.
 
 - LayoutDeleteView
   - Confirms and deletes an entire layout. Template: layout_confirm_delete.html.
@@ -85,11 +86,12 @@ URLs (apps/layout/urls.py)
 - GET /layouts/ → `layout_list`
 - POST /layouts/ → create new layout via inline form
 - GET /layouts/<username>/<slug>/ → `layout_detail`
-- GET/POST /layouts/<username>/<slug>/edit/ → `layout_edit`
+- POST /layouts/<username>/<slug>/rename/ → `layout_rename` (AJAX: update name/description; returns JSON with updated URLs)
+- GET/POST /layouts/<username>/<slug>/edit/ → `layout_edit` (GET-only UI; edits via AJAX)
 - POST /layouts/<username>/<slug>/delete/ → `layout_delete`
- - GET/POST /layouts/<username>/<slug>/filters/ → `layout_filter_config`
-  - POST /layouts/<username>/<slug>/reorder/ → `layout_reorder` (AJAX endpoint to persist block order)
-  - POST /layouts/<username>/<slug>/block/<id>/update/ → `layout_block_update` (AJAX update of responsive widths)
+- GET/POST /layouts/<username>/<slug>/filters/ → `layout_filter_config`
+- POST /layouts/<username>/<slug>/reorder/ → `layout_reorder` (AJAX endpoint to persist block order)
+- POST /layouts/<username>/<slug>/block/<id>/update/ → `layout_block_update` (AJAX update of responsive widths and title/note)
   - POST /layouts/<username>/<slug>/block/<id>/delete/ → `layout_block_delete` (AJAX delete of a block)
   - POST /layouts/<username>/<slug>/block/add/ → `layout_block_add` (AJAX add block and return updated table body)
 
@@ -97,10 +99,10 @@ Templates (apps/layout/templates/layout/)
 
 - layout_list.html: Lists layouts and includes the create form.
 - layout_detail.html: Renders layout header, Layout Filter dropdown, live Filter Conditions (collapsible), and block grid.
-- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop table for ordering and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for reordering and width changes.
- - _layout_rows.html: Partial used to render the table rows; returned by AJAX add.
-- layout_filter_config.html: Saved filters management UI, similar to table filter config.
-- layout_confirm_delete.html: Simple delete confirmation.
+- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop grid of cards for ordering and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for reordering and width changes.
+ - _layout_rows.html: Partial used to render the card items; returned by AJAX add. Intentionally does not render formset ORDER/DELETE fields because ordering and deletion are AJAX-only.
+ - layout_filter_config.html: Saved filters management UI, similar to table filter config.
+ - layout_confirm_delete.html: Simple delete confirmation.
 
 Admin (apps/layout/admin.py)
 
@@ -117,13 +119,30 @@ Filter Mechanics
 - Propagation to blocks: For each block, the merged values are namespaced and injected into the block’s GET (`{block_name}__{layout_block_id}__filters.<key>`). Blocks consume these instance-scoped filters and render accordingly.
  - Single-default invariant is enforced at the database level to avoid race conditions under concurrent updates.
 
+Text Rendering
+
+- Layout description and LayoutBlock note support multi-line input. On the detail page they render with preserved line breaks.
+
+Visibility Changes and Signals
+
+- private → public: create a "None" layout filter for all users.
+- public → private: delete all non-owner layout filter configs.
+
+Edit Semantics
+
+- Edit page itself performs no POST submits; all state changes occur via AJAX endpoints. SortableJS must be present for drag/drop; without it, the list renders statically and reordering is disabled.
+
+Cross-References
+
+- See blocks documentation for per-block "None" filters and interaction between block-level and layout-level filters.
+
 Block Integration Details
 
 - Instance namespacing: Blocks are rendered with `instance_id = str(LayoutBlock.id)`. TableBlock/ChartBlock read and write GET params with both block_name and instance_id, preventing collisions when multiple instances of the same block appear.
 - Per-instance UI: Table/Chart templates use IDs suffixed by `instance_id` so multiple instances coexist (no duplicate DOM IDs). Column/filter config selectors and Tabulator/Plotly initialization are bound per instance.
 - Default "None" block filters:
   - On new user creation, a signal creates a "None" filter (empty values) for every existing block for that user (first marked default).
-  - If a user has only one saved block filter for a block, it remains default (cannot unset when only one exists).
+ - If a user has only one saved block filter for a block, it remains default (cannot unset when only one exists).
 
 Design Decisions
 
@@ -133,9 +152,73 @@ Design Decisions
  - Slugs reflect layout names. Renaming a layout updates its slug, changing the URL.
 
 Query Parameters (Layout page)
+The layout detail page supports selecting a saved preset and applying live overrides.
+
+- filter_config_id: ID of the saved layout filter preset to activate.
+- filters.<key>: Live override values merged into the active preset using FilterResolutionMixin.
+- Behavior: Changing the preset clears any existing filters.* overrides before reloading.
+
+Access Control
+
+- View: Any authenticated user may view public layouts; private layouts are viewable only by their owner.
+- Edit/Delete: Allowed for staff users, or the owner when the layout is private. Owners cannot edit/delete public layouts.
+
+AJAX Endpoints
+
+- Reorder: POST JSON to /layouts/<username>/<slug>/reorder/ with {"ordered_ids": [..]}.
+- Update widths: POST JSON to /layouts/<username>/<slug>/block/<id>/update/ with responsive fields.
+- Delete block: POST to /layouts/<username>/<slug>/block/<id>/delete/.
+- Add block: POST JSON to /layouts/<username>/<slug>/block/add/ with {"block": "<code>"}.
+- Notes: Endpoints expect CSRF tokens and return JSON.
+
+Formset Behavior
+
+- The edit page uses a formset for rendering controls only; persistence is handled entirely via AJAX endpoints (no traditional Save submit).
+
+Auto-Creation of "None" Filters
+
+- On layout creation: a "None" filter preset (empty values) is created for the owner if private, or for all users if public.
+- On new user creation: a "None" filter is created for each existing public layout for that user.
+
+Future Developments
+
+- Duplicate layout: Add an action to clone a layout, including its blocks and filter presets.
+- Sharing controls: Allow sharing layouts with specific users or groups, beyond public/private.
+- Export/Import: Provide JSON export/import for layouts (blocks + filter presets) across environments.
+- Responsive preview: Add a visual overlay to preview effective Bootstrap columns at each breakpoint.
+- `filter_config_id`: Active saved LayoutFilterConfig id.
+- `filters.*`: Live overrides (cleared automatically when switching saved filter).
+
+Query Parameters (Layout page)
 
 - `filter_config_id`: Active saved LayoutFilterConfig id.
 - `filters.*`: Live overrides (cleared automatically when switching saved filter).
+
+How To Use
+
+- Create a layout:
+  - Go to Layouts and use the Create Layout form (name + visibility) to make a new layout. You will be redirected to the layout page.
+- Open the editor:
+  - Click Edit on your layout (URL: `/layouts/<username>/<slug>/edit/`). You must be the owner (or staff for public layouts) to edit.
+- Add blocks (AJAX):
+  - In the Add Block card, select a block from the dropdown. It is added instantly to the end of the list. Repeat to add more.
+- Reorder blocks (AJAX):
+  - Drag the ≡ handle on each block card to reorder. The order auto-saves; no Save button needed.
+- Set responsive widths (AJAX):
+  - Each block card has five dropdowns labeled `sm`, `md`, `lg`, `xl`, `xxl`.
+  - Choose a value from the allowed sizes (1, 2, 3, 4, 6, 12). Changes auto-save.
+  - Select `— inherit —` to inherit from the next smaller breakpoint.
+  - Notes:
+    - Base (extra-small) width remains at 12 and is not edited in the UI.
+    - If all dropdowns are `— inherit —`, the block will render at the base width (12) on all devices.
+- Delete a block (AJAX):
+  - Use the Delete button on the block card; confirm the prompt. The card disappears immediately.
+- View the layout:
+  - Click Back to layout to see the rendered grid. Bootstrap classes are applied according to the responsive settings; blocks wrap into rows automatically.
+- Manage layout-wide filters (optional):
+  - Use the Filters page (`/filters/`) to save named filter presets per layout. The active preset propagates into all blocks on the layout.
+- Troubleshooting:
+  - If an action fails (e.g., network error), a toast appears at the bottom-right. Refresh the page to reload current state.
 - Per-block (injected): `{block_name}__{layout_block_id}__filters.<key>` used internally to pass layout filters into blocks.
 
 Typical Workflows
@@ -143,13 +226,13 @@ Typical Workflows
 - Create a layout: Go to /layouts/, use the Create Layout form. You’re redirected to the layout.
 - Add blocks: Open Edit Layout, pick a block from the dropdown; it adds immediately via AJAX. Widths inherit initially; adjust below.
  - Reorder/resize: Drag rows to change order (auto-saves). Changing any width dropdown auto-saves.
-- Manage layout filters: Use Layout Filter dropdown to select a preset; expand Filter Conditions to apply live overrides across all blocks; Manage Filters to edit or create presets.
+- Manage layout filters: Use Layout Filter dropdown to select a preset; expand Filter Conditions to apply live overrides across all blocks; Manage Filters saves presets (persistent), while the collapsible applies live, non-persistent overrides.
 - Reset: Click Reset to clear all query params and return to default view.
 
 Edge Cases and Rules
 
 - LayoutFilterConfig delete is protected when it’s the only config; deleting a default promotes another to default.
-- Visibility: Non-staff layouts default to private; staff can set public via form.
+- Visibility: Non-staff layouts default to private; staff can set public via form. Owners cannot edit or delete public layouts unless staff; delete view restricts non-staff to private layouts.
 - Slug uniqueness: Enforced per user for clarity and stable routing.
 
 Extensibility Notes

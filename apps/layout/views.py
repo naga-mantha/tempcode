@@ -4,24 +4,25 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.views.generic import TemplateView, FormView, DeleteView
 from django.views import View
 from django.template.loader import render_to_string
 
 from apps.blocks.registry import block_registry
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.layout.models import Layout, LayoutBlock, LayoutFilterConfig
-from django.forms import modelformset_factory
 
 from apps.layout.forms import (
     LayoutForm,
     AddBlockForm,
     LayoutFilterConfigForm,
-    LayoutBlockForm,
 )
 
 from apps.layout.mixins import LayoutFilterSchemaMixin, LayoutAccessMixin
+from apps.layout.helpers.json import parse_json_body
+from apps.layout.helpers.formsets import get_layoutblock_formset
+from apps.layout.helpers.filters import build_namespaced_get
+from apps.layout.constants import RESPONSIVE_COL_FIELDS
 
 
 
@@ -39,6 +40,21 @@ class LayoutDeleteView(LoginRequiredMixin, DeleteView):
         if self.request.user.is_staff:
             return base
         return base.filter(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        layout: Layout = self.object
+        is_public = layout.visibility == Layout.VISIBILITY_PUBLIC
+        impacted_qs = LayoutFilterConfig.objects.filter(layout=layout).values_list("user__username", flat=True).distinct()
+        impacted = list(impacted_qs)
+        ctx.update(
+            {
+                "is_public": is_public,
+                "impacted_users_count": len(impacted),
+                "impacted_users": impacted[:10],  # show a sample
+            }
+        )
+        return ctx
 
 
 class LayoutListView(LoginRequiredMixin, TemplateView):
@@ -79,11 +95,52 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
         return self.render_to_response(ctx)
 
 
+class LayoutRenameView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, *args, **kwargs):
+        layout = self.get_layout(username=username, slug=slug)
+        self.ensure_edit_access(request, layout)
+        from apps.layout.helpers.json import parse_json_body
+        payload = parse_json_body(request)
+        def _get(h, key, default=""):
+            if isinstance(h, dict) and h.get(key) is not None:
+                return str(h.get(key)).strip()
+            v = request.POST.get(key)
+            return (v or default).strip()
+        new_name = _get(payload, "name")
+        new_desc = _get(payload, "description")
+        # Detect if client expects JSON
+        accept = getattr(request, "headers", {}).get("Accept") if hasattr(request, "headers") else request.META.get("HTTP_ACCEPT", "")
+        is_ajax = (
+            (request.content_type and "application/json" in request.content_type)
+            or (accept and "application/json" in accept)
+            or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
+        )
+        if not new_name:
+            if is_ajax:
+                return JsonResponse({"ok": False, "error": "Please provide a name."}, status=400)
+            messages.error(request, "Please provide a name.")
+            return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
+        layout.name = new_name
+        layout.description = new_desc
+        layout.save(update_fields=["name", "slug", "description"])  # slug auto-derives on save
+        # If JSON/AJAX, return structured response instead of redirect
+        if is_ajax:
+            return JsonResponse({
+                "ok": True,
+                "name": layout.name,
+                "slug": layout.slug,
+                "edit_url": reverse("layout_edit", kwargs={"username": layout.user.username, "slug": layout.slug}),
+                "detail_url": reverse("layout_detail", kwargs={"username": layout.user.username, "slug": layout.slug}),
+            })
+        messages.success(request, "Layout renamed.")
+        return redirect("layout_edit", username=layout.user.username, slug=layout.slug)
+
+
 class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMixin, TemplateView):
     template_name = "layout/layout_detail.html"
 
     def dispatch(self, request, username, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.layout = self.get_layout(username=username, slug=slug)
         self.ensure_detail_access(request, self.layout)
         self.filter_configs = LayoutFilterConfig.objects.filter(
             layout=self.layout, user=request.user
@@ -111,18 +168,17 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
         for lb in self.layout.blocks.select_related("block").order_by("position", "id"):
             block_impl = block_registry.get(lb.block.code)
             if not block_impl:
+                # If the block is unregistered, show a compact warning card
+                blocks_list.append({
+                    "col_classes": lb.bootstrap_col_classes(),
+                    "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
+                    "block_name": lb.block.name,
+                    "id": lb.id,
+                })
                 continue
             # Build a per-block namespaced GET overlay from selected layout filters
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
-            qd = self.request.GET.copy()
-            for k, v in (selected_filter_values or {}).items():
-                name = f"{ns}{k}"
-                if isinstance(v, (list, tuple)):
-                    qd.setlist(name, [str(x) for x in v])
-                elif isinstance(v, bool):
-                    qd[name] = "1" if v else "0"
-                elif v is not None:
-                    qd[name] = str(v)
+            qd = build_namespaced_get(self.request, ns=ns, values=selected_filter_values or {})
 
             class _ReqProxy:
                 def __init__(self, req, get):
@@ -133,16 +189,25 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
 
             proxy_request = _ReqProxy(self.request, qd)
             # Pass a stable per-instance id based on the LayoutBlock id
-            response = block_impl.render(proxy_request, instance_id=str(lb.id))
             try:
-                html = response.content.decode(response.charset or "utf-8")
-            except Exception:
-                html = response.content.decode("utf-8", errors="ignore")
+                response = block_impl.render(proxy_request, instance_id=str(lb.id))
+                try:
+                    html = response.content.decode(response.charset or "utf-8")
+                except Exception:
+                    html = response.content.decode("utf-8", errors="ignore")
+            except Exception as exc:
+                html = (
+                    "<div class='alert alert-danger p-2 m-0'>"
+                    f"Error rendering block '{lb.block.name}': {str(exc)}"
+                    "</div>"
+                )
             blocks_list.append({
                 "col_classes": lb.bootstrap_col_classes(),
                 "html": html,
                 "block_name": lb.block.name,
                 "id": lb.id,
+                "title": getattr(lb, "title", ""),
+                "note": getattr(lb, "note", ""),
             })
         can_manage = self.can_manage(self.request.user, self.layout)
         context.update(
@@ -163,19 +228,12 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
     template_name = "layout/layout_edit.html"
 
     def dispatch(self, request, username, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.layout = self.get_layout(username=username, slug=slug)
         self.ensure_edit_access(request, self.layout)
         # Limit queryset to this layout's blocks
         self.qs = self.layout.blocks.select_related("block").order_by("position", "id")
         # Formset for editing cols; allow deletion and ordering
-        self.FormSet = modelformset_factory(
-            LayoutBlock,
-            form=LayoutBlockForm,
-            fields=("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"),
-            extra=0,
-            can_delete=True,
-            can_order=True,
-        )
+        self.FormSet = get_layoutblock_formset()
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
@@ -194,7 +252,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
     form_class = LayoutFilterConfigForm
 
     def dispatch(self, request, username, slug, *args, **kwargs):
-        self.layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        self.layout = LayoutAccessMixin.get_layout(username=username, slug=slug)
         # Use unified access check for view authorization
         LayoutAccessMixin.ensure_access(request, self.layout, action="view")
         self.user_filters = LayoutFilterConfig.objects.filter(
@@ -258,13 +316,6 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
         if not name:
             messages.error(self.request, "Please provide a name.")
             return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
-        if "delete" in self.request.POST and edit_id:
-            cfg = get_object_or_404(
-                LayoutFilterConfig, id=edit_id, layout=self.layout, user=self.request.user
-            )
-            cfg.delete()
-            messages.success(self.request, "Filter deleted.")
-            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
         values = self._collect_filters(self.request.POST, self.filter_schema, base={})
         if edit_id:
             cfg = get_object_or_404(
@@ -305,14 +356,10 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
 
 class LayoutReorderView(LoginRequiredMixin, LayoutAccessMixin, View):
     def post(self, request, username, slug, *args, **kwargs):
-        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        layout = self.get_layout(username=username, slug=slug)
         self.ensure_edit_access(request, layout)
         # Accept JSON payload: {"ordered_ids": [id1, id2, ...]}
-        try:
-            import json
-            payload = json.loads(request.body.decode("utf-8")) if request.body else {}
-        except Exception:
-            payload = {}
+        payload = parse_json_body(request)
         ordered_ids = payload.get("ordered_ids") or request.POST.getlist("ordered_ids[]")
         if not ordered_ids:
             return JsonResponse({"ok": False, "error": "No ordering provided."}, status=400)
@@ -335,30 +382,33 @@ class LayoutReorderView(LoginRequiredMixin, LayoutAccessMixin, View):
 
 class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
     def post(self, request, username, slug, id, *args, **kwargs):
-        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        layout = self.get_layout(username=username, slug=slug)
         self.ensure_edit_access(request, layout)
         lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
-        try:
-            import json
-            data = json.loads(request.body.decode("utf-8")) if request.body else {}
-        except Exception:
-            data = {}
+        data = parse_json_body(request)
         # Only allow known fields; normalize to None or int in ALLOWED_COLS
         from apps.layout.constants import ALLOWED_COLS
+        INVALID = object()
         def _norm(v):
-            if v in (None, "", "null"): return None
+            if v in (None, "", "null"):
+                return None
             try:
                 iv = int(v)
             except (TypeError, ValueError):
-                return object()  # invalid sentinel
-            return iv if iv in ALLOWED_COLS else object()
+                return INVALID  # invalid sentinel
+            return iv if iv in ALLOWED_COLS else INVALID
         updates = {}
-        for key in ("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"):
+        for key in RESPONSIVE_COL_FIELDS:
             if key in data:
                 norm = _norm(data.get(key))
-                if norm is object():
+                if norm is INVALID:
                     return JsonResponse({"ok": False, "error": f"Invalid value for {key}."}, status=400)
                 updates[key] = norm
+        # Allow optional title/note updates
+        if "title" in data:
+            updates["title"] = (data.get("title") or "").strip()
+        if "note" in data:
+            updates["note"] = (data.get("note") or "").strip()
         if not updates:
             return JsonResponse({"ok": False, "error": "No updatable fields provided."}, status=400)
         for k, v in updates.items():
@@ -369,7 +419,7 @@ class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
 
 class LayoutBlockDeleteView(LoginRequiredMixin, LayoutAccessMixin, View):
     def post(self, request, username, slug, id, *args, **kwargs):
-        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        layout = self.get_layout(username=username, slug=slug)
         self.ensure_edit_access(request, layout)
         lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
         lb.delete()
@@ -378,14 +428,10 @@ class LayoutBlockDeleteView(LoginRequiredMixin, LayoutAccessMixin, View):
 
 class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
     def post(self, request, username, slug, *args, **kwargs):
-        layout = get_object_or_404(Layout, slug=slug, user__username=username)
+        layout = self.get_layout(username=username, slug=slug)
         self.ensure_edit_access(request, layout)
         # Accept JSON or form POST; expect 'block' by code or id
-        try:
-            import json
-            payload = json.loads(request.body.decode("utf-8")) if request.body and request.content_type == 'application/json' else {}
-        except Exception:
-            payload = {}
+        payload = parse_json_body(request)
         block_code = payload.get("block") or request.POST.get("block")
         if not block_code:
             return JsonResponse({"ok": False, "error": "Missing block."}, status=400)
@@ -394,6 +440,9 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
             block_obj = Block.objects.get(code=block_code)
         except Block.DoesNotExist:
             return JsonResponse({"ok": False, "error": "Invalid block."}, status=400)
+        # Ensure the block is registered/available
+        if not block_registry.get(block_obj.code):
+            return JsonResponse({"ok": False, "error": "Block not available."}, status=400)
         # Append at the end
         last = (
             LayoutBlock.objects.filter(layout=layout)
@@ -408,14 +457,7 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
         )
         # Rebuild formset for updated tbody
         qs = layout.blocks.select_related("block").order_by("position", "id")
-        FormSet = modelformset_factory(
-            LayoutBlock,
-            form=LayoutBlockForm,
-            fields=("col_sm", "col_md", "col_lg", "col_xl", "col_xxl"),
-            extra=0,
-            can_delete=True,
-            can_order=True,
-        )
+        FormSet = get_layoutblock_formset()
         formset = FormSet(queryset=qs)
         tbody_html = render_to_string(
             "layout/_layout_rows.html",

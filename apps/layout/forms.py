@@ -3,13 +3,13 @@ from django import forms
 from apps.layout.models import Layout, LayoutBlock
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
-from apps.layout.constants import ALLOWED_COLS
+from apps.layout.constants import ALLOWED_COLS, RESPONSIVE_COL_FIELDS
 
 
 class LayoutForm(forms.ModelForm):
     class Meta:
         model = Layout
-        fields = ["name", "visibility"]
+        fields = ["name", "visibility", "description"]
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -45,57 +45,41 @@ class AddBlockForm(forms.ModelForm):
 
 class LayoutBlockForm(forms.ModelForm):
     _inherit_choice = [("", "— inherit —")]
-    col_sm = forms.TypedChoiceField(
-        required=False,
-        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
-        coerce=lambda v: int(v) if str(v).isdigit() else None,
-    )
-    col_md = forms.TypedChoiceField(
-        required=False,
-        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
-        coerce=lambda v: int(v) if str(v).isdigit() else None,
-    )
-    col_lg = forms.TypedChoiceField(
-        required=False,
-        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
-        coerce=lambda v: int(v) if str(v).isdigit() else None,
-    )
-    col_xl = forms.TypedChoiceField(
-        required=False,
-        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
-        coerce=lambda v: int(v) if str(v).isdigit() else None,
-    )
-    col_xxl = forms.TypedChoiceField(
-        required=False,
-        choices=_inherit_choice + [(c, str(c)) for c in ALLOWED_COLS],
-        coerce=lambda v: int(v) if str(v).isdigit() else None,
-    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = self._inherit_choice + [(c, str(c)) for c in ALLOWED_COLS]
+        widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
+        coerce = lambda v: int(v) if str(v).isdigit() else None  # noqa: E731
+        for name in RESPONSIVE_COL_FIELDS:
+            self.fields[name] = forms.TypedChoiceField(
+                required=False,
+                choices=choices,
+                coerce=coerce,
+                widget=widget,
+            )
+        # Ensure title and note span full column width with Bootstrap styles
+        if "title" in self.fields:
+            self.fields["title"].widget.attrs.update({
+                "class": "form-control form-control-sm w-100",
+            })
+        if "note" in self.fields:
+            self.fields["note"].widget.attrs.update({
+                "class": "form-control form-control-sm w-100",
+                "rows": 2,
+            })
 
     class Meta:
         model = LayoutBlock
-        # Allow editing base and responsive cols; ordering is via drag/drop.
-        fields = ["col_sm", "col_md", "col_lg", "col_xl", "col_xxl"]
+        # Allow editing responsive cols and display metadata; ordering is via drag/drop.
+        fields = list(RESPONSIVE_COL_FIELDS) + ["title", "note"]
 
-    # Explicitly normalize optional responsive cols: '' -> None
-    def clean_col_sm(self):
-        v = self.cleaned_data.get("col_sm")
-        return v if isinstance(v, int) else None
-
-    def clean_col_md(self):
-        v = self.cleaned_data.get("col_md")
-        return v if isinstance(v, int) else None
-
-    def clean_col_lg(self):
-        v = self.cleaned_data.get("col_lg")
-        return v if isinstance(v, int) else None
-
-    def clean_col_xl(self):
-        v = self.cleaned_data.get("col_xl")
-        return v if isinstance(v, int) else None
-
-    def clean_col_xxl(self):
-        v = self.cleaned_data.get("col_xxl")
-        return v if isinstance(v, int) else None
+    def clean(self):
+        cleaned = super().clean()
+        for key in RESPONSIVE_COL_FIELDS:
+            v = cleaned.get(key)
+            cleaned[key] = v if isinstance(v, int) else None
+        return cleaned
 
 
 class LayoutFilterConfigForm(forms.Form):
