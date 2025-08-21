@@ -9,6 +9,7 @@ Key Concepts
 
 - Layout: A named dashboard owned by a user, optionally public. Identified by user + slug. Contains many LayoutBlocks.
 - LayoutBlock: A placement of a Block within a Layout. Ordered linearly (position); rendered in a single Bootstrap row with col-XX widths (Bootstrap handles wrapping).
+  - Each LayoutBlock can optionally set a per-instance default Block filter by name. This lets duplicate blocks on the same layout start with different saved filter presets.
 - LayoutFilterConfig: Saved filter presets at the layout level for a user. Has the same default/constraints semantics as table filters.
 
 Models (apps/layout/models.py)
@@ -36,7 +37,7 @@ Forms (apps/layout/forms.py)
 
 - LayoutForm: Create layout (fields: name, visibility; visibility hidden for non-staff).
 - AddBlockForm: Add block to layout (field: `block` only). All widths default to inherit (base remains 12 by default). User adjusts widths later on the edit page.
-- LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`). Base `col` remains at its model value and is not edited in the UI.
+- LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`), title/note, and a per-block "Default Block Filter" selector backed by your saved block filters for that block. Base `col` remains at its model value and is not edited in the UI.
 - LayoutFilterConfigForm: Manage layout filter presets (fields: name, is_default). Filter values are collected from request via FilterResolutionMixin helpers.
 
 Views (apps/layout/views.py)
@@ -65,7 +66,10 @@ Views (apps/layout/views.py)
   - URL: /layouts/<username>/<slug>/edit/
   - Combined editor: add blocks and edit/reorder/delete blocks on one page.
   - Add block: top card with a block picker; selecting a block immediately adds it via AJAX and updates the grid (no Add button). Appends at `position = max+1`. All responsive cols default to inherit; base remains default 12.
-  - Edit block widths: responsive grid of cards (one card per block). Each card shows five dropdowns for `sm`, `md`, `lg`, `xl`, `xxl` (labels above the fields). Changing any dropdown auto-saves.
+  - Edit block settings: responsive grid of cards (one card per block). Each card shows:
+    - Title and Note fields.
+    - Default Block Filter dropdown listing your saved Block filters (by name) for that specific block. Selecting one makes that filter the default for this instance only. Leave blank to inherit the block’s default.
+    - Five dropdowns for `sm`, `md`, `lg`, `xl`, `xxl` responsive widths (labels above the fields). Changing any control auto-saves.
   - Drag/drop ordering: powered by SortableJS using the card drag handle. Reordering auto-saves via AJAX to `/reorder/` without a page postback.
   - Delete block: Delete button on each card triggers an AJAX call and removes the card instantly.
   - Edit layout details: Name and Description auto-save via AJAX (no save button). If the name changes, slug and URLs update automatically.
@@ -99,7 +103,7 @@ Templates (apps/layout/templates/layout/)
 
 - layout_list.html: Lists layouts and includes the create form.
 - layout_detail.html: Renders layout header, Layout Filter dropdown, live Filter Conditions (collapsible), and block grid.
-- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop grid of cards for ordering and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for reordering and width changes.
+- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop grid of cards for ordering, per-block default filter selection, and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for changes.
  - _layout_rows.html: Partial used to render the card items; returned by AJAX add. Intentionally does not render formset ORDER/DELETE fields because ordering and deletion are AJAX-only.
  - layout_filter_config.html: Saved filters management UI, similar to table filter config.
  - layout_confirm_delete.html: Simple delete confirmation.

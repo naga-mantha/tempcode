@@ -16,6 +16,16 @@
           <label class="form-label mb-1 small" for="{{ form.title.id_for_label }}">Title (optional)</label>
           {{ form.title }}
         </div>
+        <div class="col-12 col-md-4 col-xxl-3">
+          <label class="form-label mb-1 small" for="{{ form.preferred_filter_name.id_for_label }}">Default Block Filter</label>
+          <div class="d-flex align-items-center gap-2">
+            <div class="flex-grow-1">{{ form.preferred_filter_name }}</div>
+            {% if form.manage_filters_url %}
+              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ form.manage_filters_url }}">Manage filters</a>
+            {% endif %}
+          </div>
+          <div class="form-text small">Select from your saved filters for this block.</div>
+        </div>
         <div class="col-12 col-md-4 col-xxl-2">
           <label class="form-label mb-1 small" for="{{ form.col_sm.id_for_label }}">Small ≥576px</label>
           {{ form.col_sm }}

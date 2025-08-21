@@ -6,11 +6,13 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import TemplateView, FormView, DeleteView
+from django import forms
 from django.views import View
 from django.template.loader import render_to_string
 
 from apps.blocks.registry import block_registry
 from apps.layout.models import Layout, LayoutBlock, LayoutFilterConfig
+from apps.blocks.models.block_filter_config import BlockFilterConfig
 
 from apps.layout.forms import (
     LayoutForm,
@@ -23,6 +25,8 @@ from apps.layout.helpers.json import parse_json_body
 from apps.layout.helpers.formsets import get_layoutblock_formset
 from apps.layout.helpers.filters import build_namespaced_get
 from apps.layout.constants import RESPONSIVE_COL_FIELDS
+from apps.blocks.block_types.table.table_block import TableBlock
+from apps.blocks.block_types.chart.chart_block import ChartBlock
 
 
 
@@ -179,6 +183,18 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             # Build a per-block namespaced GET overlay from selected layout filters
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
             qd = build_namespaced_get(self.request, ns=ns, values=selected_filter_values or {})
+            # If this block instance declares a preferred Block filter config name,
+            # try to resolve it for the current user and inject it as the per-instance
+            # filter_config_id so duplicate blocks can default differently.
+            pref_name = (lb.preferred_filter_name or "").strip()
+            if pref_name:
+                cfg = (
+                    BlockFilterConfig.objects.filter(
+                        block=lb.block, user=self.request.user, name=pref_name
+                    ).only("id").first()
+                )
+                if cfg:
+                    qd[f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filter_config_id"] = str(cfg.id)
             # Signal to block templates that they are embedded within a layout
             # so they can suppress standalone page headers/footers.
             qd["embedded"] = "1"
@@ -239,8 +255,45 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
         self.FormSet = get_layoutblock_formset()
         return super().dispatch(request, *args, **kwargs)
 
+    def _decorate_formset_filter_dropdowns(self, formset, user):
+        for form in formset.forms:
+            try:
+                block_obj = form.instance.block
+            except Exception:
+                block_obj = None
+            names = []
+            if block_obj:
+                names = list(
+                    BlockFilterConfig.objects.filter(user=user, block=block_obj)
+                    .order_by("name")
+                    .values_list("name", flat=True)
+                )
+            choices = [("", "— inherit block default —")] + [(n, n) for n in names]
+            fld = form.fields.get("preferred_filter_name")
+            if not fld:
+                continue
+            # Force Select widget and assign choices to the widget
+            widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
+            widget.choices = choices
+            fld.widget = widget
+            # Ensure the initial reflects the instance value
+            form.initial["preferred_filter_name"] = getattr(form.instance, "preferred_filter_name", "")
+            # Compute Manage Filters URL for this block type (table/chart)
+            manage_url = None
+            try:
+                impl = block_registry.get(block_obj.code) if block_obj else None
+                if isinstance(impl, TableBlock):
+                    manage_url = reverse("table_filter_config", kwargs={"block_name": block_obj.code})
+                elif isinstance(impl, ChartBlock):
+                    manage_url = reverse("chart_filter_config", kwargs={"block_name": block_obj.code})
+            except Exception:
+                manage_url = None
+            # Attach for template usage
+            setattr(form, "manage_filters_url", manage_url)
+
     def get(self, request, *args, **kwargs):
         formset = self.FormSet(queryset=self.qs)
+        self._decorate_formset_filter_dropdowns(formset, request.user)
         add_form = AddBlockForm()
         return self.render_to_response({
             "layout": self.layout,
@@ -407,11 +460,13 @@ class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
                 if norm is INVALID:
                     return JsonResponse({"ok": False, "error": f"Invalid value for {key}."}, status=400)
                 updates[key] = norm
-        # Allow optional title/note updates
+        # Allow optional title/note and preferred filter name updates
         if "title" in data:
             updates["title"] = (data.get("title") or "").strip()
         if "note" in data:
             updates["note"] = (data.get("note") or "").strip()
+        if "preferred_filter_name" in data:
+            updates["preferred_filter_name"] = (data.get("preferred_filter_name") or "").strip()
         if not updates:
             return JsonResponse({"ok": False, "error": "No updatable fields provided."}, status=400)
         for k, v in updates.items():
@@ -462,6 +517,12 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
         qs = layout.blocks.select_related("block").order_by("position", "id")
         FormSet = get_layoutblock_formset()
         formset = FormSet(queryset=qs)
+        # Populate per-row dropdowns for preferred filter
+        try:
+            # Reuse helper from the edit view class
+            LayoutEditView._decorate_formset_filter_dropdowns(self, formset, request.user)
+        except Exception:
+            pass
         tbody_html = render_to_string(
             "layout/_layout_rows.html",
             {"formset": formset},

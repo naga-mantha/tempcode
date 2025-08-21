@@ -235,7 +235,8 @@
         col_xl: pickInt('col_xl'),
         col_xxl: pickInt('col_xxl'),
         title: pickStr('title'),
-        note: pickStr('note')
+        note: pickStr('note'),
+        preferred_filter_name: pickStr('preferred_filter_name')
       };
     }
     // Listen to select/input/textarea changes for auto-save
@@ -257,8 +258,6 @@
         if (!resp.ok) showToast('Failed to save changes', 'error');
       }).catch(function(){ showToast('Failed to save changes', 'error'); });
     });
-
-    // Remove dropdown-specific handlers
 
     // AJAX Add Block on select change
     (function(){

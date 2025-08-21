@@ -64,6 +64,10 @@ class LayoutBlock(models.Model):
     # Optional display metadata
     title = models.CharField(max_length=255, blank=True, default="")
     note = models.TextField(blank=True, default="")
+    # Optional per-instance default Block filter selection by name
+    # When set, the layout will try to select the viewer's BlockFilterConfig
+    # with this name for this block instance.
+    preferred_filter_name = models.CharField(max_length=255, blank=True, default="")
     # Note: vertical sizing not currently used; remove old width/height fields
 
     class Meta:
