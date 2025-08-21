@@ -72,7 +72,12 @@ class LayoutBlockForm(forms.ModelForm):
     class Meta:
         model = LayoutBlock
         # Allow editing responsive cols and display metadata; ordering is via drag/drop.
-        fields = list(RESPONSIVE_COL_FIELDS) + ["title", "note", "preferred_filter_name"]
+        fields = list(RESPONSIVE_COL_FIELDS) + [
+            "title",
+            "note",
+            "preferred_filter_name",
+            "preferred_column_config_name",
+        ]
 
     def clean(self):
         cleaned = super().clean()

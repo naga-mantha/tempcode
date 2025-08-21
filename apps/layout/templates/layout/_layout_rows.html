@@ -11,12 +11,12 @@
           <button type="button" class="btn btn-sm btn-outline-danger js-delete-row">Delete</button>
         </div>
       </div>
-      <div class="row g-2 mt-2 align-items-end">
-        <div class="col-12 col-md-4 col-xxl-2">
+      <div class="row g-3 mt-2 align-items-end">
+        <div class="col-12 col-lg-4">
           <label class="form-label mb-1 small" for="{{ form.title.id_for_label }}">Title (optional)</label>
           {{ form.title }}
         </div>
-        <div class="col-12 col-md-4 col-xxl-3">
+        <div class="col-12 col-lg-4">
           <label class="form-label mb-1 small" for="{{ form.preferred_filter_name.id_for_label }}">Default Block Filter</label>
           <div class="d-flex align-items-center gap-2">
             <div class="flex-grow-1">{{ form.preferred_filter_name }}</div>
@@ -24,32 +24,42 @@
               <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ form.manage_filters_url }}">Manage filters</a>
             {% endif %}
           </div>
-          <div class="form-text small">Select from your saved filters for this block.</div>
         </div>
-        <div class="col-12 col-md-4 col-xxl-2">
-          <label class="form-label mb-1 small" for="{{ form.col_sm.id_for_label }}">Small ≥576px</label>
+        <div class="col-12 col-lg-4">
+          <label class="form-label mb-1 small" for="{{ form.preferred_column_config_name.id_for_label }}">Default Column View</label>
+          <div class="d-flex align-items-center gap-2">
+            <div class="flex-grow-1">{{ form.preferred_column_config_name }}</div>
+            {% if form.manage_columns_url %}
+              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ form.manage_columns_url }}">Manage views</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="row g-3 mt-2 align-items-end">
+        <div class="col-12 col-sm-6 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_sm.id_for_label }}">Small</label>
           {{ form.col_sm }}
         </div>
-        <div class="col-12 col-md-4 col-xxl-2">
-          <label class="form-label mb-1 small" for="{{ form.col_md.id_for_label }}">Medium ≥768px</label>
+        <div class="col-12 col-sm-6 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_md.id_for_label }}">Medium</label>
           {{ form.col_md }}
         </div>
-        <div class="col-12 col-md-4 col-xxl-2">
-          <label class="form-label mb-1 small" for="{{ form.col_lg.id_for_label }}">Large ≥992px</label>
+        <div class="col-12 col-sm-6 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_lg.id_for_label }}">Large</label>
           {{ form.col_lg }}
         </div>
-        <div class="col-12 col-md-4 col-xxl-2">
-          <label class="form-label mb-1 small" for="{{ form.col_xl.id_for_label }}">Extra Large ≥1200px</label>
+        <div class="col-12 col-sm-6 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_xl.id_for_label }}">Extra Large</label>
           {{ form.col_xl }}
         </div>
-        <div class="col-12 col-md-4 col-xxl-2">
-          <label class="form-label mb-1 small" for="{{ form.col_xxl.id_for_label }}">Extra Extra Large ≥1400px</label>
+        <div class="col-12 col-sm-6 col-lg-2">
+          <label class="form-label mb-1 small" for="{{ form.col_xxl.id_for_label }}">Extra Extra Large</label>
           {{ form.col_xxl }}
         </div>
       </div>
-      <div class="row g-2 mt-2">
+      <div class="row g-3 mt-2">
         <div class="col-12">
-          <label class="form-label mb-1 small" for="{{ form.note.id_for_label }}">Note (optional)</label>
+          <label class="form-label mb-1 small" for="{{ form.note.id_for_label }}">Notes (optional)</label>
           {{ form.note }}
         </div>
       </div>

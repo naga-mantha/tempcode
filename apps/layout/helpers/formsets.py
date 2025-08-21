@@ -8,6 +8,16 @@ def get_layoutblock_formset():
     return modelformset_factory(
         LayoutBlock,
         form=LayoutBlockForm,
-        fields=("col_sm", "col_md", "col_lg", "col_xl", "col_xxl", "title", "note", "preferred_filter_name"),
+        fields=(
+            "col_sm",
+            "col_md",
+            "col_lg",
+            "col_xl",
+            "col_xxl",
+            "title",
+            "note",
+            "preferred_filter_name",
+            "preferred_column_config_name",
+        ),
         extra=0,
     )

@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 from apps.blocks.registry import block_registry
 from apps.layout.models import Layout, LayoutBlock, LayoutFilterConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.models.block_column_config import BlockColumnConfig
 
 from apps.layout.forms import (
     LayoutForm,
@@ -195,6 +196,17 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                 )
                 if cfg:
                     qd[f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filter_config_id"] = str(cfg.id)
+            # If this block instance declares a preferred Block column config name,
+            # inject the column_config_id similarly for per-instance default view.
+            pref_col = (lb.preferred_column_config_name or "").strip()
+            if pref_col:
+                col = (
+                    BlockColumnConfig.objects.filter(
+                        block=lb.block, user=self.request.user, name=pref_col
+                    ).only("id").first()
+                )
+                if col:
+                    qd[f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__column_config_id"] = str(col.id)
             # Signal to block templates that they are embedded within a layout
             # so they can suppress standalone page headers/footers.
             qd["embedded"] = "1"
@@ -271,13 +283,28 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
             choices = [("", "— inherit block default —")] + [(n, n) for n in names]
             fld = form.fields.get("preferred_filter_name")
             if not fld:
-                continue
-            # Force Select widget and assign choices to the widget
-            widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
-            widget.choices = choices
-            fld.widget = widget
-            # Ensure the initial reflects the instance value
-            form.initial["preferred_filter_name"] = getattr(form.instance, "preferred_filter_name", "")
+                pass
+            else:
+                # Force Select widget and assign choices to the widget
+                widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
+                widget.choices = choices
+                fld.widget = widget
+                form.initial["preferred_filter_name"] = getattr(form.instance, "preferred_filter_name", "")
+            # Column config choices
+            col_names = []
+            if block_obj:
+                col_names = list(
+                    BlockColumnConfig.objects.filter(user=user, block=block_obj)
+                    .order_by("name")
+                    .values_list("name", flat=True)
+                )
+            col_choices = [("", "— inherit block default —")] + [(n, n) for n in col_names]
+            col_fld = form.fields.get("preferred_column_config_name")
+            if col_fld:
+                col_widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
+                col_widget.choices = col_choices
+                col_fld.widget = col_widget
+                form.initial["preferred_column_config_name"] = getattr(form.instance, "preferred_column_config_name", "")
             # Compute Manage Filters URL for this block type (table/chart)
             manage_url = None
             try:
@@ -290,6 +317,14 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
                 manage_url = None
             # Attach for template usage
             setattr(form, "manage_filters_url", manage_url)
+            # Compute Manage Columns URL (only for table blocks)
+            manage_cols_url = None
+            try:
+                if isinstance(impl, TableBlock):
+                    manage_cols_url = reverse("column_config_view", kwargs={"block_name": block_obj.code})
+            except Exception:
+                manage_cols_url = None
+            setattr(form, "manage_columns_url", manage_cols_url)
 
     def get(self, request, *args, **kwargs):
         formset = self.FormSet(queryset=self.qs)
@@ -467,6 +502,8 @@ class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
             updates["note"] = (data.get("note") or "").strip()
         if "preferred_filter_name" in data:
             updates["preferred_filter_name"] = (data.get("preferred_filter_name") or "").strip()
+        if "preferred_column_config_name" in data:
+            updates["preferred_column_config_name"] = (data.get("preferred_column_config_name") or "").strip()
         if not updates:
             return JsonResponse({"ok": False, "error": "No updatable fields provided."}, status=400)
         for k, v in updates.items():
