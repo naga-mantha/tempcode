@@ -98,6 +98,8 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         return {
             "block_name": self.block_name,
             "instance_id": instance_id,
+            "block_title": getattr(self.block, "name", self.block_name),
+            "block": self.block,
             "fields": fields,
             "tabulator_options": self.get_tabulator_options(user),
             "column_configs": column_configs,
@@ -111,11 +113,44 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         }
 
     def _get_context(self, request, instance_id):
-        cache_key = (id(request), instance_id)
+        # If no explicit instance_id is provided (standalone block render),
+        # try to detect a previously-used instance namespace from the querystring
+        # so that view/filter selections persist across reloads.
+        effective_instance_id = instance_id or self._detect_instance_id_from_query(request)
+        cache_key = (id(request), effective_instance_id)
         if cache_key not in self._context_cache:
             # Replace cache for this (request, instance) pair.
-            self._context_cache[cache_key] = self._build_context(request, instance_id)
+            self._context_cache[cache_key] = self._build_context(request, effective_instance_id)
         return self._context_cache[cache_key]
+
+    def _detect_instance_id_from_query(self, request):
+        """Best-effort extraction of instance_id from namespaced GET params.
+
+        Looks for keys like:
+        - "<block>__<instance>__column_config_id"
+        - "<block>__<instance>__filter_config_id"
+        - "<block>__<instance>__filters.<name>"
+        Returns the first detected instance id, or None if not found.
+        """
+        try:
+            keys = request.GET.keys()
+        except Exception:
+            return None
+        prefix = f"{self.block_name}__"
+        for key in keys:
+            if not key.startswith(prefix):
+                continue
+            rest = key[len(prefix):]
+            if "__" not in rest:
+                continue
+            candidate, tail = rest.split("__", 1)
+            if (
+                tail.startswith("column_config_id")
+                or tail.startswith("filter_config_id")
+                or tail.startswith("filters.")
+            ):
+                return candidate
+        return None
 
     def get_config(self, request, instance_id=None):
         context = dict(self._get_context(request, instance_id))

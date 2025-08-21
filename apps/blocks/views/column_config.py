@@ -55,6 +55,7 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
         configs = BlockColumnConfig.objects.filter(block=self.block, user=self.user)
         context.update({
             "block": self.block,
+            "block_title": getattr(self.block, "name", ""),
             "configs": configs,
             "fields_metadata": self.fields_metadata,
         })

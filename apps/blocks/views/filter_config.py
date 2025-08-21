@@ -103,6 +103,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         context.update(
             {
                 "block": self.block_impl,
+                "block_title": getattr(self.db_block, "name", route_block_name),
                 "route_block_name": route_block_name,
                 "user_filters": self.user_filters,
                 "editing": self.editing,

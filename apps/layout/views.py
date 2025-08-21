@@ -179,6 +179,9 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             # Build a per-block namespaced GET overlay from selected layout filters
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
             qd = build_namespaced_get(self.request, ns=ns, values=selected_filter_values or {})
+            # Signal to block templates that they are embedded within a layout
+            # so they can suppress standalone page headers/footers.
+            qd["embedded"] = "1"
 
             class _ReqProxy:
                 def __init__(self, req, get):
