@@ -1,6 +1,15 @@
 from django.core.exceptions import PermissionDenied
-from .models import Transition, TransitionLog, Workflow
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
+
+from .models import Transition, TransitionLog, Workflow
+
+def _bypass_all(user) -> bool:
+    if getattr(user, "is_superuser", False):
+        return True
+    staff_bypass = getattr(settings, "PERMISSIONS_STAFF_BYPASS", True)
+    return staff_bypass and getattr(user, "is_staff", False)
+
 
 def get_allowed_transitions(obj, user):
     state = getattr(obj, "workflow_state", None)
@@ -14,13 +23,13 @@ def get_allowed_transitions(obj, user):
 
     transitions = Transition.objects.filter(
         workflow=workflow,
-        source_state=state
+        source_state=state,
     ).prefetch_related("allowed_groups")
 
-    return [
-        t for t in transitions
-        if user.groups.filter(id__in=t.allowed_groups.values_list("id", flat=True)).exists()
-    ]
+    if _bypass_all(user):
+        return list(transitions)
+
+    return [t for t in transitions if t.is_allowed_for_user(user)]
 
 def apply_transition(obj, transition_name, user, *, comment="", save=True):
     allowed_transitions = get_allowed_transitions(obj, user)

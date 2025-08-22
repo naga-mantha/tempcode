@@ -55,29 +55,7 @@ from typing import Callable
 
 from django.core.exceptions import PermissionDenied
 
-from .checks import (
-    can_add_model,
-    can_change_instance,
-    can_change_model,
-    can_delete_instance,
-    can_delete_model,
-    can_view_instance,
-    can_view_model,
-)
-
-# Mapping of action strings to check functions
-_MODEL_CHECKS = {
-    "view": can_view_model,
-    "add": can_add_model,
-    "change": can_change_model,
-    "delete": can_delete_model,
-}
-
-_INSTANCE_CHECKS = {
-    "view": can_view_instance,
-    "change": can_change_instance,
-    "delete": can_delete_instance,
-}
+from .checks import get_instance_check, get_model_check
 
 
 class ModelPermissionRequiredMixin:
@@ -98,9 +76,7 @@ class ModelPermissionRequiredMixin:
                 "ModelPermissionRequiredMixin requires 'permission_model' or 'model'"
             )
 
-        check_func = _MODEL_CHECKS.get(action)
-        if check_func is None:
-            raise ValueError(f"Unknown permission action: {action}")
+        check_func = get_model_check(action)
 
         if not check_func(request.user, model):
             raise PermissionDenied
@@ -126,9 +102,7 @@ class InstancePermissionRequiredMixin:
                 "override 'get_permission_object'."
             )
 
-        check_func = _INSTANCE_CHECKS.get(action)
-        if check_func is None:
-            raise ValueError(f"Unknown permission action: {action}")
+        check_func = get_instance_check(action)
 
         if not check_func(request.user, instance):
             raise PermissionDenied
@@ -150,9 +124,7 @@ def model_permission_required(model, action: str = "view"):
     def decorator(view_func: Callable):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            check_func = _MODEL_CHECKS.get(action)
-            if check_func is None:
-                raise ValueError(f"Unknown permission action: {action}")
+            check_func = get_model_check(action)
             if not check_func(request.user, model):
                 raise PermissionDenied
             return view_func(request, *args, **kwargs)
@@ -178,9 +150,7 @@ def instance_permission_required(get_instance: Callable, action: str = "view"):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
             instance = get_instance(request, *args, **kwargs)
-            check_func = _INSTANCE_CHECKS.get(action)
-            if check_func is None:
-                raise ValueError(f"Unknown permission action: {action}")
+            check_func = get_instance_check(action)
             if not check_func(request.user, instance):
                 raise PermissionDenied
             return view_func(request, *args, **kwargs)

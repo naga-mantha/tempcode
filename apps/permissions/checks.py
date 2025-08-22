@@ -13,6 +13,7 @@ context manager.
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from django.conf import settings
 from django.db.models import QuerySet
 
 
@@ -38,6 +39,29 @@ def _cached_has_perm(user, perm: str) -> bool:
     if key not in cache:
         cache[key] = user.has_perm(perm)
     return cache[key]
+
+
+def has_perm_cached(user, perm: str) -> bool:
+    """Public wrapper to check a permission using the per-request cache.
+
+    Falls back to ``user.has_perm`` when caching is disabled.
+    """
+
+    return _cached_has_perm(user, perm)
+
+
+def _bypass_all(user) -> bool:
+    """Return True if the user should bypass all permission checks.
+
+    Superusers always bypass. Staff bypass is controlled by the
+    ``PERMISSIONS_STAFF_BYPASS`` setting (defaults to True for backwards
+    compatibility).
+    """
+
+    if getattr(user, "is_superuser", False):
+        return True
+    staff_bypass = getattr(settings, "PERMISSIONS_STAFF_BYPASS", True)
+    return staff_bypass and getattr(user, "is_staff", False)
 
 
 def clear_perm_cache() -> None:
@@ -76,7 +100,7 @@ def can_act_on_model(user, model, action):
         bool: ``True`` if the user has the requested model-level permission.
     """
 
-    if user.is_superuser or user.is_staff:
+    if _bypass_all(user):
         return True
     model_name = model._meta.model_name
     app_label = model._meta.app_label
@@ -163,7 +187,7 @@ def can_act_on_instance(user, instance, action):
     """
 
     model = type(instance)
-    if user.is_superuser or user.is_staff:
+    if _bypass_all(user):
         return True
 
     if action not in _INSTANCE_ACTIONS:
@@ -246,7 +270,7 @@ def can_act_on_field(user, model, field_name, action, instance=None):
     provided, instance-level permissions are also checked.
     """
 
-    if user.is_superuser or user.is_staff:
+    if _bypass_all(user):
         return True
 
     if action == "view":
@@ -306,7 +330,7 @@ def _get_fields_by_action(user, model, action, instance=None):
         if not field.auto_created and field.editable
     ]
 
-    if user.is_superuser or user.is_staff:
+    if _bypass_all(user):
         return [field.name for field in fields]
 
     if action == "view":
@@ -352,7 +376,7 @@ def _filter_queryset_by_action(
     memory.
     """
 
-    if user.is_superuser or user.is_staff:
+    if _bypass_all(user):
         return queryset
 
     allowed_qs = queryset.none()
@@ -367,7 +391,7 @@ def _filter_queryset_by_action(
         allowed_qs |= queryset.filter(pk__in=batch)
     return allowed_qs
 
-def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
+def filter_viewable_queryset(user, queryset: QuerySet, *, chunk_size: int = 2000) -> QuerySet:
     """Return a QuerySet containing only viewable objects for the user.
 
     If the user lacks view permission on the model, an empty queryset is
@@ -378,9 +402,9 @@ def filter_viewable_queryset(user, queryset: QuerySet) -> QuerySet:
     model = queryset.model
     if not can_view_model(user, model):
         return queryset.none()
-    return _filter_queryset_by_action(user, queryset, can_view_instance)
+    return _filter_queryset_by_action(user, queryset, can_view_instance, chunk_size=chunk_size)
 
-def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
+def filter_editable_queryset(user, queryset: QuerySet, *, chunk_size: int = 2000) -> QuerySet:
     """Return a QuerySet containing only objects the user may edit.
 
     If the user lacks change permission on the model, an empty queryset is
@@ -391,9 +415,9 @@ def filter_editable_queryset(user, queryset: QuerySet) -> QuerySet:
     model = queryset.model
     if not can_change_model(user, model):
         return queryset.none()
-    return _filter_queryset_by_action(user, queryset, can_change_instance)
+    return _filter_queryset_by_action(user, queryset, can_change_instance, chunk_size=chunk_size)
 
-def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
+def filter_deletable_queryset(user, queryset: QuerySet, *, chunk_size: int = 2000) -> QuerySet:
     """Return a QuerySet containing only objects the user may delete.
 
     If the user lacks delete permission on the model, an empty queryset is
@@ -405,4 +429,42 @@ def filter_deletable_queryset(user, queryset: QuerySet) -> QuerySet:
     model = queryset.model
     if not can_delete_model(user, model):
         return queryset.none()
-    return _filter_queryset_by_action(user, queryset, can_delete_instance)
+    return _filter_queryset_by_action(user, queryset, can_delete_instance, chunk_size=chunk_size)
+
+# ----------------------------
+# ACTION → CHECK MAP EXPORTS
+# ----------------------------
+
+def get_model_check(action: str):
+    """Return the model-level check function for the given action.
+
+    Supported actions: "view", "add", "change", "delete".
+    """
+
+    mapping = {
+        "view": can_view_model,
+        "add": can_add_model,
+        "change": can_change_model,
+        "delete": can_delete_model,
+    }
+    try:
+        return mapping[action]
+    except KeyError:
+        raise ValueError(f"Unknown permission action: {action}")
+
+
+def get_instance_check(action: str):
+    """Return the instance-level check function for the given action.
+
+    Supported actions: "view", "change", "delete".
+    """
+
+    mapping = {
+        "view": can_view_instance,
+        "change": can_change_instance,
+        "delete": can_delete_instance,
+    }
+    try:
+        return mapping[action]
+    except KeyError:
+        raise ValueError(f"Unknown permission action: {action}")

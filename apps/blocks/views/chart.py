@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 
+from django.shortcuts import render
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
@@ -12,7 +13,19 @@ def render_chart_block(request, block_name):
     block = block_registry.get(block_name)
     if not block:
         raise Http404(f"Block '{block_name}' not found in registry.")
-    return block.render(request)
+    # If embedded within a layout, render the partial directly.
+    if request.GET.get("embedded"):
+        return block.render(request)
+    # Otherwise render a full page wrapper that extends base.html
+    # and includes the partial so we can show page-level headers/footers.
+    config = block.get_config(request)
+    data = block.get_data(request)
+    context = {}
+    if isinstance(config, dict):
+        context.update(config)
+    if isinstance(data, dict):
+        context.update(data)
+    return render(request, "blocks/chart/chart_block_page.html", context)
 
 
 @login_required

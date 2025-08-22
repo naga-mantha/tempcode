@@ -128,6 +128,8 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         instance_id = instance_id or uuid.uuid4().hex[:8]
         return {
             "block_name": self.block_name,
+            "block_title": getattr(self.block, "name", self.block_name),
+            "block": self.block,
             "instance_id": instance_id,
             "filter_configs": filter_configs,
             "active_filter_config_id": active_filter_config.id

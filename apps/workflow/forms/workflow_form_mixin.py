@@ -23,6 +23,7 @@ class WorkflowFormMixin:
                 fields_to_remove.append(name)
             elif not can_write_field_state(user, model, name, instance):
                 field.disabled = True
+                field.required = False
 
         for name in fields_to_remove:
             del self.fields[name]

@@ -1,40 +1,41 @@
 {% load static %}
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
-<div class="card">
-  <div class="card-body">
-    <div class="d-flex justify-content-end mb-3">
-      <label class="me-2">Filter:</label>
-      <select id="filter-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto">
-        <option value="">-- None --</option>
-        {% for f in filter_configs %}
-          <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
-            {{ f.name }}{% if f.is_default %} (default){% endif %}
-          </option>
-        {% endfor %}
-      </select>
-      <a class="btn btn-link p-0 ms-2" href="{% url 'chart_filter_config' block_name %}">Manage Filters</a>
-    </div>
-
-    <form method="get" id="dynamic-filters-form-{{ block_name }}-{{ instance_id }}" class="mb-3">
-      {% if active_filter_config_id %}
-        <input type="hidden" name="{{ block_name }}__{{ instance_id }}__filter_config_id" value="{{ active_filter_config_id }}">
-      {% endif %}
-
-      <details class="border rounded">
-        <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
-          Filter Conditions
-        </summary>
-        <div class="p-3">
-          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
-          <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
-        </div>
-      </details>
-    </form>
-
-    <div id="chart-{{ block_name }}-{{ instance_id }}"></div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <a class="btn btn-link p-0" href="{% url 'render_chart_block' block_name %}">Chart Link</a>
+  </div>
+  <div>
+    <label class="me-2">Filter:</label>
+    <select id="filter-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto">
+      <option value="">-- None --</option>
+      {% for f in filter_configs %}
+        <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+          {{ f.name }}{% if f.is_default %} (default){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-link p-0 ms-2" href="{% url 'chart_filter_config' block_name %}">Manage Filters</a>
   </div>
 </div>
+
+<form method="get" id="dynamic-filters-form-{{ block_name }}-{{ instance_id }}" class="mb-3">
+  {% if active_filter_config_id %}
+    <input type="hidden" name="{{ block_name }}__{{ instance_id }}__filter_config_id" value="{{ active_filter_config_id }}">
+  {% endif %}
+
+  <details class="border rounded">
+    <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
+      Filter Conditions
+    </summary>
+    <div class="p-3">
+      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
+      <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+    </div>
+  </details>
+</form>
+
+<div id="chart-{{ block_name }}-{{ instance_id }}"></div>
 
 {% block scripts %}
 <script>

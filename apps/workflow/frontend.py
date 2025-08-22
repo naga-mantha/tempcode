@@ -1,3 +1,5 @@
+from django.urls import reverse
+
 from .apply_transition import get_allowed_transitions
 
 def render_transition_buttons(obj, user):
@@ -10,7 +12,15 @@ def render_transition_buttons(obj, user):
             "transition_name": t.name,
             "from_state": t.source_state.name,
             "to_state": t.dest_state.name,
-            "url": f"/workflow/transition/{obj._meta.app_label}/{obj._meta.model_name}/{obj.pk}/{t.name}/",  # generic handler
+            "url": reverse(
+                "workflow:workflow_perform_transition",
+                kwargs={
+                    "app_label": obj._meta.app_label,
+                    "model_name": obj._meta.model_name,
+                    "object_id": obj.pk,
+                    "transition_name": t.name,
+                },
+            ),
         })
 
     return buttons

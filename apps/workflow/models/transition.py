@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import Group
+from django.conf import settings
 from apps.workflow.models import Workflow, State
 
 class Transition(models.Model):
@@ -18,4 +19,9 @@ class Transition(models.Model):
         return f"{self.workflow.name}: {self.source_state.name} → {self.dest_state.name} ({self.name})"
 
     def is_allowed_for_user(self, user):
+        if getattr(user, "is_superuser", False):
+            return True
+        staff_bypass = getattr(settings, "PERMISSIONS_STAFF_BYPASS", True)
+        if staff_bypass and getattr(user, "is_staff", False):
+            return True
         return user.groups.filter(id__in=self.allowed_groups.values_list("id", flat=True)).exists()
