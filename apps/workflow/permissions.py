@@ -11,6 +11,14 @@ from apps.permissions.checks import (
     has_perm_cached,
 )
 
+
+def _has_workflow_state_field(model) -> bool:
+    try:
+        model._meta.get_field("workflow_state")
+        return True
+    except Exception:
+        return False
+
 def _bypass_all(user) -> bool:
     if getattr(user, "is_superuser", False):
         return True
@@ -24,7 +32,9 @@ def get_workflow_state(obj):
 # --------------------------------
 # FIELD-LEVEL CHECKS AT STATE
 # --------------------------------
-def _state_code(state) -> str:
+def _state_code(state) -> str | None:
+    if not state:
+        return None
     return slugify(state.name)
 
 
@@ -86,6 +96,8 @@ def get_editable_fields_state(user, model, instance=None):
 # --------------------------------
 def _get_instance_perm_codename(instance, action):
     state = getattr(instance, "workflow_state", None)
+    if not state:
+        return None
     model = instance._meta.model
     model_name = model._meta.model_name
     app_label = model._meta.app_label
@@ -96,24 +108,36 @@ def can_view_instance_state(user, instance):
         return True
     if not can_view_instance(user, instance):
         return False
-    return has_perm_cached(user, _get_instance_perm_codename(instance, "view"))
+    code = _get_instance_perm_codename(instance, "view")
+    if not code:
+        return True
+    return has_perm_cached(user, code)
 
 def can_change_instance_state(user, instance):
     if _bypass_all(user):
         return True
     if not can_change_instance(user, instance):
         return False
-    return has_perm_cached(user, _get_instance_perm_codename(instance, "change"))
+    code = _get_instance_perm_codename(instance, "change")
+    if not code:
+        return True
+    return has_perm_cached(user, code)
 
 def can_delete_instance_state(user, instance):
     if _bypass_all(user):
         return True
     if not can_delete_instance(user, instance):
         return False
-    return has_perm_cached(user, _get_instance_perm_codename(instance, "delete"))
+    code = _get_instance_perm_codename(instance, "delete")
+    if not code:
+        return True
+    return has_perm_cached(user, code)
 
 def _filter_queryset_by_action_state(user, queryset: QuerySet, check_func, *, chunk_size: int = 2000) -> QuerySet:
     if _bypass_all(user):
+        return queryset
+    # Skip state filtering entirely if model has no workflow_state field
+    if not _has_workflow_state_field(queryset.model):
         return queryset
     allowed_qs = queryset.none()
     batch: list[int] = []

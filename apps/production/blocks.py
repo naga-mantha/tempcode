@@ -1,6 +1,7 @@
 from apps.blocks.block_types.table.table_block import TableBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation
 from apps.blocks.services.filtering import apply_filter_registry
+from django.core.exceptions import FieldDoesNotExist
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
@@ -12,11 +13,17 @@ class ProductionOrderTableBlock(TableBlock):
     def get_queryset(self, user, filters, column_config):
         selected_fields = column_config.fields if column_config else []
 
-        # Extract related fields for select_related
+        # Extract valid forward-related fields for select_related
         related_fields = set()
         for f in selected_fields:
             if "__" in f:
-                related_fields.add(f.split("__")[0])
+                prefix = f.split("__", 1)[0]
+                try:
+                    field = ProductionOrder._meta.get_field(prefix)
+                except FieldDoesNotExist:
+                    continue
+                if getattr(field, "is_relation", False) and not getattr(field, "many_to_many", False):
+                    related_fields.add(prefix)
 
         qs = ProductionOrder.objects.select_related(*related_fields)
 
@@ -33,7 +40,11 @@ class ProductionOrderTableBlock(TableBlock):
 
         defs = []
         for field in fields:
-            label = label_for_field(field, model, return_attr=False)
+            try:
+                label = label_for_field(field, model, return_attr=False)
+            except Exception:
+                # Skip invalid/missing fields gracefully
+                continue
             defs.append({"field": field, "title": label})
 
         return defs
@@ -87,11 +98,17 @@ class ProductionOrderOperationTableBlock(TableBlock):
     def get_queryset(self, user, filters, column_config):
         selected_fields = column_config.fields if column_config else []
 
-        # Extract related fields for select_related
+        # Extract valid forward-related fields for select_related
         related_fields = set()
         for f in selected_fields:
             if "__" in f:
-                related_fields.add(f.split("__")[0])
+                prefix = f.split("__", 1)[0]
+                try:
+                    field = ProductionOrderOperation._meta.get_field(prefix)
+                except FieldDoesNotExist:
+                    continue
+                if getattr(field, "is_relation", False) and not getattr(field, "many_to_many", False):
+                    related_fields.add(prefix)
 
         qs = ProductionOrderOperation.objects.select_related(*related_fields)
 

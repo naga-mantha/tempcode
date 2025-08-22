@@ -59,11 +59,46 @@
   document.addEventListener("DOMContentLoaded", () => {
     // 1) Initialize the table
     const tableEl = document.getElementById("table-{{ block_name }}-{{ instance_id }}");
+    // adjust columns to enforce per-row editability using __editable flags
+    const baseColumns = {{ columns|safe }};
+    const columns = baseColumns.map(col => {
+      if (col.editor) {
+        col.editable = function(cell){
+          const data = cell.getRow().getData();
+          const f = cell.getColumn().getField();
+          return data && data.__editable && data.__editable[f] === true;
+        };
+      }
+      return col;
+    });
+
     const table = new Tabulator(tableEl, {
       layout: "fitColumns",
       data:{{ data|safe }},
-      columns:{{ columns|safe }},
+      columns:columns,
       ...{{ tabulator_options|safe }},  // ensure trailing comma
+    });
+
+    // 3) Inline editing: send changes to server
+    table.on("cellEdited", function(cell){
+      const row = cell.getRow();
+      const id = row.getData().id;
+      const field = cell.getField();
+      const value = cell.getValue();
+      if (id == null) { return; }
+      fetch("{% url 'inline_edit' block_name %}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id, field, value}),
+      }).then(res => res.json()).then(resp => {
+        if (!resp.success) {
+          alert(resp.error || "Update failed");
+          cell.restoreOldValue();
+        }
+      }).catch(() => {
+        alert("Network error while saving");
+        cell.restoreOldValue();
+      });
     });
 
     // helper to preserve both column_config_id and filter_config_id in URL

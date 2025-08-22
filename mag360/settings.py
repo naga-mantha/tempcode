@@ -231,4 +231,4 @@ admin_emails = env('ADMINS')
 ADMINS = tuple(parseaddr(email) for email in admin_emails.split(','))
 
 # Permissions app settings
-PERMISSIONS_STAFF_BYPASS = True  # If True, staff users can bypass permission checks
+PERMISSIONS_STAFF_BYPASS = False  # If True, staff users can bypass permission checks

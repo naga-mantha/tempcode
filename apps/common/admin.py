@@ -8,8 +8,8 @@ class ProductionOrderScheduleAdmin(admin.ModelAdmin):
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
-    list_display = ("production_order", )
-    # search_fields = ("priority",)
+    list_display = ("production_order", "status", "quantity", "due_date",)
+    search_fields = ("production_order", "status", "quantity", "due_date",)
 
 @admin.register(ProductionOrderOperation)
 class ProductionOrderOperationAdmin(admin.ModelAdmin):

@@ -5,6 +5,14 @@ from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.workflow.permissions import (
     get_readable_fields_state,
     get_editable_fields_state,
+    can_read_field_state,
+    can_write_field_state,
+    filter_viewable_queryset_state,
+)
+from apps.permissions.checks import (
+    can_read_field as can_read_field_generic,
+    can_write_field as can_write_field_generic,
+    filter_viewable_queryset as filter_viewable_queryset_generic,
 )
 from apps.blocks.helpers.field_rules import get_field_display_rules
 from django.db import models
@@ -92,7 +100,13 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         fields, columns = self._compute_fields(
             user, selected_fields, active_column_config, sample_obj
         )
-        data = self._serialize_rows(queryset, selected_fields)
+        # Provide user to row serializer for per-instance field checks
+        self._current_user = user
+        try:
+            data = self._serialize_rows(queryset, selected_fields)
+        finally:
+            if hasattr(self, "_current_user"):
+                delattr(self, "_current_user")
         # Ensure we have an instance_id (for standalone renders)
         instance_id = instance_id or uuid.uuid4().hex[:8]
         return {
@@ -223,6 +237,9 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
 
     def _build_queryset(self, user, filter_values, active_column_config):
         queryset = self.get_queryset(user, filter_values, active_column_config)
+        # Filter out instances the user cannot view (base permissions and workflow state)
+        queryset = filter_viewable_queryset_generic(user, queryset)
+        queryset = filter_viewable_queryset_state(user, queryset)
         sample_obj = queryset.first() if queryset else None
         return queryset, sample_obj
 
@@ -244,8 +261,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         visible_fields = [
             f
             for f in selected_fields
-            if f in readable_fields
-            and not (display_rules.get(f) and display_rules[f].is_excluded)
+            if not (display_rules.get(f) and display_rules[f].is_excluded)
         ]
         column_defs = self.get_column_defs(user, active_column_config)
         column_label_map = {col["field"]: col["title"] for col in column_defs}
@@ -260,26 +276,76 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                 }
             )
         from django.contrib.admin.utils import label_for_field
-        columns = [
-            {
-                "title": label_for_field(defn.get("field"), self.get_model(), return_attr=False),
-                "field": defn.get("field"),
+        editable_map = {f["name"]: f.get("editable", False) for f in fields}
+        columns = []
+        for defn in column_defs:
+            field_name = defn.get("field")
+            col = {
+                "title": label_for_field(field_name, self.get_model(), return_attr=False),
+                "field": field_name,
             }
-            for defn in column_defs
-        ]
+            # Define editor for direct editable model fields; per-row editability enforced in JS using __editable map
+            if "__" not in field_name:
+                try:
+                    model_field = self.get_model()._meta.get_field(field_name)
+                    if getattr(model_field, "editable", True):
+                        col["editor"] = "input"
+                except Exception:
+                    pass
+            columns.append(col)
         return fields, columns
 
     def _serialize_rows(self, queryset, selected_fields):
+        """Serialize queryset rows applying field-level read masking.
+
+        For each selected field, if the user lacks read permission (base or
+        workflow-state), the value is masked as an empty string.
+        """
+
+        # We need the request user; derive from the queryset's _hints when possible.
+        # Since we don't have access to request here, cache the last seen user
+        # via context. This method is only called from _build_context which has the request.
         data = []
+        # Attach user via closure by reading from the most recent context cache entry.
+        # Fallback to no masking if user cannot be determined (unlikely in normal flow).
+        user = None
+        # Attempt to infer from first object's _state (not available); instead,
+        # rely on the fact that _serialize_rows is only called within _build_context
+        # where self._context_cache entry was just built. We'll pass user via a hidden attr.
+        user = getattr(self, "_current_user", None)
+
         for obj in queryset:
             row = {}
+            # Always include primary key for inline edits
+            try:
+                row["id"] = obj.pk
+            except Exception:
+                pass
+            editable_flags = {}
             for field in selected_fields:
+                target_instance = obj
+                target_model = type(obj)
+                attr_name = field
                 if "__" in field:
                     related_field, sub_field = field.split("__", 1)
                     related_obj = getattr(obj, related_field, None)
-                    value = getattr(related_obj, sub_field, None) if related_obj else None
-                else:
-                    value = getattr(obj, field, None)
+                    target_instance = related_obj
+                    target_model = type(related_obj) if related_obj is not None else None
+                    attr_name = sub_field
+
+                # Compute value first
+                value = getattr(target_instance or obj, attr_name if target_instance else field, None)
+
+                # Mask if unreadable by base or state permission
+                if user and target_model and target_instance is not None:
+                    if not can_read_field_generic(user, target_model, attr_name, target_instance) or not can_read_field_state(
+                        user, target_model, attr_name, target_instance
+                    ):
+                        row[field] = "***"
+                        # still compute edit flags
+                        editable_flags[field] = False
+                        continue
+
                 if value is None:
                     row[field] = ""
                 elif isinstance(value, models.Model):
@@ -290,6 +356,17 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                         row[field] = value
                     except TypeError:
                         row[field] = str(value)
+
+                # Per-row edit flags
+                if user and target_model and target_instance is not None:
+                    can_write = can_write_field_generic(user, target_model, attr_name, target_instance) and can_write_field_state(
+                        user, target_model, attr_name, target_instance
+                    )
+                    editable_flags[field] = bool(can_write)
+                else:
+                    editable_flags[field] = False
             data.append(row)
+            if editable_flags:
+                row["__editable"] = editable_flags
         return json.dumps(data)
 

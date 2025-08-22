@@ -3,8 +3,8 @@ from django.core.exceptions import PermissionDenied
 from apps.workflow.models import Workflow, State
 
 class WorkflowModelMixin(models.Model):
-    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, default=None, null=True)
-    workflow_state = models.ForeignKey(State, on_delete=models.PROTECT, default=None, null=True)
+    workflow = models.ForeignKey(Workflow, on_delete=models.PROTECT, default=None, blank=True, null=True)
+    workflow_state = models.ForeignKey(State, on_delete=models.PROTECT, default=None, blank=True, null=True)
 
     class Meta:
         abstract = True

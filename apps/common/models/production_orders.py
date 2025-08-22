@@ -10,6 +10,7 @@ class ProductionOrder(WorkflowModelMixin):
     status = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.FloatField(blank=True, null=True)
     due_date = models.DateField(blank=True, null=True)
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
 
     objects = models.Manager()
     df_objects = DataFrameManager()
@@ -22,3 +23,10 @@ class ProductionOrder(WorkflowModelMixin):
 
     def __str__(self):
         return str(self.production_order)
+
+    def can_user_view(self, user):
+            return self.quantity > 100
+
+
+    def can_user_change(self, user):
+        return self.quantity > 1000

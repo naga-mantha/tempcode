@@ -26,16 +26,16 @@ def get_model_fields_for_column_config(model, user):
         if rule and rule.is_excluded:
             continue
 
+        # Include mandatory fields even if base read permission is missing
         if user and not can_read_field(user, model, field.name):
-            continue
+            if not (rule and rule.is_mandatory):
+                continue
 
         if isinstance(field, models.ForeignKey):
             rel_model = field.remote_field.model
             rel_label = f"{rel_model._meta.app_label}.{rel_model.__name__}"
             rel_rules = get_field_display_rules(model_label=rel_label)
             rel_rmap = {r.field_name: r for r in rel_rules}
-            rel_instance = rel_model()
-
             for sub in rel_model._meta.fields:
                 if sub.name == "id":
                     continue
@@ -44,8 +44,10 @@ def get_model_fields_for_column_config(model, user):
                 if rel_rule and rel_rule.is_excluded:
                     continue
 
-                if user and not can_read_field(user, rel_instance, sub.name):
-                    continue
+                # Include mandatory related fields even if base read is missing
+                if user and not can_read_field(user, rel_model, sub.name):
+                    if not (rel_rule and rel_rule.is_mandatory):
+                        continue
 
                 fields.append({
                     "name": f"{field.name}__{sub.name}",
