@@ -4,6 +4,7 @@ django-comments-xtd
 django-contrib-comments
 django-environ
 django-extensions
+django-autocomplete-light
 pandas
 django-pandas
 python-dateutil

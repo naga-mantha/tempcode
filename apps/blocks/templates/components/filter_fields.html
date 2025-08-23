@@ -40,10 +40,10 @@
         {% if val %}
           {% if cfg.multiple %}
             {% for v in val %}
-              <option value="{{ v }}" selected></option>
+              <option value="{{ v }}" selected>{{ v }}</option>
             {% endfor %}
           {% else %}
-            <option value="{{ val }}" selected></option>
+            <option value="{{ val }}" selected>{{ val }}</option>
           {% endif %}
         {% endif %}
       </select>
