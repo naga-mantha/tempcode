@@ -2,7 +2,7 @@
    - filter_schema: dict of key -> {label, type, help?, choices?, multiple?}
    - initial_values: dict of key -> value (or list for multiselect)
 #}
-{% load dict_extras %}
+{% load dict_extras static %}
 
 {% for key, cfg in filter_schema.items %}
   {% with val=initial_values|get_item:key %}
@@ -28,6 +28,25 @@
         {% endfor %}
       </select>
       <div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
+
+    {% elif cfg.type == 'autocomplete' %}
+      {% include "autocomplete_light/static.html" %}
+      <select class="form-select"
+              data-autocomplete-light-url="{{ cfg.url }}"
+              data-autocomplete-light-function="select2"
+              {% if cfg.forward %}data-autocomplete-light-forward="{{ cfg.forward }}"{% endif %}
+              name="{{ name_prefix|default:'filters.' }}{{ key }}"
+              {% if cfg.multiple %}multiple{% endif %}>
+        {% if val %}
+          {% if cfg.multiple %}
+            {% for v in val %}
+              <option value="{{ v }}" selected></option>
+            {% endfor %}
+          {% else %}
+            <option value="{{ val }}" selected></option>
+          {% endif %}
+        {% endif %}
+      </select>
 
     {% elif cfg.type == 'number' %}
       <input type="number" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
