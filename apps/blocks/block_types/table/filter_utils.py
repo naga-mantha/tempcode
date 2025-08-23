@@ -8,6 +8,8 @@ class FilterResolutionMixin:
         for key, cfg in raw_schema.items():
             item = dict(cfg)
             item.setdefault("type", "text")
+            if item["type"] == "autocomplete":
+                item.setdefault("multiple", False)
             if "choices" in item and callable(item["choices"]):
                 item["choices"] = item["choices"](user)
             schema[key] = item
@@ -28,7 +30,7 @@ class FilterResolutionMixin:
                 names.append(key)
 
             for name in names:
-                if cfg.get("type") == "multiselect":
+                if cfg.get("type") in {"multiselect", "autocomplete"} and cfg.get("multiple"):
                     vals = qd.getlist(name)
                     if vals:
                         base[key] = vals
