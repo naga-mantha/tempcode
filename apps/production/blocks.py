@@ -2,7 +2,7 @@ from apps.blocks.block_types.table.table_block import TableBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
-from django.urls import reverse_lazy
+from django.db.models import Q
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
@@ -27,13 +27,6 @@ class ProductionOrderTableBlock(TableBlock):
                     related_fields.add(prefix)
 
         qs = ProductionOrder.objects.select_related(*related_fields)
-
-        item_ids = filters.get("item")
-        if item_ids:
-            if isinstance(item_ids, list):
-                qs = qs.filter(item_id__in=item_ids)
-            else:
-                qs = qs.filter(item_id=item_ids)
 
         # Apply remaining filters to the queryset (still as model instances)
         return apply_filter_registry("production_order_table", qs, filters, user)
@@ -90,10 +83,8 @@ class ProductionOrderTableBlock(TableBlock):
             },
             "item": {
                 "label": "Item",
-                "type": "autocomplete",
-                "url": reverse_lazy("item-autocomplete"),
-                "multiple": True,
-                "handler": lambda qs, val: qs,
+                "type": "text",
+                "handler": lambda qs, val: qs.filter(Q(item__code__icontains=val) | Q(item__description__icontains=val)),
             },
             # "urgent": {
             #     "label": "Urgent only",

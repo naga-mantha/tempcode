@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import Http404, JsonResponse
+import json
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import TemplateView, FormView, DeleteView
@@ -348,102 +349,108 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
 
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = LayoutAccessMixin.get_layout(username=username, slug=slug)
-        # Use unified access check for view authorization
         LayoutAccessMixin.ensure_access(request, self.layout, action="view")
         self.user_filters = LayoutFilterConfig.objects.filter(
             layout=self.layout, user=request.user
         ).order_by("-is_default", "name")
-        self.editing = None
-        if request.method == "GET":
-            edit_id = request.GET.get("id")
-            if edit_id:
-                self.editing = get_object_or_404(
-                    LayoutFilterConfig, id=edit_id, layout=self.layout, user=request.user
-                )
         self.filter_schema = self._build_filter_schema(request)
         return super().dispatch(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        # Handle deletes before validating the form (since 'name' isn't posted on delete)
-        if "delete" in request.POST:
-            edit_id = request.POST.get("id")
-            if edit_id:
-                cfg = get_object_or_404(
-                    LayoutFilterConfig,
-                    id=edit_id,
-                    layout=self.layout,
-                    user=request.user,
-                )
-                try:
-                    cfg.delete()
-                except Exception as exc:
-                    messages.error(request, str(exc))
-                else:
-                    messages.success(request, "Filter deleted.")
-            return redirect(
-                "layout_filter_config",
-                username=self.layout.user.username,
-                slug=self.layout.slug,
-            )
-        return super().post(request, username, slug, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["filter_schema"] = self.filter_schema
         return kwargs
 
-    def get_initial(self):
-        initial = super().get_initial()
-        if self.editing:
-            initial.update(
-                {
-                    "name": self.editing.name,
-                    "is_default": self.editing.is_default,
-                }
-            )
-        return initial
-
     def form_valid(self, form):
-        # We no longer include 'id' in the form; read from POST if present
-        edit_id = self.request.POST.get("id")
-        name = form.cleaned_data["name"].strip()
-        is_default = form.cleaned_data.get("is_default", False)
-        if not name:
-            messages.error(self.request, "Please provide a name.")
-            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
-        values = self._collect_filters(self.request.POST, self.filter_schema, base={})
-        if edit_id:
+        action = form.cleaned_data.get("action")
+        config_id = form.cleaned_data.get("config_id")
+        name = (form.cleaned_data.get("name") or "").strip()
+
+        if action == "create":
+            if not name:
+                messages.error(self.request, "Please provide a name.")
+                return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
+            values = self._collect_filters(self.request.POST, self.filter_schema, base={}, prefix="filters.", allow_flat=False)
+            existing = LayoutFilterConfig.objects.filter(
+                layout=self.layout, user=self.request.user, name=name
+            ).first()
+            try:
+                if existing:
+                    existing.values = values
+                    existing.save()
+                else:
+                    LayoutFilterConfig.objects.create(
+                        layout=self.layout,
+                        user=self.request.user,
+                        name=name,
+                        values=values,
+                    )
+            except IntegrityError:
+                messages.error(self.request, "Filter name already taken. Please choose a different name.")
+        elif action == "delete" and config_id:
             cfg = get_object_or_404(
-                LayoutFilterConfig, id=edit_id, layout=self.layout, user=self.request.user
+                LayoutFilterConfig, id=config_id, layout=self.layout, user=self.request.user
             )
-        else:
-            cfg = LayoutFilterConfig(layout=self.layout, user=self.request.user)
-        cfg.name = name
-        cfg.values = values
-        cfg.is_default = is_default
-        try:
+            try:
+                cfg.delete()
+                messages.success(self.request, "Filter deleted.")
+            except Exception as exc:
+                messages.error(self.request, str(exc))
+        elif action == "set_default" and config_id:
+            cfg = get_object_or_404(
+                LayoutFilterConfig, id=config_id, layout=self.layout, user=self.request.user
+            )
+            cfg.is_default = True
             cfg.save()
-        except IntegrityError:
-            messages.error(
-                self.request,
-                "Filter name already taken. Please choose a different name.",
-            )
-            if cfg.id:
-                return redirect(f"{self.request.path}?id={cfg.id}")
-            return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
-        messages.success(self.request, "Filter saved.")
-        return redirect(f"{self.request.path}?id={cfg.id}")
+        return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        initial_values = self.editing.values if self.editing else {}
+        # Build choice-label maps for select-like fields
+        labels_by_key = {}
+        try:
+            for key, cfg in (self.filter_schema or {}).items():
+                choices = cfg.get("choices")
+                if isinstance(choices, (list, tuple)):
+                    labels_by_key[str(key)] = {str(v): str(lbl) for (v, lbl) in choices}
+        except Exception:
+            pass
+
+        # Build display of saved filter values
+        def _fmt_with_schema(key, value):
+            cfg = self.filter_schema.get(key, {}) or {}
+            ftype = cfg.get("type")
+            if isinstance(value, bool):
+                return "Yes" if value else "No"
+            if ftype in {"select", "multiselect"} and isinstance(cfg.get("choices"), (list, tuple)):
+                choice_map = {str(v): str(lbl) for (v, lbl) in cfg.get("choices")}
+                if isinstance(value, (list, tuple)):
+                    return ", ".join([choice_map.get(str(v), str(v)) for v in value])
+                return choice_map.get(str(value), str(value))
+            if isinstance(value, (list, tuple)):
+                return ", ".join([str(v) for v in value])
+            return str(value)
+
+        values_by_id = {}
+        for cfg in self.user_filters:
+            items = []
+            try:
+                for k, v in (cfg.values or {}).items():
+                    label = str(self.filter_schema.get(k, {}).get("label", k))
+                    items.append(f"{label}: {_fmt_with_schema(k, v)}")
+            except Exception:
+                pass
+            values_by_id[cfg.id] = items
+
         context.update(
             {
                 "layout": self.layout,
-                "user_filters": self.user_filters,
-                "editing": self.editing,
+                "configs": self.user_filters,
                 "filter_schema": self.filter_schema,
-                "initial_values": initial_values,
+                "initial_values": {},
+                "configs_values_json": json.dumps({cfg.id: cfg.values for cfg in self.user_filters}),
+                "configs_values_by_id": values_by_id,
+                "schema_choice_labels_json": json.dumps(labels_by_key),
             }
         )
         return context

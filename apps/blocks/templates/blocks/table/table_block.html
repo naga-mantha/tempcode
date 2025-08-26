@@ -110,6 +110,14 @@
       });
       window.location.href = url.toString();
     }
+    function clearNamespacedFilters(urlObj){
+      const nsPrefix = "{{ block_name }}__{{ instance_id }}__filters.";
+      const toDelete = [];
+      for (const [k] of urlObj.searchParams.entries()){
+        if (k.startsWith(nsPrefix)) toDelete.push(k);
+      }
+      toDelete.forEach(k => urlObj.searchParams.delete(k));
+    }
 
     // 2) Keep both selections when switching either dropdown
     const colSelect = document.getElementById("column-config-select-{{ block_name }}-{{ instance_id }}");
@@ -120,8 +128,15 @@
     });
 
     filtSelect?.addEventListener("change", function() {
-      const columnId = colSelect?.value || "";
-      setSearchParams({ "{{ block_name }}__{{ instance_id }}__column_config_id": columnId, "{{ block_name }}__{{ instance_id }}__filter_config_id": this.value });
+      const url = new URL(window.location.href);
+      // Clear any ad-hoc filter overrides so saved config values show
+      clearNamespacedFilters(url);
+      const columnKey = "{{ block_name }}__{{ instance_id }}__column_config_id";
+      const filterKey = "{{ block_name }}__{{ instance_id }}__filter_config_id";
+      const columnId = colSelect?.value || url.searchParams.get(columnKey) || "";
+      if (columnId) url.searchParams.set(columnKey, columnId); else url.searchParams.delete(columnKey);
+      if (this.value) url.searchParams.set(filterKey, this.value); else url.searchParams.delete(filterKey);
+      window.location.href = url.toString();
     });
   });
 </script>

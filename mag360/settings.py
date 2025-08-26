@@ -39,8 +39,6 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 # Application definition
 
 INSTALLED_APPS = [
-    'dal',
-    'dal_select2',
     'apps.common',
     'apps.accounts',
     'apps.blocks',

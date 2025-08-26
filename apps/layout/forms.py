@@ -88,8 +88,14 @@ class LayoutBlockForm(forms.ModelForm):
 
 
 class LayoutFilterConfigForm(forms.Form):
-    name = forms.CharField()
-    is_default = forms.BooleanField(required=False)
+    ACTIONS = (
+        ("create", "create"),
+        ("delete", "delete"),
+        ("set_default", "set_default"),
+    )
+    action = forms.ChoiceField(choices=ACTIONS)
+    config_id = forms.IntegerField(required=False)
+    name = forms.CharField(required=False)
 
     def __init__(self, *args, filter_schema=None, **kwargs):
         super().__init__(*args, **kwargs)

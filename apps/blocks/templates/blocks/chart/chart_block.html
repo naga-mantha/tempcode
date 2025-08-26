@@ -45,11 +45,21 @@
     Plotly.newPlot(chartEl, fig.data, fig.layout);
 
     const filtSelect = document.getElementById('filter-config-select-{{ block_name }}-{{ instance_id }}');
+    function clearNamespacedFilters(urlObj){
+      const nsPrefix = "{{ block_name }}__{{ instance_id }}__filters.";
+      const toDelete = [];
+      for (const [k] of urlObj.searchParams.entries()){
+        if (k.startsWith(nsPrefix)) toDelete.push(k);
+      }
+      toDelete.forEach(k => urlObj.searchParams.delete(k));
+    }
     filtSelect?.addEventListener('change', function() {
-      const params = new URLSearchParams(window.location.search);
+      const url = new URL(window.location.href);
+      // Remove ad-hoc overrides so saved filter values apply
+      clearNamespacedFilters(url);
       const key = '{{ block_name }}__{{ instance_id }}__filter_config_id';
-      if (this.value) params.set(key, this.value); else params.delete(key);
-      window.location.search = params.toString();
+      if (this.value) url.searchParams.set(key, this.value); else url.searchParams.delete(key);
+      window.location.href = url.toString();
     });
   });
 </script>
