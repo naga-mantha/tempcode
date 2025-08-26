@@ -6,7 +6,7 @@ configuration models such as ``BlockColumnConfig`` and
 specific data payload (e.g. ``fields`` or ``values``).
 """
 
-from django.db import models
+from django.db import models, transaction
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.models.block import Block
@@ -36,20 +36,26 @@ class BaseUserConfig(models.Model):
         """
 
         model = self.__class__
+        # Ensure single-default semantics even when creating a new default
+        # by updating other rows within the same transaction.
+        with transaction.atomic():
+            qs = model.objects.select_for_update().filter(block=self.block, user=self.user)
+            if not self.pk:
+                if not qs.exists():
+                    # First config for this (block, user) becomes default
+                    self.is_default = True
+                else:
+                    # If creating and marking as default, unset others now
+                    if self.is_default:
+                        qs.update(is_default=False)
+            else:
+                if self.is_default:
+                    qs.exclude(pk=self.pk).update(is_default=False)
+                # If this is the only config, it must remain default
+                if qs.count() == 1:
+                    self.is_default = True
 
-        if not self.pk:
-            if not model.objects.filter(block=self.block, user=self.user).exists():
-                self.is_default = True
-        else:
-            if self.is_default:
-                model.objects.filter(block=self.block, user=self.user).exclude(pk=self.pk).update(
-                    is_default=False
-                )
-            # If this is the only config, it must remain default
-            if model.objects.filter(block=self.block, user=self.user).count() == 1:
-                self.is_default = True
-
-        super().save(*args, **kwargs)
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):  # noqa: D401 - behaviour documented in child
         """Delete the configuration ensuring another default if required."""

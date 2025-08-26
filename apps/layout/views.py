@@ -194,8 +194,11 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                         block=lb.block, user=self.request.user, name=pref_name
                     ).only("id").first()
                 )
-                if cfg:
-                    qd[f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filter_config_id"] = str(cfg.id)
+                # Respect explicit user selection in the querystring; only inject
+                # the instance default if no selection was provided.
+                key = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filter_config_id"
+                if cfg and key not in self.request.GET:
+                    qd[key] = str(cfg.id)
             # If this block instance declares a preferred Block column config name,
             # inject the column_config_id similarly for per-instance default view.
             pref_col = (lb.preferred_column_config_name or "").strip()
@@ -205,8 +208,9 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                         block=lb.block, user=self.request.user, name=pref_col
                     ).only("id").first()
                 )
-                if col:
-                    qd[f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__column_config_id"] = str(col.id)
+                key_col = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__column_config_id"
+                if col and key_col not in self.request.GET:
+                    qd[key_col] = str(col.id)
             # Signal to block templates that they are embedded within a layout
             # so they can suppress standalone page headers/footers.
             qd["embedded"] = "1"
