@@ -58,9 +58,10 @@ Both table and chart partials include a “Manage Filters” link and dynamic fi
 ## Filters (shared)
 
 - Schema driven via `FilterResolutionMixin` (`block_types/table/filter_utils.py`).
-- Schema format (per key): `{ type, label, choices? }` where:
+- Schema format (per key): `{ type, label, choices?, tom_select_options? }` where:
   - `type`: `text` (default), `select`, `multiselect`, `boolean`.
   - `choices`: list or callable(user) → list for select/multiselect.
+  - `tom_select_options`: optional dict of Tom Select settings merged into defaults.
 - Resolution: `_resolve_filter_schema` normalizes types and resolves callable choices.
 - Collection: `_collect_filters(qd, schema, base, prefix, allow_flat)` extracts values from request data, merging with saved config defaults.
 - GET namespacing: keys look like `"<block>__<instance>__filters.<name>"` when embedded, or `"<block>__filters.<name>"` otherwise.
