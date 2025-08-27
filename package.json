@@ -15,6 +15,7 @@
     "path": "^0.12.7",
     "sass": "^1.89.1",
     "sortablejs": "^1.15.6",
-    "tabulator-tables": "^6.3.1"
+    "tabulator-tables": "^6.3.1",
+    "tom-select": "^2.3.1"
   }
 }

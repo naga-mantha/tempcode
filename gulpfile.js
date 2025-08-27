@@ -14,16 +14,18 @@ const { series } = require('gulp');
 function move_css() {
     return gulp.src([
         'node_modules/tabulator-tables/dist/css/tabulator_bootstrap5.min.css',
-	], {"allowEmpty": true})
-	.pipe(gulp.dest('apps/common/src/vendor-css'))
+        'node_modules/tom-select/dist/css/tom-select.bootstrap5.min.css',
+        ], {"allowEmpty": true})
+        .pipe(gulp.dest('apps/common/src/vendor-css'))
 }
 
 function move_js() {
     return gulp.src([
         'node_modules/tabulator-tables/dist/js/tabulator.min.js',
         'node_modules/sortablejs/Sortable.min.js',
-	], {"allowEmpty": true})
-	.pipe(gulp.dest('apps/common/src/vendor-js'))
+        'node_modules/tom-select/dist/js/tom-select.complete.min.js',
+        ], {"allowEmpty": true})
+        .pipe(gulp.dest('apps/common/src/vendor-js'))
 }
 
 function move_icons() {

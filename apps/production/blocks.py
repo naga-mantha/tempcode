@@ -58,39 +58,27 @@ class ProductionOrderTableBlock(TableBlock):
         }
 
     def get_filter_schema(self, request):
-        from django.db.models import Value
-        # Dynamic choices example: callable receiving user (will be resolved in view)
-        def status_choices(user):
-            return [("open", "Open"), ("in_progress", "In Progress"), ("closed", "Closed")]
+        from django.urls import reverse
+
+        def order_choices(user, query=""):
+            qs = ProductionOrder.objects.all()
+            if query:
+                qs = qs.filter(production_order__icontains=query)
+            return [(o.production_order, o.production_order) for o in qs.order_by("production_order")[:20]]
 
         return {
-            # "status": {
-            #     "label": "Status",
-            #     "type": "multiselect",  # or "select"
-            #     "choices": status_choices,  # or a static list
-            #     "help": "Filter by one or more statuses.",
-            #     "handler": lambda qs, val: qs.filter(status__in=val if isinstance(val, list) else [val]),
-            # },
-            # "due_date": {
-            #     "label": "Due Date",
-            #     "type": "date",
-            #     "handler": lambda qs, val: qs.filter(due_date=val),
-            # },
             "production_order": {
                 "label": "Order #",
-                "type": "text",
-                "handler": lambda qs, val: qs.filter(production_order__icontains=val),
+                "type": "select",
+                "choices": order_choices,
+                "choices_url": reverse("block_filter_choices", args=[self.block_name, "production_order"]),
+                "handler": lambda qs, val: qs.filter(production_order=val) if val else qs,
             },
             "item": {
                 "label": "Item",
                 "type": "text",
                 "handler": lambda qs, val: qs.filter(Q(item__code__icontains=val) | Q(item__description__icontains=val)),
             },
-            # "urgent": {
-            #     "label": "Urgent only",
-            #     "type": "boolean",
-            #     "handler": lambda qs, val: qs.filter(is_urgent=True) if val else qs,
-            # },
         }
 
 

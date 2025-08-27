@@ -9,7 +9,12 @@ class FilterResolutionMixin:
             item = dict(cfg)
             item.setdefault("type", "text")
             if "choices" in item and callable(item["choices"]):
-                item["choices"] = item["choices"](user)
+                # If an ajax URL is provided, defer resolving choices until
+                # requested by the client.
+                if item.get("choices_url"):
+                    item["choices"] = []
+                else:
+                    item["choices"] = item["choices"](user)
             schema[key] = item
         return schema
 

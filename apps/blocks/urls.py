@@ -4,6 +4,7 @@ from apps.blocks.views import chart as chart_views
 from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
 from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
+from apps.blocks.views.filter_choices import FilterChoicesView
 
 urlpatterns = [
     path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
@@ -29,5 +30,10 @@ urlpatterns = [
         "chart/<str:block_name>/filters/<int:config_id>/delete/",
         chart_views.filter_delete_view,
         name="chart_filter_delete",
+    ),
+    path(
+        "filter-options/<str:block_name>/<str:key>/",
+        FilterChoicesView.as_view(),
+        name="block_filter_choices",
     ),
 ]
