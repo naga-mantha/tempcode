@@ -1,6 +1,6 @@
 from django.contrib.messages import get_messages
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.urls import reverse
 
 from apps.accounts.models.custom_user import CustomUser
@@ -131,3 +131,41 @@ class ChartFilterConfigViewTests(TestCase):
             ).count(),
             1,
         )
+
+
+class ChartBlockFilterResolutionTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create(username="cb-user")
+        self.block_name = "dummy_chart"
+        self.block = Block.objects.create(code=self.block_name, name="Dummy Chart")
+
+        class DummyChart(DonutChartBlock):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.captured_filters = None
+
+            def get_filter_schema(self, request):
+                return {"status": {"label": "Status"}}
+
+            def get_chart_data(self, user, filters):
+                self.captured_filters = dict(filters)
+                return {"labels": [], "values": []}
+
+        self.block_impl = DummyChart(self.block_name)
+        block_registry.register(self.block_name, self.block_impl)
+        self.factory = RequestFactory()
+
+    def tearDown(self):
+        block_registry._blocks.pop(self.block_name, None)
+        block_registry._metadata.pop(self.block_name, None)
+
+    def test_filters_resolved_with_namespaced_instance(self):
+        instance = "abc123"
+        request = self.factory.get(
+            "/", {f"{self.block_name}__{instance}__filters.status": "open"}
+        )
+        request.user = self.user
+
+        # The block should detect the instance namespace and capture the filter value
+        self.block_impl.get_data(request)
+        self.assertEqual(self.block_impl.captured_filters, {"status": "open"})
