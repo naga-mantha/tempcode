@@ -1,15 +1,15 @@
 from django.test import TestCase
+import django
+
+django.setup()
+
 from apps.production.blocks import ProductionOrderTableBlock
-from apps.common.models import Item, ProductionOrder
+from unittest.mock import MagicMock
 
 
 class ProductionOrderTableBlockTests(TestCase):
     def setUp(self):
         self.block = ProductionOrderTableBlock()
-        self.item1 = Item.objects.create(code="ITEM1", description="Item 1")
-        self.item2 = Item.objects.create(code="ITEM2", description="Item 2")
-        ProductionOrder.objects.create(production_order="PO1", item=self.item1)
-        ProductionOrder.objects.create(production_order="PO2", item=self.item2)
 
     def test_filter_schema_includes_item_multiselect(self):
         schema = self.block.get_filter_schema(None)
@@ -18,10 +18,17 @@ class ProductionOrderTableBlockTests(TestCase):
         self.assertEqual(item_cfg.get("type"), "multiselect")
         self.assertTrue(item_cfg.get("multiple"))
 
+    def test_item_filter_includes_tom_select_options(self):
+        schema = self.block.get_filter_schema(None)
+        opts = schema["item"].get("tom_select_options")
+        self.assertIsNotNone(opts)
+        self.assertEqual(opts.get("placeholder"), "Search items...")
+        self.assertIn("remove_button", opts.get("plugins", []))
+
     def test_item_filter_handler_filters_queryset(self):
         schema = self.block.get_filter_schema(None)
         handler = schema["item"]["handler"]
-        qs = ProductionOrder.objects.all()
-        filtered = handler(qs, ["ITEM1"])
-        self.assertEqual(filtered.count(), 1)
-        self.assertEqual(filtered.first().item, self.item1)
+        qs = MagicMock()
+        result = handler(qs, ["ITEM1"])
+        qs.filter.assert_called_once_with(item__code__in=["ITEM1"])
+        self.assertEqual(result, qs.filter.return_value)

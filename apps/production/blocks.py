@@ -89,6 +89,10 @@ class ProductionOrderTableBlock(TableBlock):
                 "multiple": True,
                 "choices": item_choices,
                 "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "tom_select_options": {
+                    "placeholder": "Search items...",
+                    "plugins": ["remove_button"],
+                },
                 "handler": lambda qs, val: qs.filter(item__code__in=val) if val else qs,
             },
         }
