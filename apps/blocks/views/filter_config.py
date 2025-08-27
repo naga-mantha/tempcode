@@ -11,6 +11,12 @@ from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.permissions.checks import (
+    can_read_field as can_read_field_generic,
+)
+from apps.workflow.permissions import (
+    can_read_field_state,
+)
 
 
 class FilterConfigForm(forms.Form):
@@ -43,7 +49,21 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             block=self.db_block, user=request.user
         ).order_by("-is_default", "name")
         self.raw_schema = self.block_impl.get_filter_schema(request)
-        self.filter_schema = self._resolve_filter_schema(self.raw_schema, request.user)
+        # Resolve dynamic choices and normalize types
+        schema = self._resolve_filter_schema(self.raw_schema, request.user)
+        # Prune fields the user cannot read at field/state level
+        filtered_schema = {}
+        for key, cfg in (schema or {}).items():
+            model = cfg.get("model")
+            field_name = cfg.get("field")
+            if model and field_name:
+                if not (
+                    can_read_field_generic(request.user, model, field_name)
+                    and can_read_field_state(request.user, model, field_name)
+                ):
+                    continue
+            filtered_schema[key] = cfg
+        self.filter_schema = filtered_schema
         return super().dispatch(request, block_name, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -116,11 +136,14 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             if isinstance(value, (list, tuple)):
                 return ", ".join([str(v) for v in value])
             return str(value)
+        allowed_keys = set((self.filter_schema or {}).keys())
         values_by_id = {}
         for cfg in self.user_filters:
             items = []
             try:
                 for k, v in (cfg.values or {}).items():
+                    if k not in allowed_keys:
+                        continue
                     label = str(self.filter_schema.get(k, {}).get("label", k))
                     items.append(f"{label}: {_fmt_with_schema(k, v)}")
             except Exception:
@@ -146,7 +169,11 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
                 "filter_schema": self.filter_schema,
                 # initial values empty for new form; JS will populate when selecting an existing config
                 "initial_values": {},
-                "configs_values_json": json.dumps({cfg.id: cfg.values for cfg in self.user_filters}),
+                # Only expose allowed keys to the client for safety/privacy
+                "configs_values_json": json.dumps({
+                    cfg.id: {k: v for k, v in (cfg.values or {}).items() if k in allowed_keys}
+                    for cfg in self.user_filters
+                }),
                 "configs_values_by_id": values_by_id,
                 "schema_choice_labels_json": json.dumps(labels_by_key),
             }
