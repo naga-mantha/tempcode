@@ -7,7 +7,7 @@ from apps.blocks.block_types.chart.chart_block import (
     LineChartBlock,
 )
 from apps.common.models import ProductionOrder
-
+from plotly import graph_objects as go
 
 class _StatusFilterMixin:
     """Provide a reusable status filter schema for chart blocks."""
@@ -80,6 +80,13 @@ class ProductionOrdersPerItemBarChart(_StatusFilterMixin, BarChartBlock):
                 "yaxis": {"title": "Production Orders"},
             },
         )
+
+    def get_figure(self, user, filters):
+        data = self.get_chart_data(user, filters)
+        fig = go.Figure(data=[
+            go.Bar(x=data["x"], y=data["y"], marker_color="#ff9900")
+        ])
+        return fig
 
     def get_filter_schema(self, request):
         return self._status_filter_schema()
