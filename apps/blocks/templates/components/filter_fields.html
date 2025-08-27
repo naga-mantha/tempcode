@@ -1,5 +1,5 @@
 {# expects:
-   - filter_schema: dict of key -> {label, type, help?, choices?, multiple?}
+   - filter_schema: dict of key -> {label, type, help?, choices?, multiple?, tom_select_options?}
    - initial_values: dict of key -> value (or list for multiselect)
 #}
 {% load dict_extras static %}
@@ -10,7 +10,7 @@
     <label class="form-label">{{ cfg.label }}</label>
 
     {% if cfg.type == 'select' %}
-      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}"{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}>
+      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}"{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}{% if cfg.tom_select_options %} data-tom-select-options='{{ cfg.tom_select_options|tojson }}'{% endif %}>
         <option value="">-- Any --</option>
         {% if not cfg.choices_url %}
           {% for v, lbl in cfg.choices %}
@@ -25,7 +25,7 @@
       </select>
 
     {% elif cfg.type == 'multiselect' %}
-      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}" multiple{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}>
+      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}" multiple{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}{% if cfg.tom_select_options %} data-tom-select-options='{{ cfg.tom_select_options|tojson }}'{% endif %}>
         {% if not cfg.choices_url %}
           {% for v, lbl in cfg.choices %}
             <option value="{{ v }}" {% if val and v in val %}selected{% endif %}>
@@ -85,6 +85,7 @@
         fetch(url).then(r => r.json()).then(callback).catch(() => callback());
       };
     }
-    new TomSelect(el, settings);
+    const extraOpts = el.dataset.tomSelectOptions ? JSON.parse(el.dataset.tomSelectOptions) : {};
+    new TomSelect(el, { ...settings, ...extraOpts });
   });
 </script>
