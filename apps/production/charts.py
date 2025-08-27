@@ -15,6 +15,7 @@ class _StatusFilterMixin:
     def _status_filter_schema(self):
         def status_choices(user, query=""):
             qs = ProductionOrder.objects.all()
+            qs = self.filter_queryset(user, qs)
             if query:
                 qs = qs.filter(status__icontains=query)
             statuses = (
@@ -33,6 +34,8 @@ class _StatusFilterMixin:
                 "choices_url": reverse(
                     "block_filter_choices", args=[self.block_name, "status"]
                 ),
+                "model": ProductionOrder,
+                "field": "status",
                 "tom_select_options": {
                     "placeholder": "Search status...",
                     "plugins": ["remove_button"],
@@ -51,7 +54,7 @@ class ProductionOrdersByStatusChart(_StatusFilterMixin, DonutChartBlock):
         return self._status_filter_schema()
 
     def get_chart_data(self, user, filters):
-        qs = ProductionOrder.objects.all()
+        qs = self.filter_queryset(user, ProductionOrder.objects.all())
         statuses = filters.get("status")
         if statuses:
             qs = qs.filter(status__in=statuses)
@@ -82,7 +85,7 @@ class ProductionOrdersPerItemBarChart(_StatusFilterMixin, BarChartBlock):
         return self._status_filter_schema()
 
     def get_chart_data(self, user, filters):
-        qs = ProductionOrder.objects.all()
+        qs = self.filter_queryset(user, ProductionOrder.objects.all())
         statuses = filters.get("status")
         if statuses:
             qs = qs.filter(status__in=statuses)
@@ -113,7 +116,7 @@ class ProductionOrdersPerItemLineChart(_StatusFilterMixin, LineChartBlock):
         return self._status_filter_schema()
 
     def get_chart_data(self, user, filters):
-        qs = ProductionOrder.objects.all()
+        qs = self.filter_queryset(user, ProductionOrder.objects.all())
         statuses = filters.get("status")
         if statuses:
             qs = qs.filter(status__in=statuses)

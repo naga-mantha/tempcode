@@ -10,6 +10,14 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.permissions.checks import (
+    filter_viewable_queryset as filter_viewable_queryset_generic,
+    can_read_field as can_read_field_generic,
+)
+from apps.workflow.permissions import (
+    filter_viewable_queryset_state,
+    can_read_field_state,
+)
 from django.core.exceptions import PermissionDenied
 
 
@@ -68,6 +76,11 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
     def get_filter_config_queryset(self, user):
         return BlockFilterConfig.objects.filter(user=user, block=self.block)
 
+    def filter_queryset(self, user, queryset):
+        """Filter ``queryset`` to rows ``user`` may view."""
+        queryset = filter_viewable_queryset_generic(user, queryset)
+        return filter_viewable_queryset_state(user, queryset)
+
     def _select_filter_config(self, request, instance_id=None):
         user = request.user
         ns = f"{self.block_name}__{instance_id}__" if instance_id else f"{self.block_name}__"
@@ -94,7 +107,21 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         except TypeError:
             raw_schema = self.get_filter_schema(user)
         filter_schema = self._resolve_filter_schema(raw_schema, user)
-        base_values = active_filter_config.values if active_filter_config else {}
+        # Remove filters for fields the user cannot read
+        filtered_schema = {}
+        for key, cfg in filter_schema.items():
+            model = cfg.get("model")
+            field_name = cfg.get("field")
+            if model and field_name:
+                if not (
+                    can_read_field_generic(user, model, field_name)
+                    and can_read_field_state(user, model, field_name)
+                ):
+                    continue
+            filtered_schema[key] = cfg
+        filter_schema = filtered_schema
+        raw_base = active_filter_config.values if active_filter_config else {}
+        base_values = {k: v for k, v in raw_base.items() if k in filter_schema}
         ns_prefix = (
             f"{self.block_name}__{instance_id}__filters."
             if instance_id
