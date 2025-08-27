@@ -85,27 +85,45 @@
     els.forEach(el => {
       const tag = el.tagName.toLowerCase();
       if (tag === 'select') {
+        const ts = el.tomselect;
         const isMultiple = el.hasAttribute('multiple');
         const key = name.indexOf('filters.') === 0 ? name.slice('filters.'.length) : name;
         const labelMap = schemaLabels[key] || {};
         function ensureOption(val){
           const valStr = String(val);
-          let opt = Array.from(el.options).find(o => String(o.value) === valStr);
-          if (!opt) {
-            opt = document.createElement('option');
-            opt.value = valStr;
-            opt.textContent = labelMap[valStr] || valStr;
-            el.appendChild(opt);
+          const label = labelMap[valStr] || valStr;
+          if (ts) {
+            ts.addOption({value: valStr, label: label});
+          } else {
+            let opt = Array.from(el.options).find(o => String(o.value) === valStr);
+            if (!opt) {
+              opt = document.createElement('option');
+              opt.value = valStr;
+              opt.textContent = label;
+              el.appendChild(opt);
+            }
+            opt.selected = true;
           }
-          opt.selected = true;
         }
-        if (isMultiple && Array.isArray(value)) {
-          Array.from(el.options).forEach(o => o.selected = false);
-          value.forEach(v => ensureOption(v));
+        if (ts) {
+          ts.clear(true);
+          ts.clearOptions();
+          if (isMultiple && Array.isArray(value)) {
+            value.forEach(v => ensureOption(v));
+            ts.setValue(value, true);
+          } else if (value != null && value !== '') {
+            ensureOption(value);
+            ts.setValue(String(value), true);
+          }
         } else {
-          Array.from(el.options).forEach(o => o.selected = false);
-          if (value != null && value !== '') ensureOption(value);
-          else el.value = '';
+          if (isMultiple && Array.isArray(value)) {
+            Array.from(el.options).forEach(o => o.selected = false);
+            value.forEach(v => ensureOption(v));
+          } else {
+            Array.from(el.options).forEach(o => o.selected = false);
+            if (value != null && value !== '') ensureOption(value);
+            else el.value = '';
+          }
         }
       } else if (el.type === 'checkbox') {
         el.checked = Boolean(value);
@@ -126,8 +144,14 @@
   function clearFilterForm() {
     const form = document.getElementById('filter-form');
     form.reset();
-    form.querySelectorAll('select[multiple]').forEach(sel => {
-      Array.from(sel.options).forEach(o => o.selected = false);
+    form.querySelectorAll('select').forEach(sel => {
+      if (sel.tomselect) {
+        sel.tomselect.clear();
+      } else if (sel.multiple) {
+        Array.from(sel.options).forEach(o => o.selected = false);
+      } else {
+        sel.value = '';
+      }
     });
   }
 

@@ -10,22 +10,33 @@
     <label class="form-label">{{ cfg.label }}</label>
 
     {% if cfg.type == 'select' %}
-      <select class="form-select" name="{{ name_prefix|default:'filters.' }}{{ key }}">
+      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}"{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}>
         <option value="">-- Any --</option>
-        {% for v, lbl in cfg.choices %}
-          <option value="{{ v }}" {% if val|stringformat:"s" == v|stringformat:"s" %}selected{% endif %}>
-            {{ lbl }}
-          </option>
-        {% endfor %}
+        {% if not cfg.choices_url %}
+          {% for v, lbl in cfg.choices %}
+            <option value="{{ v }}" {% if val|stringformat:"s" == v|stringformat:"s" %}selected{% endif %}>
+              {{ lbl }}
+            </option>
+          {% endfor %}
+        {% elif val %}
+          {# for AJAX selects, include current value so Tom Select can display it #}
+          <option value="{{ val }}" selected>{{ val }}</option>
+        {% endif %}
       </select>
 
     {% elif cfg.type == 'multiselect' %}
-      <select class="form-select" name="{{ name_prefix|default:'filters.' }}{{ key }}" multiple>
-        {% for v, lbl in cfg.choices %}
-          <option value="{{ v }}" {% if val and v in val %}selected{% endif %}>
-            {{ lbl }}
-          </option>
-        {% endfor %}
+      <select class="form-select filter-field-select" name="{{ name_prefix|default:'filters.' }}{{ key }}" multiple{% if cfg.choices_url %} data-ajax-url="{{ cfg.choices_url }}"{% endif %}>
+        {% if not cfg.choices_url %}
+          {% for v, lbl in cfg.choices %}
+            <option value="{{ v }}" {% if val and v in val %}selected{% endif %}>
+              {{ lbl }}
+            </option>
+          {% endfor %}
+        {% elif val %}
+          {% for v in val %}
+            <option value="{{ v }}" selected>{{ v }}</option>
+          {% endfor %}
+        {% endif %}
       </select>
       <div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
 
@@ -53,3 +64,25 @@
   </div>
   {% endwith %}
 {% endfor %}
+
+<script>
+  document.querySelectorAll('.filter-field-select').forEach(function(el){
+    if (el.dataset.tomInitialized) return;
+    el.dataset.tomInitialized = '1';
+    const ajaxUrl = el.dataset.ajaxUrl;
+    const settings = {persist: false};
+    if (el.multiple) {
+      settings.plugins = ['remove_button'];
+    }
+    if (ajaxUrl) {
+      settings.valueField = 'value';
+      settings.labelField = 'label';
+      settings.searchField = 'label';
+      settings.load = function(query, callback){
+        const url = ajaxUrl + (query ? ('?q=' + encodeURIComponent(query)) : '');
+        fetch(url).then(r => r.json()).then(callback).catch(() => callback());
+      };
+    }
+    new TomSelect(el, settings);
+  });
+</script>
