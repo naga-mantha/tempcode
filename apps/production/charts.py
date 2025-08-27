@@ -1,5 +1,4 @@
 from apps.blocks.block_types.chart.chart_block import DonutChartBlock, BarChartBlock, LineChartBlock
-from django.urls import reverse
 
 class ProductionOrdersByStatusChart(DonutChartBlock):
     def __init__(self):
@@ -27,20 +26,20 @@ class SalesByMonthChart(BarChartBlock):
         )
 
     def get_filter_schema(self, user):
-        def order_choices(user, query=""):
-            return [("all", "All"), ("na", "North America"), ("eu", "Europe")]
-
-
-        # Fake region selector; not used in the static data
+        # Fixed region selector; options are static so we don't need a choices_url
         return {
             "region": {
                 "label": "Region",
                 "type": "select",
-                "choices": order_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "production_order"]),
-                # "handler": lambda qs, val: qs.filter(production_order=val) if val else qs,
+                "choices": [
+                    ("all", "All"),
+                    ("na", "North America"),
+                    ("eu", "Europe"),
+                ],
+                # Use Tom Select with fixed values and no option creation
                 "tom_select_options": {
                     "placeholder": "Search regions...",
+                    "create": False,
                 },
             },
         }
