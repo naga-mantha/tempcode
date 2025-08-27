@@ -2,7 +2,11 @@ from apps.production.blocks import (
     ProductionOrderTableBlock,
     ProductionOrderOperationTableBlock,
 )
-from apps.production.charts import ProductionOrdersByStatusChart, SalesByMonthChart, ActiveUsersOverTimeChart
+from apps.production.charts import (
+    ProductionOrdersByStatusChart,
+    ProductionOrdersPerItemBarChart,
+    ProductionOrdersPerItemLineChart,
+)
 
 
 def register(registry):
@@ -11,7 +15,7 @@ def register(registry):
     registry.register("production_order_table", ProductionOrderTableBlock())
     registry.register("production_order_operation_table", ProductionOrderOperationTableBlock())
     registry.register("prod_orders_by_status", ProductionOrdersByStatusChart())
-    registry.register("sales_by_month", SalesByMonthChart())
-    registry.register("active_users_over_time", ActiveUsersOverTimeChart())
+    registry.register("prod_orders_per_item_bar", ProductionOrdersPerItemBarChart())
+    registry.register("prod_orders_per_item_line", ProductionOrdersPerItemLineChart())
 
 

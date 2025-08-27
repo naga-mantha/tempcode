@@ -1,82 +1,136 @@
-from apps.blocks.block_types.chart.chart_block import DonutChartBlock, BarChartBlock, LineChartBlock
+from django.db.models import Count
+from django.urls import reverse
 
-class ProductionOrdersByStatusChart(DonutChartBlock):
-    def __init__(self):
-        super().__init__(
-            "prod_orders_by_status",
-            default_layout={}
-        )
+from apps.blocks.block_types.chart.chart_block import (
+    BarChartBlock,
+    DonutChartBlock,
+    LineChartBlock,
+)
+from apps.common.models import ProductionOrder
 
-    def get_filter_schema(self, request):
-        # No filters for now
-        return {}
 
-    def get_chart_data(self, user, filters):
-        # Hardcoded numbers
+class _StatusFilterMixin:
+    """Provide a reusable status filter schema for chart blocks."""
+
+    def _status_filter_schema(self):
+        def status_choices(user, query=""):
+            qs = ProductionOrder.objects.all()
+            if query:
+                qs = qs.filter(status__icontains=query)
+            statuses = (
+                qs.order_by("status")
+                .values_list("status", flat=True)
+                .distinct()
+            )
+            return [(s, s) for s in statuses if s]
+
         return {
-            "labels": ["Open", "In Progress", "Closed"],
-            "values": [12, 7, 5],
-        }
-
-class SalesByMonthChart(BarChartBlock):
-    def __init__(self):
-        super().__init__(
-            block_name="sales_by_month",
-            default_layout={"title": "Sales by Month", "margin": {"t": 40}}
-        )
-
-    def get_filter_schema(self, user):
-        # Fixed region selector; options are static so we don't need a choices_url
-        return {
-            "region": {
-                "label": "Region",
-                "type": "select",
-                "choices": [
-                    ("all", "All"),
-                    ("na", "North America"),
-                    ("eu", "Europe"),
-                ],
-                # Use Tom Select with fixed values and no option creation
+            "status": {
+                "label": "Status",
+                "type": "multiselect",
+                "multiple": True,
+                "choices": status_choices,
+                "choices_url": reverse(
+                    "block_filter_choices", args=[self.block_name, "status"]
+                ),
                 "tom_select_options": {
-                    "placeholder": "Search regions...",
-                    "create": False,
+                    "placeholder": "Search status...",
+                    "plugins": ["remove_button"],
                 },
-            },
-        }
-
-    def get_chart_data(self, user, filters):
-        # Ignore filters for now; return static fake data
-        return {
-            "x": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-            "y": [120, 90, 150, 80, 170, 130],
-        }
-
-
-class ActiveUsersOverTimeChart(LineChartBlock):
-    def __init__(self):
-        super().__init__(
-            block_name="active_users_over_time",
-            default_layout={
-                "title": "Active Users Over Time",
-                "xaxis": {"title": "Date"},
-                "yaxis": {"title": "Active Users"},
-                "margin": {"t": 40},
-            },
-        )
-
-    def get_filter_schema(self, user):
-        # Optional filter; not used by static data
-        return {
-            "timeframe": {
-                "type": "select",
-                "label": "Timeframe",
-                "choices": [("30d", "Last 30 days"), ("90d", "Last 90 days")],
             }
         }
 
+
+class ProductionOrdersByStatusChart(_StatusFilterMixin, DonutChartBlock):
+    """Donut chart showing counts of production orders by status."""
+
+    def __init__(self):
+        super().__init__("prod_orders_by_status")
+
+    def get_filter_schema(self, request):
+        return self._status_filter_schema()
+
     def get_chart_data(self, user, filters):
-        # Ignore filters for now; return static data
+        qs = ProductionOrder.objects.all()
+        statuses = filters.get("status")
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+        data = (
+            qs.values("status")
+            .order_by("status")
+            .annotate(count=Count("id"))
+        )
         return {
-            "x": ["2025-07-01", "2025-07-08", "2025-07-15", "2025-07-22", "2025-07-29", "2025-08-05"],
-            "y": [110, 125, 120, 140, 135, 150],
+            "labels": [row["status"] for row in data],
+            "values": [row["count"] for row in data],
         }
+
+
+class ProductionOrdersPerItemBarChart(_StatusFilterMixin, BarChartBlock):
+    """Bar chart of production order counts per item."""
+
+    def __init__(self):
+        super().__init__(
+            "prod_orders_per_item_bar",
+            default_layout={
+                "xaxis": {"title": "Item"},
+                "yaxis": {"title": "Production Orders"},
+            },
+        )
+
+    def get_filter_schema(self, request):
+        return self._status_filter_schema()
+
+    def get_chart_data(self, user, filters):
+        qs = ProductionOrder.objects.all()
+        statuses = filters.get("status")
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+        data = (
+            qs.values("item__code")
+            .order_by("item__code")
+            .annotate(count=Count("id"))
+        )
+        return {
+            "x": [row["item__code"] for row in data],
+            "y": [row["count"] for row in data],
+        }
+
+
+class ProductionOrdersPerItemLineChart(_StatusFilterMixin, LineChartBlock):
+    """Line chart of production order counts per item."""
+
+    def __init__(self):
+        super().__init__(
+            "prod_orders_per_item_line",
+            default_layout={
+                "xaxis": {"title": "Item"},
+                "yaxis": {"title": "Production Orders"},
+            },
+        )
+
+    def get_filter_schema(self, request):
+        return self._status_filter_schema()
+
+    def get_chart_data(self, user, filters):
+        qs = ProductionOrder.objects.all()
+        statuses = filters.get("status")
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+        data = (
+            qs.values("item__code")
+            .order_by("item__code")
+            .annotate(count=Count("id"))
+        )
+        return {
+            "x": [row["item__code"] for row in data],
+            "y": [row["count"] for row in data],
+        }
+
+
+__all__ = [
+    "ProductionOrdersByStatusChart",
+    "ProductionOrdersPerItemBarChart",
+    "ProductionOrdersPerItemLineChart",
+]
+
