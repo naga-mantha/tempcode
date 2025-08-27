@@ -28,7 +28,7 @@ class SalesByMonthChart(BarChartBlock):
 
     def get_filter_schema(self, user):
         def order_choices(user, query=""):
-            return [("all", "All"), ("na", "North America"), ("eu", "Europe")],
+            return [("all", "All"), ("na", "North America"), ("eu", "Europe")]
 
 
         # Fake region selector; not used in the static data
