@@ -2,6 +2,8 @@ from django.contrib.messages import get_messages
 from django.db import IntegrityError
 from django.test import TestCase, RequestFactory
 from django.urls import reverse
+from django.db.models import Count
+from unittest.mock import patch
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.base import BaseBlock
@@ -9,6 +11,7 @@ from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.block_types.chart.chart_block import DonutChartBlock
+from apps.common.models import ProductionOrder, Item
 
 
 class BlockFilterConfigTests(TestCase):
@@ -169,3 +172,64 @@ class ChartBlockFilterResolutionTests(TestCase):
         # The block should detect the instance namespace and capture the filter value
         self.block_impl.get_data(request)
         self.assertEqual(self.block_impl.captured_filters, {"status": "open"})
+
+
+class ChartBlockPermissionTests(TestCase):
+    def setUp(self):
+        self.user = CustomUser.objects.create(username="perm-user")
+        self.factory = RequestFactory()
+
+    def test_unreadable_field_removed_from_filter_schema(self):
+        class DummyChart(DonutChartBlock):
+            def __init__(self):
+                super().__init__("dummy_perm_chart")
+
+            def get_filter_schema(self, request):
+                return {"status": {"label": "Status", "model": ProductionOrder, "field": "status"}}
+
+            def get_chart_data(self, user, filters):
+                return {"labels": [], "values": []}
+
+        chart = DummyChart()
+        request = self.factory.get("/")
+        request.user = self.user
+        with patch("apps.blocks.block_types.chart.chart_block.can_read_field_generic", return_value=False), patch(
+            "apps.blocks.block_types.chart.chart_block.can_read_field_state", return_value=False
+        ):
+            schema, _vals = chart._resolve_filters(request, None)
+        self.assertNotIn("status", schema)
+
+    def test_filter_queryset_excludes_unviewable_rows(self):
+        item = Item.objects.create(code="ITM1")
+        ProductionOrder.objects.create(production_order="PO1", status="open", item=item)
+        ProductionOrder.objects.create(production_order="PO2", status="closed", item=item)
+
+        class DummyChart(DonutChartBlock):
+            def __init__(self):
+                super().__init__("dummy_qs_chart")
+
+            def get_filter_schema(self, request):
+                return {}
+
+            def get_chart_data(self, user, filters):
+                qs = ProductionOrder.objects.all()
+                qs = self.filter_queryset(user, qs)
+                data = qs.values("status").order_by("status").annotate(count=Count("id"))
+                return {
+                    "labels": [row["status"] for row in data],
+                    "values": [row["count"] for row in data],
+                }
+
+        chart = DummyChart()
+        with patch(
+            "apps.blocks.block_types.chart.chart_block.filter_viewable_queryset_generic",
+            side_effect=lambda user, qs: qs.filter(status="open"),
+        ) as mock_generic, patch(
+            "apps.blocks.block_types.chart.chart_block.filter_viewable_queryset_state",
+            side_effect=lambda user, qs: qs,
+        ) as mock_state:
+            data = chart.get_chart_data(self.user, {})
+            mock_generic.assert_called_once()
+            mock_state.assert_called_once()
+        self.assertEqual(data["labels"], ["open"])
+        self.assertEqual(data["values"], [1])
