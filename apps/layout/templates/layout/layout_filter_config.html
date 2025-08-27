@@ -190,7 +190,7 @@
   });
 
   document.getElementById('filter-form').addEventListener('submit', function (e) {
-    const name = (nameInput?.value || '').trim();
+    const name = nameInput && nameInput.value ? nameInput.value.trim() : '';
     if (!name) {
       e.preventDefault();
       alert('Please enter a name for this filter.');
