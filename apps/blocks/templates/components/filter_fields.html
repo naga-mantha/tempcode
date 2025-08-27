@@ -36,6 +36,8 @@
           {% for v in val %}
             <option value="{{ v }}" selected>{{ v }}</option>
           {% endfor %}
+        {% else %}
+          <option value=""></option>
         {% endif %}
       </select>
       <div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
