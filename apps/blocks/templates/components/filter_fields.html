@@ -86,6 +86,7 @@
       };
     }
     const extraOpts = el.dataset.tomSelectOptions ? JSON.parse(el.dataset.tomSelectOptions) : {};
-    new TomSelect(el, { ...settings, ...extraOpts });
+    const ts = new TomSelect(el, { ...settings, ...extraOpts });
+    ts.on('item_add', () => ts.setTextboxValue(''));
   });
 </script>
