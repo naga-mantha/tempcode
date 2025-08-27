@@ -68,27 +68,44 @@
 {% endfor %}
 
 <script>
-  document.querySelectorAll('.filter-field-select').forEach(function(el){
-    if (el.dataset.tomInitialized) return;
-    el.dataset.tomInitialized = '1';
-    const ajaxUrl = el.dataset.ajaxUrl;
-    const settings = {persist: false, maxOptions: 100};
-    if (el.multiple) {
-      settings.plugins = ['remove_button'];
+  // Initialize Tom Select only on actual <select> elements and guard parsing.
+  document.querySelectorAll('select.filter-field-select').forEach(function(el){
+    try {
+      if (!el || el.tagName !== 'SELECT') return;
+      if (el.dataset.tomInitialized) return;
+      el.dataset.tomInitialized = '1';
+
+      const ajaxUrl = el.dataset.ajaxUrl;
+      const settings = { persist: false, maxOptions: 100 };
+
+      if (el.multiple) {
+        settings.plugins = ['remove_button'];
+      }
+
+      if (ajaxUrl) {
+        settings.valueField = 'value';
+        settings.labelField = 'label';
+        settings.searchField = 'label';
+        settings.preload = true;
+        settings.shouldLoad = () => true;
+        settings.load = function(query, callback){
+          const url = ajaxUrl + (query ? ('?q=' + encodeURIComponent(query)) : '');
+          fetch(url).then(r => r.json()).then(callback).catch(() => callback());
+        };
+      }
+
+      let extraOpts = {};
+      if (el.dataset.tomSelectOptions) {
+        try { extraOpts = JSON.parse(el.dataset.tomSelectOptions) || {}; } catch (e) { extraOpts = {}; }
+      }
+
+      const ts = new TomSelect(el, { ...settings, ...extraOpts });
+      if (ts && typeof ts.setTextboxValue === 'function') {
+        ts.on('item_add', () => ts.setTextboxValue(''));
+      }
+    } catch (e) {
+      // Fail-safe: do not block page if a single field fails to initialize
+      // console.warn('TomSelect init failed', e);
     }
-    if (ajaxUrl) {
-      settings.valueField = 'value';
-      settings.labelField = 'label';
-      settings.searchField = 'label';
-      settings.preload = true;
-      settings.shouldLoad = () => true;
-      settings.load = function(query, callback){
-        const url = ajaxUrl + (query ? ('?q=' + encodeURIComponent(query)) : '');
-        fetch(url).then(r => r.json()).then(callback).catch(() => callback());
-      };
-    }
-    const extraOpts = el.dataset.tomSelectOptions ? JSON.parse(el.dataset.tomSelectOptions) : {};
-    const ts = new TomSelect(el, { ...settings, ...extraOpts });
-    ts.on('item_add', () => ts.setTextboxValue(''));
   });
 </script>
