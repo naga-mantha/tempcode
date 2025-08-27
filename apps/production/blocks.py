@@ -1,5 +1,5 @@
 from apps.blocks.block_types.table.table_block import TableBlock
-from apps.common.models import ProductionOrder, ProductionOrderOperation
+from apps.common.models import ProductionOrder, ProductionOrderOperation, Item
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
@@ -66,6 +66,15 @@ class ProductionOrderTableBlock(TableBlock):
                 qs = qs.filter(production_order__icontains=query)
             return [(o.production_order, o.production_order) for o in qs.order_by("production_order")[:20]]
 
+        def item_choices(user, query=""):
+            qs = Item.objects.all()
+            if query:
+                qs = qs.filter(Q(code__icontains=query) | Q(description__icontains=query))
+            return [
+                (i.code, f"{i.code} - {i.description}".strip())
+                for i in qs.order_by("code")[:20]
+            ]
+
         return {
             "production_order": {
                 "label": "Order #",
@@ -76,8 +85,11 @@ class ProductionOrderTableBlock(TableBlock):
             },
             "item": {
                 "label": "Item",
-                "type": "text",
-                "handler": lambda qs, val: qs.filter(Q(item__code__icontains=val) | Q(item__description__icontains=val)),
+                "type": "multiselect",
+                "multiple": True,
+                "choices": item_choices,
+                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "handler": lambda qs, val: qs.filter(item__code__in=val) if val else qs,
             },
         }
 

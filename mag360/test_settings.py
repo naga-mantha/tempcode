@@ -5,7 +5,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "test"
 ALLOWED_HOSTS = []
 
-INSTALLED_APPS = []
+INSTALLED_APPS = [
+    "apps.common",
+    "apps.blocks",
+    "apps.production",
+    "apps.workflow",
+    "apps.accounts",
+    "apps.permissions",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+]
 
 DATABASES = {
     "default": {
@@ -15,7 +24,8 @@ DATABASES = {
 }
 
 MIDDLEWARE = []
-ROOT_URLCONF = "mag360.test_urls"
+ROOT_URLCONF = "apps.blocks.urls"
 TEMPLATES = []
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+AUTH_USER_MODEL = "accounts.CustomUser"
