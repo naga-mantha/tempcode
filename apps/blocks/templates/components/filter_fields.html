@@ -70,7 +70,7 @@
     if (el.dataset.tomInitialized) return;
     el.dataset.tomInitialized = '1';
     const ajaxUrl = el.dataset.ajaxUrl;
-    const settings = {persist: false};
+    const settings = {persist: false, maxOptions: 100};
     if (el.multiple) {
       settings.plugins = ['remove_button'];
     }
@@ -78,6 +78,8 @@
       settings.valueField = 'value';
       settings.labelField = 'label';
       settings.searchField = 'label';
+      settings.preload = true;
+      settings.shouldLoad = () => true;
       settings.load = function(query, callback){
         const url = ajaxUrl + (query ? ('?q=' + encodeURIComponent(query)) : '');
         fetch(url).then(r => r.json()).then(callback).catch(() => callback());
