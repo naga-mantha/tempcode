@@ -141,10 +141,51 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         }
 
     def _get_context(self, request, instance_id):
-        cache_key = (id(request), instance_id)
+        """Retrieve (and cache) rendering context for this block instance.
+
+        If ``instance_id`` is not explicitly provided (as is the case when a
+        chart block is rendered on its own page), we attempt to infer a
+        previously-used instance namespace from the query string. This mirrors
+        the behaviour of :class:`TableBlock` so that filter selections persist
+        across form submissions. Without this, the randomly generated
+        ``instance_id`` used for form field names would change on each request
+        and submitted filters would never be detected.
+        """
+
+        effective_instance_id = instance_id or self._detect_instance_id_from_query(request)
+        cache_key = (id(request), effective_instance_id)
         if cache_key not in self._context_cache:
-            self._context_cache[cache_key] = self._build_context(request, instance_id)
+            self._context_cache[cache_key] = self._build_context(request, effective_instance_id)
         return self._context_cache[cache_key]
+
+    def _detect_instance_id_from_query(self, request):
+        """Best-effort extraction of ``instance_id`` from namespaced GET params.
+
+        Looks for keys like::
+
+            <block>__<instance>__filter_config_id
+            <block>__<instance>__filters.<name>
+
+        Returns the first detected instance id, or ``None`` if not found. This
+        allows filter submissions to round-trip correctly for standalone chart
+        pages where the instance namespace is generated server-side.
+        """
+
+        try:
+            keys = request.GET.keys()
+        except Exception:
+            return None
+        prefix = f"{self.block_name}__"
+        for key in keys:
+            if not key.startswith(prefix):
+                continue
+            rest = key[len(prefix):]
+            if "__" not in rest:
+                continue
+            candidate, tail = rest.split("__", 1)
+            if tail.startswith("filter_config_id") or tail.startswith("filters."):
+                return candidate
+        return None
 
     def get_config(self, request, instance_id=None):
         context = dict(self._get_context(request, instance_id))
