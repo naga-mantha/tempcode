@@ -3,6 +3,7 @@ from apps.common.models import ProductionOrder, ProductionOrderOperation, Item
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
+from django.urls import reverse
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
@@ -58,8 +59,6 @@ class ProductionOrderTableBlock(TableBlock):
         }
 
     def get_filter_schema(self, request):
-        from django.urls import reverse
-
         def order_choices(user, query=""):
             qs = ProductionOrder.objects.all()
             if query:
@@ -82,6 +81,9 @@ class ProductionOrderTableBlock(TableBlock):
                 "choices": order_choices,
                 "choices_url": reverse("block_filter_choices", args=[self.block_name, "production_order"]),
                 "handler": lambda qs, val: qs.filter(production_order=val) if val else qs,
+                "tom_select_options": {
+                    "placeholder": "Search production orders...",
+                },
             },
             "item": {
                 "label": "Item",
@@ -92,6 +94,7 @@ class ProductionOrderTableBlock(TableBlock):
                 "tom_select_options": {
                     "placeholder": "Search items...",
                     "plugins": ["remove_button"],
+                    "maxItems": 3
                 },
                 "handler": lambda qs, val: qs.filter(item__code__in=val) if val else qs,
             },
