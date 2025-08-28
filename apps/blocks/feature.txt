@@ -1,0 +1,4 @@
+We are working on the blocks app.
+
+I want the TableBlock to be downloadable to Excel. We are already using the Tabulator JS to populate the tables. I need you to integrate "download to xlsx" feature from Tabulator into the table block?
+https://tabulator.info/docs/6.3/download#xlsx

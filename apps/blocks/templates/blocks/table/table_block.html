@@ -1,6 +1,8 @@
 {% load static %}
 <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+{# SheetJS for XLSX download support in Tabulator #}
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
@@ -15,7 +17,7 @@
     <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>
     <a class="btn btn-link p-0 ms-2" href="{% url 'render_table_block' block_name %}">Table Link</a>
   </div>
-<div>
+  <div>
     <label class="me-2">Filter:</label>
     <select id="filter-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto">
       <option value="">-- None --</option>
@@ -26,6 +28,9 @@
       {% endfor %}
     </select>
     <a class="btn btn-link p-0 ms-2" href="{% url 'table_filter_config' block_name %}">Manage Filters</a>
+    <button id="download-xlsx-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-3" type="button" title="Download as Excel">
+      Download Excel
+    </button>
   </div>
 
 </div>
@@ -137,6 +142,22 @@
       if (columnId) url.searchParams.set(columnKey, columnId); else url.searchParams.delete(columnKey);
       if (this.value) url.searchParams.set(filterKey, this.value); else url.searchParams.delete(filterKey);
       window.location.href = url.toString();
+    });
+
+    // 4) Download to XLSX using Tabulator + SheetJS
+    const dlBtn = document.getElementById("download-xlsx-{{ block_name }}-{{ instance_id }}");
+    dlBtn?.addEventListener("click", function(){
+      try {
+        // default: download active (sorted/filtered) rows and visible columns
+        const filename = ("{{ block_name }}" || "table") + ".xlsx";
+        table.download("xlsx", filename, {
+          sheetName: "{{ block_name }}" || "Data",
+          // rowRange: "active", // implicit default; uncomment to be explicit
+        });
+      } catch (e) {
+        console.error("XLSX download failed", e);
+        alert("Unable to generate Excel file. Please try again.");
+      }
     });
   });
 </script>

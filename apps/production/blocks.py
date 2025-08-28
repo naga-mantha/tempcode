@@ -55,7 +55,8 @@ class ProductionOrderTableBlock(TableBlock):
         return {
             "layout": "fitColumns",
             "pagination": "local",
-            "paginationSize": 20,
+            "paginationSize": 3,
+            "paginationSizeSelector": [3, 6, 8, 10],
         }
 
     def get_filter_schema(self, request):
