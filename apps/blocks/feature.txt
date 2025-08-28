@@ -1,7 +1,4 @@
-Great. The "Download to Excel"/"Download to PDF" feature is working.
-Another thing, the tabulator JS/CSS is integrated into vendor_css and vendor_js. No need to include them separately in header. I removed it from header
+Back to "Download to Excel" feature
 
-Now I want filters on every column header of every table block. Here is the tutorials
-https://tabulator.info/docs/6.3/filter#header-filters
-https://tabulator.info/examples/6.3#filter-header
-
+I want to have a set of defaults for get_tabulator_options in apps/blocks/block_types/table/table_block.py.
+Then in the final app (Ex: production - apps/production/blocks.py), I want to override those defaults if needed.

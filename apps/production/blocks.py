@@ -52,10 +52,8 @@ class ProductionOrderTableBlock(TableBlock):
 
         return defs
 
-    def get_tabulator_options(self, user):
+    def get_tabulator_options_overrides(self, user):
         return {
-            "layout": "fitColumns",
-            "pagination": "local",
             "paginationSize": 3,
             "paginationSizeSelector": [3, 6, 8, 10],
         }
@@ -165,12 +163,7 @@ class ProductionOrderOperationTableBlock(TableBlock):
 
         return defs
 
-    def get_tabulator_options(self, user):
-        return {
-            "layout": "fitColumns",
-            "pagination": "local",
-            "paginationSize": 20,
-        }
+    # Uses base tabulator defaults; no overrides needed.
 
     def get_filter_schema(self, request):
         return {

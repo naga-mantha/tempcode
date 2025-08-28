@@ -73,8 +73,39 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             "You must override get_column_defs(user, column_config)"
         )
 
-    def get_tabulator_options(self, user):
+    def get_tabulator_default_options(self, user):
+        """Base defaults for Tabulator options across all TableBlocks.
+
+        Subclasses should generally not override this; instead, override
+        :meth:`get_tabulator_options_overrides` to supply per-app/per-block
+        changes that are merged on top of these defaults.
+        """
+        return {
+            "layout": "fitColumns",
+            "pagination": "local",
+            "paginationSize": 20,
+            "paginationSizeSelector": [10, 20, 50, 100],
+        }
+
+    def get_tabulator_options_overrides(self, user):
+        """Override point for final apps to tweak Tabulator options.
+
+        Return a dict of options that will be shallow-merged on top of
+        :meth:`get_tabulator_default_options`.
+        """
         return {}
+
+    def get_tabulator_options(self, user):
+        """Resolved Tabulator options = defaults + overrides.
+
+        If a subclass overrides this method directly, it takes full control of
+        the options. Prefer overriding :meth:`get_tabulator_options_overrides`
+        instead to preserve base defaults automatically.
+        """
+        defaults = self.get_tabulator_default_options(user) or {}
+        overrides = self.get_tabulator_options_overrides(user) or {}
+        merged = {**defaults, **overrides}
+        return merged
 
     def get_xlsx_download_options(self, request, instance_id=None):
         """Return per-block XLSX download configuration.
@@ -410,4 +441,3 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             if editable_flags:
                 row["__editable"] = editable_flags
         return json.dumps(data)
-
