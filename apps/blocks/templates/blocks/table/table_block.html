@@ -1,6 +1,4 @@
 {% load static %}
-<link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
-<script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
 {# SheetJS for XLSX download support in Tabulator #}
 {# Use xlsx-js-style fork to enable cell styling support #}
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
@@ -80,6 +78,11 @@
           const f = cell.getColumn().getField();
           return data && data.__editable && data.__editable[f] === true;
         };
+      }
+      // Add header filter to every column
+      if (!col.headerFilter) {
+        col.headerFilter = "input";
+        col.headerFilterLiveFilter = true;
       }
       return col;
     });

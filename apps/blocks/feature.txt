@@ -1,2 +1,7 @@
-Great. The "Download to Excel" feature is working. How can the production app control the Excel download settings?
-I would like to customize the file name, and maybe colors/styles per block
+Great. The "Download to Excel"/"Download to PDF" feature is working.
+Another thing, the tabulator JS/CSS is integrated into vendor_css and vendor_js. No need to include them separately in header. I removed it from header
+
+Now I want filters on every column header of every table block. Here is the tutorials
+https://tabulator.info/docs/6.3/filter#header-filters
+https://tabulator.info/examples/6.3#filter-header
+
