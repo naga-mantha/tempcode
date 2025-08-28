@@ -107,44 +107,64 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         merged = {**defaults, **overrides}
         return merged
 
-    def get_xlsx_download_options(self, request, instance_id=None):
-        """Return per-block XLSX download configuration.
-
-        Production blocks can override this to customize filename, sheet name,
-        and simple header styling.
-
-        Returns a plain dict that will be JSON-serialized for use in the
-        template's client-side Tabulator download call. Example return value:
-        {
-            "filename": "my-report.xlsx",
-            "sheetName": "Report",
-            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
-        }
-        """
+    def get_xlsx_download_default_options(self, request, instance_id=None):
+        """Base defaults for XLSX download across all TableBlocks."""
         return {
             "filename": f"{self.block_name}.xlsx",
             "sheetName": f"{self.block_name}",
-            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
+            "header": {"fillColor": "#004085", "fontColor": "#FFFFFF", "bold": True},
+            # Intentionally omit default "options" to avoid complex deep merges
         }
 
-    def get_pdf_download_options(self, request, instance_id=None):
-        """Return per-block PDF download configuration for Tabulator.
+    def get_xlsx_download_options_overrides(self, request, instance_id=None):
+        """Override point for final apps to tweak XLSX download options."""
+        return {}
 
-        Customize filename, orientation, title, and header styling. You can also
-        pass through raw Tabulator PDF options under `options` to override
-        properties like `jsPDF` and `autoTable` if needed.
+    def get_xlsx_download_options(self, request, instance_id=None):
+        """Resolved XLSX options = defaults + overrides (with shallow nested merge).
+
+        Prefer overriding :meth:`get_xlsx_download_options_overrides` to keep
+        base defaults. If you override this method, you take full control.
         """
+        defaults = self.get_xlsx_download_default_options(request, instance_id) or {}
+        overrides = self.get_xlsx_download_options_overrides(request, instance_id) or {}
+        merged = {**defaults, **overrides}
+        # Merge nested common dicts if present
+        for key in ("options", "header"):
+            if isinstance(defaults.get(key), dict) or isinstance(overrides.get(key), dict):
+                base_sub = defaults.get(key) or {}
+                over_sub = overrides.get(key) or {}
+                merged[key] = {**base_sub, **over_sub}
+        return merged
+
+    def get_pdf_download_default_options(self, request, instance_id=None):
+        """Base defaults for PDF download across all TableBlocks."""
         return {
             "filename": f"{self.block_name}.pdf",
             "orientation": "portrait",  # or "landscape"
             "title": getattr(self.block, "name", self.block_name),
             # Simple header styling mapped to autoTable headStyles
-            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
-            # extra options merged into Tabulator's pdf options
+            "header": {"fillColor": "#003366", "fontColor": "#FFFFFF", "bold": True},
             "options": {
                 "jsPDF": {"unit": "pt", "format": "a4", "compress": True},
-            },
+            }
         }
+
+    def get_pdf_download_options_overrides(self, request, instance_id=None):
+        """Override point for final apps to tweak PDF download options."""
+        return {}
+
+    def get_pdf_download_options(self, request, instance_id=None):
+        """Resolved PDF options = defaults + overrides (with shallow nested merge)."""
+        defaults = self.get_pdf_download_default_options(request, instance_id) or {}
+        overrides = self.get_pdf_download_options_overrides(request, instance_id) or {}
+        merged = {**defaults, **overrides}
+        for key in ("options", "header"):
+            if isinstance(defaults.get(key), dict) or isinstance(overrides.get(key), dict):
+                base_sub = defaults.get(key) or {}
+                over_sub = overrides.get(key) or {}
+                merged[key] = {**base_sub, **over_sub}
+        return merged
 
     def get_column_config_queryset(self, user):
         return BlockColumnConfig.objects.filter(user=user, block=self.block)

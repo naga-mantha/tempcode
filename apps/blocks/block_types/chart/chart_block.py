@@ -232,11 +232,22 @@ class DonutChartBlock(ChartBlock, ABC):
     def get_chart_data(self, user, filters):
         """Return mapping with ``labels`` and ``values`` lists."""
 
+    def get_pie_default_trace(self, user):
+        """Base defaults for donut/pie trace options."""
+        return {"hole": 0.4}
+
+    def get_pie_trace_overrides(self, user):
+        """Override point for apps to tweak pie trace options."""
+        return {}
+
     def get_figure(self, user, filters):
         data = self.get_chart_data(user, filters)
         labels = data.get("labels", [])
         values = data.get("values", [])
-        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.4)])
+        defaults = self.get_pie_default_trace(user) or {}
+        overrides = self.get_pie_trace_overrides(user) or {}
+        trace_kwargs = {**defaults, **overrides}
+        fig = go.Figure(data=[go.Pie(labels=labels, values=values, **trace_kwargs)])
         return fig
 
 
@@ -247,11 +258,22 @@ class BarChartBlock(ChartBlock, ABC):
     def get_chart_data(self, user, filters):
         """Return mapping with ``x`` and ``y`` data lists."""
 
+    def get_bar_default_trace(self, user):
+        """Base defaults for bar trace options."""
+        return {"orientation": "v"}
+
+    def get_bar_trace_overrides(self, user):
+        """Override point for apps to tweak bar trace options."""
+        return {}
+
     def get_figure(self, user, filters):
         data = self.get_chart_data(user, filters)
         x = data.get("x", [])
         y = data.get("y", [])
-        fig = go.Figure(data=[go.Bar(x=x, y=y)])
+        defaults = self.get_bar_default_trace(user) or {}
+        overrides = self.get_bar_trace_overrides(user) or {}
+        trace_kwargs = {**defaults, **overrides}
+        fig = go.Figure(data=[go.Bar(x=x, y=y, **trace_kwargs)])
         return fig
 
 
@@ -262,11 +284,22 @@ class LineChartBlock(ChartBlock, ABC):
     def get_chart_data(self, user, filters):
         """Return mapping with ``x`` and ``y`` data lists."""
 
+    def get_line_default_trace(self, user):
+        """Base defaults for line trace options."""
+        return {"mode": "lines"}
+
+    def get_line_trace_overrides(self, user):
+        """Override point for apps to tweak line trace options."""
+        return {}
+
     def get_figure(self, user, filters):
         data = self.get_chart_data(user, filters)
         x = data.get("x", [])
         y = data.get("y", [])
-        fig = go.Figure(data=[go.Scatter(x=x, y=y, mode="lines")])
+        defaults = self.get_line_default_trace(user) or {}
+        overrides = self.get_line_trace_overrides(user) or {}
+        trace_kwargs = {**defaults, **overrides}
+        fig = go.Figure(data=[go.Scatter(x=x, y=y, **trace_kwargs)])
         return fig
 
 

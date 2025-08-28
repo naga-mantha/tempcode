@@ -81,12 +81,8 @@ class ProductionOrdersPerItemBarChart(_StatusFilterMixin, BarChartBlock):
             },
         )
 
-    def get_figure(self, user, filters):
-        data = self.get_chart_data(user, filters)
-        fig = go.Figure(data=[
-            go.Bar(x=data["x"], y=data["y"], marker_color="#ff9900")
-        ])
-        return fig
+    def get_bar_trace_overrides(self, user):
+        return {"marker_color": "#ff9900"}
 
     def get_filter_schema(self, request):
         return self._status_filter_schema()
