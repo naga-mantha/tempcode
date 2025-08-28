@@ -2,7 +2,11 @@
 <link href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
 {# SheetJS for XLSX download support in Tabulator #}
-<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{# Use xlsx-js-style fork to enable cell styling support #}
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
+{# jsPDF + AutoTable for PDF download support in Tabulator #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
@@ -30,6 +34,9 @@
     <a class="btn btn-link p-0 ms-2" href="{% url 'table_filter_config' block_name %}">Manage Filters</a>
     <button id="download-xlsx-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-3" type="button" title="Download as Excel">
       Download Excel
+    </button>
+    <button id="download-pdf-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-2" type="button" title="Download as PDF">
+      Download PDF
     </button>
   </div>
 
@@ -83,6 +90,13 @@
       columns:columns,
       ...{{ tabulator_options|safe }},  // ensure trailing comma
     });
+
+    // Ensure Tabulator sees jsPDF global when using the UMD build
+    try {
+      if (window.jspdf && window.jspdf.jsPDF && !window.jsPDF) {
+        window.jsPDF = window.jspdf.jsPDF;
+      }
+    } catch (e) {}
 
     // 3) Inline editing: send changes to server
     table.on("cellEdited", function(cell){
@@ -144,19 +158,120 @@
       window.location.href = url.toString();
     });
 
-    // 4) Download to XLSX using Tabulator + SheetJS
+    // 4) Download to XLSX using Tabulator + SheetJS, configured per block
     const dlBtn = document.getElementById("download-xlsx-{{ block_name }}-{{ instance_id }}");
     dlBtn?.addEventListener("click", function(){
       try {
-        // default: download active (sorted/filtered) rows and visible columns
-        const filename = ("{{ block_name }}" || "table") + ".xlsx";
-        table.download("xlsx", filename, {
-          sheetName: "{{ block_name }}" || "Data",
-          // rowRange: "active", // implicit default; uncomment to be explicit
-        });
+        const xlsxCfg = {{ xlsx_download|default:"{}"|safe }} || {};
+        const filename = (xlsxCfg.filename && String(xlsxCfg.filename).trim()) || ("{{ block_name }}" + ".xlsx");
+        const sheetName = (xlsxCfg.sheetName && String(xlsxCfg.sheetName).trim()) || ("{{ block_name }}" || "Data");
+
+        // optional header styling via SheetJS (best-effort; ignored if not supported)
+        let documentProcessing;
+        if (xlsxCfg.header && typeof XLSX !== 'undefined') {
+          const headerCfg = xlsxCfg.header || {};
+          const toARGB = (hex) => {
+            const clean = String(hex || '').trim().replace('#','').toUpperCase();
+            if (!clean) return '';
+            return (clean.length === 6 ? ('FF' + clean) : clean);
+          };
+          const fillHex = toARGB(headerCfg.fillColor);
+          const fontHex = toARGB(headerCfg.fontColor);
+          const makeStyle = () => {
+            const s = {};
+            if (fillHex) s.fill = { patternType: "solid", fgColor: { rgb: fillHex } };
+            if (fontHex || headerCfg.bold) s.font = {};
+            if (fontHex) s.font.color = { rgb: fontHex };
+            if (headerCfg.bold) s.font.bold = true;
+            return s;
+          };
+          documentProcessing = function(workbook){
+            try {
+              const wsName = sheetName || workbook.SheetNames?.[0];
+              const ws = workbook.Sheets?.[wsName];
+              if (!ws) return workbook;
+              const cols = table.getColumns(true);
+              const style = makeStyle();
+              for (let i = 0; i < cols.length; i++){
+                const addr = XLSX.utils.encode_cell({ c: i, r: 0 });
+                const cell = ws[addr];
+                if (cell) {
+                  cell.s = Object.assign({}, cell.s || {}, style);
+                }
+              }
+            } catch (e) {
+              console.warn('XLSX header styling skipped:', e);
+            }
+            return workbook;
+          };
+        }
+
+        const extra = (xlsxCfg.options && typeof xlsxCfg.options === 'object') ? xlsxCfg.options : {};
+        const dlOptions = Object.assign({ sheetName }, extra, documentProcessing ? { documentProcessing } : {});
+        table.download("xlsx", filename, dlOptions);
       } catch (e) {
         console.error("XLSX download failed", e);
         alert("Unable to generate Excel file. Please try again.");
+      }
+    });
+
+    // 5) Download to PDF using Tabulator + jsPDF + AutoTable, configured per block
+    const dlPdfBtn = document.getElementById("download-pdf-{{ block_name }}-{{ instance_id }}");
+    dlPdfBtn?.addEventListener("click", function(){
+      try {
+        const pdfCfg = {{ pdf_download|default:"{}"|safe }} || {};
+        const filename = (pdfCfg.filename && String(pdfCfg.filename).trim()) || ("{{ block_name }}" + ".pdf");
+        const orientation = pdfCfg.orientation || "portrait";
+        const title = (pdfCfg.title && String(pdfCfg.title)) || ("{{ block_title|escapejs }}");
+        const extra = (pdfCfg.options && typeof pdfCfg.options === 'object') ? pdfCfg.options : {};
+
+        const toRGB = (hex) => {
+          const clean = String(hex || '').trim().replace('#','');
+          if (!clean) return undefined;
+          const n = parseInt(clean, 16);
+          if (clean.length === 3){
+            const r = (n >> 8) & 0xF; const g = (n >> 4) & 0xF; const b = n & 0xF;
+            return [r*17, g*17, b*17];
+          }
+          const r = (n >> 16) & 0xFF; const g = (n >> 8) & 0xFF; const b = n & 0xFF;
+          return [r, g, b];
+        };
+
+        // Build autoTable config to style header
+        let autoTableOption;
+        const headerCfg = pdfCfg.header || {};
+        const headStyles = {};
+        const fill = toRGB(headerCfg.fillColor);
+        const text = toRGB(headerCfg.fontColor);
+        if (fill) headStyles.fillColor = fill;
+        if (text) headStyles.textColor = text;
+        if (headerCfg.bold) headStyles.fontStyle = 'bold';
+        autoTableOption = function(doc){
+          return Object.assign({
+            headStyles,
+            styles: { cellPadding: 3, fontSize: 8 },
+            margin: { top: 40 },
+            didDrawPage: function(data){
+              try {
+                if (title && doc && typeof doc.text === 'function'){
+                  doc.setFontSize(10);
+                  doc.text(String(title), data.settings.margin.left, 24);
+                }
+              } catch (e) {}
+            }
+          }, (extra.autoTable || {}));
+        };
+
+        const pdfOptions = Object.assign({
+          orientation,
+          title,
+          autoTable: autoTableOption,
+        }, extra);
+
+        table.download("pdf", filename, pdfOptions);
+      } catch (e) {
+        console.error("PDF download failed", e);
+        alert("Unable to generate PDF file. Please try again.");
       }
     });
   });

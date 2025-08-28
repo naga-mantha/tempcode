@@ -76,6 +76,45 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
     def get_tabulator_options(self, user):
         return {}
 
+    def get_xlsx_download_options(self, request, instance_id=None):
+        """Return per-block XLSX download configuration.
+
+        Production blocks can override this to customize filename, sheet name,
+        and simple header styling.
+
+        Returns a plain dict that will be JSON-serialized for use in the
+        template's client-side Tabulator download call. Example return value:
+        {
+            "filename": "my-report.xlsx",
+            "sheetName": "Report",
+            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
+        }
+        """
+        return {
+            "filename": f"{self.block_name}.xlsx",
+            "sheetName": f"{self.block_name}",
+            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
+        }
+
+    def get_pdf_download_options(self, request, instance_id=None):
+        """Return per-block PDF download configuration for Tabulator.
+
+        Customize filename, orientation, title, and header styling. You can also
+        pass through raw Tabulator PDF options under `options` to override
+        properties like `jsPDF` and `autoTable` if needed.
+        """
+        return {
+            "filename": f"{self.block_name}.pdf",
+            "orientation": "portrait",  # or "landscape"
+            "title": getattr(self.block, "name", self.block_name),
+            # Simple header styling mapped to autoTable headStyles
+            "header": {"fillColor": "#e9ecef", "fontColor": "#212529", "bold": True},
+            # extra options merged into Tabulator's pdf options
+            "options": {
+                "jsPDF": {"unit": "pt", "format": "a4", "compress": True},
+            },
+        }
+
     def get_column_config_queryset(self, user):
         return BlockColumnConfig.objects.filter(user=user, block=self.block)
 
@@ -116,6 +155,8 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             "block": self.block,
             "fields": fields,
             "tabulator_options": self.get_tabulator_options(user),
+            "xlsx_download": json.dumps(self.get_xlsx_download_options(request, instance_id) or {}),
+            "pdf_download": json.dumps(self.get_pdf_download_options(request, instance_id) or {}),
             "column_configs": column_configs,
             "filter_configs": filter_configs,
             "active_column_config_id": active_column_config.id if active_column_config else None,

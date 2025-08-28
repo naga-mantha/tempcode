@@ -1,4 +1,2 @@
-We are working on the blocks app.
-
-I want the TableBlock to be downloadable to Excel. We are already using the Tabulator JS to populate the tables. I need you to integrate "download to xlsx" feature from Tabulator into the table block?
-https://tabulator.info/docs/6.3/download#xlsx
+Great. The "Download to Excel" feature is working. How can the production app control the Excel download settings?
+I would like to customize the file name, and maybe colors/styles per block

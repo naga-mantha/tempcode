@@ -4,6 +4,7 @@ from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
@@ -57,6 +58,26 @@ class ProductionOrderTableBlock(TableBlock):
             "pagination": "local",
             "paginationSize": 3,
             "paginationSizeSelector": [3, 6, 8, 10],
+        }
+
+    def get_xlsx_download_options(self, request, instance_id=None):
+        return {
+            "filename": f"POs-{timezone.now().strftime('%Y-%m-%d')}.xlsx",
+            "sheetName": "Purchase Orders",
+            "options": {"rowRange": "all"},  # include all rows
+            "header": {"fillColor": "#004085", "fontColor": "#FFFFFF", "bold": True},
+        }
+
+    def get_pdf_download_options(self, request, instance_id=None):
+        return {
+            "filename": "Report.pdf",
+            "orientation": "landscape",
+            "title": "My Report",
+            "header": {"fillColor": "#003366", "fontColor": "#FFFFFF", "bold": True},
+            "options": {
+                "jsPDF": {"unit": "pt", "format": "a4", "compress": True},
+                # You can also pass an `autoTable` object here; it merges with defaults
+            },
         }
 
     def get_filter_schema(self, request):
