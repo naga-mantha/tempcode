@@ -110,3 +110,8 @@ class CurrencyAdmin(admin.ModelAdmin):
 class CustomerPurchaseOrderAdmin(admin.ModelAdmin):
     list_display = ("customer_purchase_order", "item", "customer", "d2_date",)
     search_fields = ("customer_purchase_order", "customer", "d2_date",)
+
+@admin.register(SoValidateAggregate)
+class SoValidateAggregateAdmin(admin.ModelAdmin):
+    list_display = ("item", "company", "period", "value",)
+    search_fields = ("company", "period", "value",)

@@ -20,3 +20,4 @@ from apps.common.models.order_categories import OrderCategory
 from apps.common.models.sales_orders import SalesOrder
 from apps.common.models.sales_order_lines import SalesOrderLine
 from apps.common.models.customer_purchase_orders import CustomerPurchaseOrder
+from apps.common.models.so_validate import SoValidateAggregate

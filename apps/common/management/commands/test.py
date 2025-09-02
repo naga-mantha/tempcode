@@ -6,5 +6,5 @@ class Command(BaseCommand):
     help = 'Create Calendar Days'
 
     def handle(self, *args, **kwargs):
-        ProductionOrder.objects.all().delete()
+        CustomerPurchaseOrder.objects.all().delete()
 

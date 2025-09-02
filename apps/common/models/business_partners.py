@@ -10,6 +10,7 @@ class BusinessPartner(models.Model):
     code = models.CharField(max_length=15, blank=True, default="")
     name = models.CharField(max_length=100, blank=True, default="")
     status = models.CharField(max_length=10, choices=STATUS, default='-')
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

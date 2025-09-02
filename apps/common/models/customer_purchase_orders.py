@@ -1,11 +1,11 @@
 from django.db import models
-from apps.common.models import Item, Currency, SalesOrder
+from apps.common.models import Item, BusinessPartner
 from django_pandas.managers import DataFrameManager
 
 class CustomerPurchaseOrder(models.Model):
     customer_purchase_order = models.CharField(max_length=30, blank=True, default="")
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
-    customer = models.CharField(max_length=30, blank=True, default="")
+    customer = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
     d2_date = models.DateField(blank=True, null=True)
     back_order = models.FloatField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

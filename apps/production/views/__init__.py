@@ -1,1 +1,0 @@
-from apps.production.views.so_validate import so_validate

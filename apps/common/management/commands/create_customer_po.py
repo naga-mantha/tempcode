@@ -43,7 +43,7 @@ class Command(BaseCommand):
             obj = CustomerPurchaseOrder()
             obj.customer_purchase_order = currentline[0].strip()
             obj.item = None if currentline[1].strip()=="" else Item.objects.get_or_create(code=currentline[1].strip())[0]
-            obj.customer = "Collins"
+            obj.customer = BusinessPartner.objects.get_or_create(code="CUSCOL")[0]
             obj.d2_date = None if currentline[2].strip() == "" else datetime.strptime(currentline[2].strip(), '%Y-%m-%d')
             obj.back_order = float(currentline[3].strip())
 
