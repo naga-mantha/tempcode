@@ -1,1 +1,18 @@
-HOME!!!!
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="main-container">
+        <h1 class="page-title">Welcome</h1>
+
+
+        {% if user.is_authenticated %}
+        <h5>Welcome {{ user.username }}, </h5>
+            <p>Please use the main menu to navigate around the webapp.</p>
+            <p>If you have any issues, <a href="mailto:maisupport@mecaer.ca">please open a ticket.</a></p>
+        {% else %}
+            <p>To access other pages on this site, please <a href="/accounts/login">login.</a></p>
+            <p>If you do not have an account, <a href="mailto:maisupport@mecaer.ca">please open a ticket</a> requesting for an account.</p>
+        {% endif %}
+        <p></p>
+    </div>
+{% endblock %}

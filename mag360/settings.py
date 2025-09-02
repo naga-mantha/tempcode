@@ -58,7 +58,7 @@ INSTALLED_APPS = [
     'django_comments',
     "crispy_forms",
     "crispy_bootstrap5",
-
+    'widget_tweaks',
 
 ]
 
@@ -78,7 +78,7 @@ ROOT_URLCONF = 'mag360.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR/'common/templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -154,10 +154,16 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # MAG360 SETTINGS
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "home"
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 SITE_ID = 3
+
+# if not env('HOST')=="http://127.0.0.1:8000":
+#     SECURE_SSL_REDIRECT = env('SECURE_SSL_REDIRECT')
 
 # https://django-comments-xtd.readthedocs.io/en/latest/quickstart.html
 COMMENTS_APP = 'django_comments_xtd'
@@ -230,3 +236,8 @@ ADMINS = tuple(parseaddr(email) for email in admin_emails.split(','))
 
 # Permissions app settings
 PERMISSIONS_STAFF_BYPASS = False  # If True, staff users can bypass permission checks
+
+LOGIN_REQUIRED_IGNORE_PATHS = [
+    r'/accounts/*',
+    r'/admin/*',
+]
