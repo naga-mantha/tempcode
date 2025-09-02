@@ -154,13 +154,13 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # MAG360 SETTINGS
-LOGIN_REDIRECT_URL = "home"
+LOGIN_REDIRECT_URL = "layout_list"
 LOGOUT_REDIRECT_URL = "home"
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
-SITE_ID = 3
+SITE_ID = int(env('SITE_ID')) # Used by django-comments-xtd
 
 # if not env('HOST')=="http://127.0.0.1:8000":
 #     SECURE_SSL_REDIRECT = env('SECURE_SSL_REDIRECT')

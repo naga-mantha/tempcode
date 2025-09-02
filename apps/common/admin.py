@@ -80,3 +80,28 @@ class MachineDowntimeAdmin(admin.ModelAdmin):
 class LaborVacationAdmin(admin.ModelAdmin):
     list_display = ("labor", "start_date", "end_date",)
     search_fields = ("start_date", "end_date",)
+
+@admin.register(SalesOrder)
+class SalesOrderAdmin(admin.ModelAdmin):
+    list_display = ("order", "customer", "category",)
+    search_fields = ("order",)
+
+@admin.register(SalesOrderLine)
+class SalesOrderLineAdmin(admin.ModelAdmin):
+    list_display = ("sales_order", "sales_order_line", "sequence",)
+    search_fields = ("sales_order", "sales_order_line", "sequence",)
+
+@admin.register(BusinessPartner)
+class BusinessPartnerAdmin(admin.ModelAdmin):
+    list_display = ("code", "name",)
+    search_fields = ("code", "name",)
+
+@admin.register(OrderCategory)
+class OrderCategoryAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "model_ct", "parent")
+    search_fields = ("code", "description",)
+
+@admin.register(Currency)
+class CurrencyAdmin(admin.ModelAdmin):
+    list_display = ("base_currency", "quote_currency", "price")
+    search_fields = ("base_currency", "quote_currency",)
