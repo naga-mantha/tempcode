@@ -105,3 +105,8 @@ class OrderCategoryAdmin(admin.ModelAdmin):
 class CurrencyAdmin(admin.ModelAdmin):
     list_display = ("base_currency", "quote_currency", "price")
     search_fields = ("base_currency", "quote_currency",)
+
+@admin.register(CustomerPurchaseOrder)
+class CustomerPurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ("customer_purchase_order", "item", "customer", "d2_date",)
+    search_fields = ("customer_purchase_order", "customer", "d2_date",)

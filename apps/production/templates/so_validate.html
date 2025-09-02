@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="main-container">
+  <h1 class="page-title">SO Backlog Validation</h1>
+
+  {% if table_html %}
+    <div class="table-responsive">
+      {{ table_html|safe }}
+    </div>
+  {% else %}
+    <p>No data to display.</p>
+  {% endif %}
+</div>
+{% endblock %}
