@@ -1,12 +1,11 @@
 from django.db import models
 from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
-from apps.common.models import BusinessPartner, OrderCategory
 
 class SalesOrder(WorkflowModelMixin):
     order = models.CharField(max_length=10)
-    customer = models.ForeignKey(BusinessPartner, null=True, blank=True, on_delete=models.PROTECT)
-    category = models.ForeignKey(OrderCategory, null=True, blank=True, on_delete=models.PROTECT)
+    customer = models.ForeignKey('BusinessPartner', null=True, blank=True, on_delete=models.PROTECT)
+    category = models.ForeignKey('OrderCategory', null=True, blank=True, on_delete=models.PROTECT)
 
     objects = models.Manager()
     df_objects = DataFrameManager()
