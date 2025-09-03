@@ -1,15 +1,16 @@
 from apps.blocks.block_types.table.table_block import TableBlock
-from apps.common.models import ProductionOrder, ProductionOrderOperation, Item
+from apps.blocks.block_types.pivot.pivot_block import PivotBlock
+from apps.common.models import ProductionOrder, ProductionOrderOperation, Item, BusinessPartner
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.urls import reverse
-from django.utils import timezone
 import pandas as pd
-from apps.common.models import SalesOrderLine, CustomerPurchaseOrder
 from apps.common.models import SoValidateAggregate
-from django.db.models.functions import TruncMonth
-from django.db.models import Sum
+import environ
+
+env = environ.Env()
+
 
 class ProductionOrderTableBlock(TableBlock):
     def __init__(self):
@@ -175,13 +176,17 @@ class ProductionOrderOperationTableBlock(TableBlock):
         }
 
 
-class SoValidateTableBlock(TableBlock):
+class SoValidateTableBlock(PivotBlock):
     def __init__(self):
         super().__init__("so_validate_table")
 
     def get_model(self):
         # Use the aggregate fact model for column/filter config metadata
         return SoValidateAggregate
+
+    def get_column_defs(self, user, column_config=None):
+        # Use PivotBlock's curated Manage Views fields
+        return super().get_column_defs(user, column_config)
 
     def get_filter_schema(self, request):
         # Helpers to provide choices
@@ -201,18 +206,26 @@ class SoValidateTableBlock(TableBlock):
                 qs = qs.filter(Q(code__icontains=query) | Q(description__icontains=query))
             return [(i.id, f"{i.code} - {i.description}".strip()) for i in qs.order_by("code")[:50]]
 
+        def parent_bp_choices(user, query=""):
+            qs = BusinessPartner.objects.filter(parent__isnull=True)
+            if query:
+                qs = qs.filter(Q(code__icontains=query) | Q(name__icontains=query))
+            return [(bp.id, f"{bp.code or bp.name}") for bp in qs.order_by("code", "name")[:50]]
+
         return {
             "start_period": {
                 "label": "Start Month",
                 "type": "select",
                 "choices": month_choices,
                 "choices_url": reverse("block_filter_choices", args=[self.block_name, "start_period"]),
+                "handler": lambda qs, val: qs.filter(period__gte=pd.to_datetime(val).date()) if val else qs,
             },
             "end_period": {
                 "label": "End Month",
                 "type": "select",
                 "choices": month_choices,
                 "choices_url": reverse("block_filter_choices", args=[self.block_name, "end_period"]),
+                "handler": lambda qs, val: qs.filter(period__lte=pd.to_datetime(val).date()) if val else qs,
             },
             "item": {
                 "label": "Item",
@@ -223,53 +236,69 @@ class SoValidateTableBlock(TableBlock):
                 "tom_select_options": {
                     "placeholder": "Search items...",
                     "plugins": ["remove_button"],
-                    "maxItems": 5,
                 },
+                "handler": lambda qs, val: qs.filter(item__in=[int(v) for v in val]) if val else qs,
+            },
+            "parent_bp": {
+                "label": "Parent Business Partner",
+                "type": "select",
+                "choices": parent_bp_choices,
+                "choices_url": reverse("block_filter_choices", args=[self.block_name, "parent_bp"]),
+                "tom_select_options": {
+                    "placeholder": "Select parent company...",
+                },
+                "maxItems": 1,
+                "handler": lambda qs, val: qs.filter(customer_id=int(val)) if val else qs,
             },
         }
 
-    def _build_pivot(self, selected_filters, selected_fields):
-        # Resolve period bounds
-        import datetime as _dt
-        start_raw = (selected_filters or {}).get("start_period")
-        end_raw = (selected_filters or {}).get("end_period")
-        def parse_date(s):
-            try:
-                return _dt.datetime.strptime(str(s), "%Y-%m-01").date()
-            except Exception:
-                return None
-        start_p = parse_date(start_raw)
-        end_p = parse_date(end_raw)
+    def get_manageable_fields(self, user):
+        return ["item__code", "item__description", "company__name", "company__code"]
 
-        qs = SoValidateAggregate.objects.select_related("item")
-        if start_p:
-            qs = qs.filter(period__gte=start_p)
-        if end_p:
-            qs = qs.filter(period__lte=end_p)
-        items_filter = (selected_filters or {}).get("item")
-        if items_filter:
-            qs = qs.filter(item__in=items_filter)
+    def get_base_queryset(self, user):
+        return SoValidateAggregate.objects.select_related("item", "company", "customer")
 
-        # If no bounds provided, default to last 12 months present
-        if not start_p or not end_p:
-            months = list(
-                qs.values_list("period", flat=True).distinct().order_by("period")
-            )
-            if months:
-                tail = months[-12:]
-                min_p, max_p = tail[0], tail[-1]
-                qs = qs.filter(period__gte=min_p, period__lte=max_p)
+    def build_pivot(self, queryset, selected_fields, selected_filters, user):
+        # Resolve selected parent BP (for labeling) from filters
+        parent_raw = (selected_filters or {}).get("parent_bp")
+        try:
+            parent_bp_id = int(parent_raw) if parent_raw not in (None, "") else None
+        except Exception:
+            parent_bp_id = None
+
+        # Apply registered filter handlers to provided queryset
+        qs = apply_filter_registry("so_validate_table", queryset, selected_filters or {}, user)
+
+        # Determine requested nested fields for item and company, based on Manage Views selection
+        selected_list = list(map(str, (selected_fields or [])))
+        item_fields_requested = [f for f in selected_list if f.startswith("item__")]
+        company_fields_requested = [f for f in selected_list if f.startswith("company__")]
+        # Identity columns shown only if corresponding name field is selected
+        show_item = "item__code" in selected_list
+        show_company = "company__name" in selected_list
+        extra_item_fields = [f for f in item_fields_requested if f != "item__code"]
+        extra_company_fields = [f for f in company_fields_requested if f != "company__name"]
 
         # Build a dataframe from the aggregate table
         # Note: we can do this in pure Django ORM too, but pandas keeps consistency with earlier logic.
-        df = pd.DataFrame(list(qs.values("item__code", "company", "period", "value")))
+        values_fields = [
+            "item__code",
+            "company__name",
+            "company__code",
+            "customer_id",
+            "period",
+            "value",
+        ] + extra_item_fields + extra_company_fields
+        df = pd.DataFrame(list(qs.values(*values_fields)))
         if df.empty:
-            return [
-                {"title": "Item", "field": "Item"},
-                {"title": "Company", "field": "Company"},
-            ], []
+            cols = []
+            if show_item:
+                cols.append({"title": "Item", "field": "Item"})
+            if show_company:
+                cols.append({"title": "Company", "field": "Company"})
+            return cols, []
 
-        df = df.rename(columns={"item__code": "Item", "company": "Company"})
+        df = df.rename(columns={"item__code": "Item", "company__name": "CompanyName", "company__code": "CompanyCode"})
         df["period"] = pd.to_datetime(df["period"], errors="coerce")
         df = df.dropna(subset=["period"]).copy()
         df["MMYY"] = df["period"].dt.strftime("%m%y")
@@ -281,7 +310,7 @@ class SoValidateTableBlock(TableBlock):
 
         # Pivot using aggregated value
         pivot_sum = df.pivot_table(
-            index=["Item", "Company"],
+            index=["Item", "CompanyName"],
             columns="MMYY",
             values="value",
             aggfunc="sum",
@@ -289,85 +318,103 @@ class SoValidateTableBlock(TableBlock):
         )
         pivot_sum = pivot_sum.reindex(columns=columns_order)
 
-        # Decide if we include identity columns based on selected column config fields
-        show_item = True
-        show_company = True
-        if isinstance(selected_fields, (list, tuple)) and selected_fields:
-            # If admin configured columns, only include those identities they picked
-            show_item = any(f.startswith("item") for f in selected_fields)
-            show_company = any(f == "company" for f in selected_fields)
+        # maps for additional selected fields
+        item_field_maps = {}
+        for f in extra_item_fields:
+            # value tied to Item (code) irrespective of company/month
+            if f in df.columns:
+                item_field_maps[f] = df[["Item", f]].dropna().drop_duplicates("Item").set_index("Item")[f].to_dict()
+        company_field_maps = {}
+        for f in extra_company_fields:
+            if f in df.columns:
+                company_field_maps[f] = df[["CompanyName", f]].dropna().drop_duplicates("CompanyName").set_index("CompanyName")[f].to_dict()
 
-        # Build rows per Item: Collins, MAI, Delta
+        # Build rows per Item: Customer, Company, Delta
+        # Determine selected parent label and comparison company label for row ordering
+        selected_parent_name = None
+        if parent_bp_id:
+            try:
+                bp = BusinessPartner.objects.get(pk=parent_bp_id)
+                selected_parent_name = bp.name or bp.code
+            except BusinessPartner.DoesNotExist:
+                selected_parent_name = None
+
+        try:
+            company_label = environ.Env()("COMPANY")
+        except Exception:
+            company_label = None
+
         rows = []
         for item, df_item in pivot_sum.groupby(level=0):
             df_item_companies = df_item.droplevel(0)
-            df_item_companies = df_item_companies.reindex(["Collins", "MAI"]).fillna(0)
-            for company in ["Collins", "MAI"]:
+            # Determine the two companies to show for this item
+            customer_label = selected_parent_name
+            if not customer_label:
+                # Fallback to first available company as "customer"
+                customer_label = next(iter(df_item_companies.index.tolist()), None)
+            companies_order = [customer_label, company_label]
+
+            # Ensure both rows exist
+            df_item_companies = df_item_companies.reindex(companies_order).fillna(0)
+
+            # Customer and Company rows
+            for company_name in companies_order:
                 row = {}
                 if show_item:
                     row["Item"] = item
                 if show_company:
-                    row["Company"] = company
-                row.update({col: float(df_item_companies.loc[company].get(col, 0)) for col in columns_order})
+                    row["Company"] = company_name
+                # Additional selected fields
+                for f in extra_item_fields:
+                    row[f] = item_field_maps.get(f, {}).get(item, "")
+                for f in extra_company_fields:
+                    row[f] = company_field_maps.get(f, {}).get(company_name, "")
+                vals = df_item_companies.loc[company_name] if company_name in df_item_companies.index else None
+                if vals is None or isinstance(vals, float):
+                    # If the reindex produced a scalar due to missing index, handle gracefully
+                    data_map = {col: float(vals) if vals is not None else 0.0 for col in columns_order}
+                else:
+                    data_map = {col: float(vals.get(col, 0)) for col in columns_order}
+                row.update(data_map)
                 rows.append(row)
-            delta_vals = (df_item_companies.loc["Collins"] - df_item_companies.loc["MAI"]).fillna(0)
+
+            # Delta row (Customer - Company)
+            try:
+                delta_vals = (df_item_companies.loc[companies_order[0]] - df_item_companies.loc[companies_order[1]]).fillna(0)
+            except Exception:
+                # If any missing, treat as zeros
+                zero = pd.Series({c: 0.0 for c in columns_order})
+                delta_vals = zero
             delta_row = {}
             if show_item:
                 delta_row["Item"] = item
             if show_company:
                 delta_row["Company"] = "Delta"
+            # Leave additional descriptive fields blank on delta row
+            for f in extra_item_fields:
+                delta_row[f] = ""
+            for f in extra_company_fields:
+                delta_row[f] = ""
             delta_row.update({col: float(delta_vals.get(col, 0)) for col in columns_order})
             rows.append(delta_row)
 
         # Columns for Tabulator (dynamic months + optionally identity columns)
+        from django.contrib.admin.utils import label_for_field
+        model = self.get_model()
         columns = []
-        if show_item:
-            columns.append({"title": "Item", "field": "Item"})
-        if show_company:
-            columns.append({"title": "Company", "field": "Company"})
+        # Respect Manage Views order for identity and extra fields
+        for f in selected_list:
+            if f == "item__code" and show_item:
+                columns.append({"title": "Item", "field": "Item"})
+            elif f == "company__name" and show_company:
+                columns.append({"title": "Company", "field": "Company"})
+            elif f in extra_item_fields or f in extra_company_fields:
+                try:
+                    title = label_for_field(f, model, return_attr=False)
+                except Exception:
+                    title = f.replace("__", " ").title()
+                columns.append({"title": title, "field": f})
+        # Then the dynamic month columns
         columns.extend({"title": col, "field": col} for col in columns_order)
 
         return columns, rows
-
-    def get_config(self, request, instance_id=None):
-        # Reuse TableBlock's config selection and filter resolution so saved configs work
-        (
-            column_configs,
-            filter_configs,
-            active_column_config,
-            active_filter_config,
-            selected_fields,
-        ) = self._select_configs(request, instance_id)
-        filter_schema, selected_filter_values = self._resolve_filters(
-            request, active_filter_config, instance_id
-        )
-        columns, _ = self._build_pivot(selected_filter_values, selected_fields)
-        return {
-            "block_name": self.block_name,
-            "instance_id": instance_id or "main",
-            "columns": columns,
-            "tabulator_options": self.get_tabulator_options(request.user),
-            "xlsx_download": self.get_xlsx_download_options(request, instance_id),
-            "pdf_download": self.get_pdf_download_options(request, instance_id),
-            "column_configs": column_configs,
-            "filter_configs": filter_configs,
-            "active_column_config_id": active_column_config.id if active_column_config else None,
-            "active_filter_config_id": active_filter_config.id if active_filter_config else None,
-            "filter_schema": filter_schema,
-            "selected_filter_values": selected_filter_values,
-        }
-
-    def get_data(self, request, instance_id=None):
-        import json
-        (
-            _column_configs,
-            _filter_configs,
-            _active_column_config,
-            active_filter_config,
-            selected_fields,
-        ) = self._select_configs(request, instance_id)
-        _schema, selected_filter_values = self._resolve_filters(
-            request, active_filter_config, instance_id
-        )
-        _, rows = self._build_pivot(selected_filter_values, selected_fields)
-        return {"data": json.dumps(rows)}

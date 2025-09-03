@@ -1,0 +1,16 @@
+I have SalesOrderLines model (apps/common/models/sales_order_lines.py). Please refer to the link for the fields.
+In this model, I will have our company sales order lines data. Company is "MAI" and can be read from the .env file
+
+I have another model called CustomerPurchaseOrder (apps/common/models/customer_purchase_orders.py). Please refer to the link for the fields.
+In this model, I will have our customer purchase order data. Customer is any BusinessPartner (apps/common/models/business_partners.py) that doesnt have a parent. This can be treated as the 'company'
+
+I have the SoValidateAggregate model (apps/common/models/so_validate.py). I might need some changes
+This model should have the following fields:
+1. Item
+2. Company (For SalesOrderLines it will read from .env file. For CustomerPurchaseOrder it will be same as Customer, see #3)
+3. Customer (For SalesOrderLines/CustomerPurchaseOrder it will be the BusinessPartner without a parent)
+4. period (Stores the first of the month in the format MM-YY)
+5. Value (Summed back_order value for that month)
+
+The SoValidateTableBlock (apps/production/blocks.py) should be updated to reflect the above changes.
+The user should be able to filter the Parent BusinessPartner and Start/End Period (MM-YY).

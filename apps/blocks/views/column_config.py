@@ -47,7 +47,18 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             raise Http404(f"Block '{block_name}' not found.")
         self.user = request.user
         self.model = self.block_instance.get_model()
-        self.fields_metadata = get_model_fields_for_column_config(self.model, self.user)
+        # Respect blocks that expose curated Manage Views fields
+        allowed = None
+        if hasattr(self.block_instance, "get_manageable_fields"):
+            try:
+                allowed = set(self.block_instance.get_manageable_fields(self.user) or [])
+            except Exception:
+                allowed = None
+        all_fields = get_model_fields_for_column_config(self.model, self.user)
+        if allowed:
+            self.fields_metadata = [f for f in all_fields if f.get("name") in allowed]
+        else:
+            self.fields_metadata = all_fields
         return super().dispatch(request, block_name, *args, **kwargs)
 
     def get_context_data(self, **kwargs):

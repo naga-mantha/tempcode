@@ -211,6 +211,34 @@ Register with the registry and add a `Block` record with `code="task_status_donu
   - Edit checks: `get_editable_fields_state`, `can_write_field_state`
 - Ensure these apps are installed and configured if you rely on field‑level controls.
 
+## Pivot Tables
+
+Base class: `PivotBlock` (`block_types/pivot/pivot_block.py`)
+- Template: `blocks/table/table_block.html` (Tabulator 6.x)
+- Supported features: `["filters", "column_config"]`
+- Purpose: Build pivoted/aggregated datasets while letting users manage only relevant identity/extra columns via Manage Views (not every model field).
+
+Implement by subclassing and overriding:
+- `get_model()` → Source or fact model (used for labels/permissions).
+- `get_manageable_fields(user)` → Curated list of field names available in Manage Views (e.g., `["item__code", "item__description", "company__name"]`).
+- `get_filter_schema(request)` → Filter schema and handlers (same format as `TableBlock`).
+- `get_base_queryset(user)` → Initial queryset for the pivot data source.
+- `build_pivot(queryset, selected_fields, filters, user)` → Return `(columns, rows)` for Tabulator.
+
+Runtime flow
+1. Resolve active column and filter configs per user/instance (namespaced like tables).
+2. Apply row-level visibility checks.
+3. Call `build_pivot(...)` with the filtered queryset and selected Manage Views fields.
+4. Return Tabulator-ready config and data; Manage Views shows exactly the curated fields.
+
+Manage Views input set
+- `ColumnConfig` options are restricted to `get_manageable_fields(user)` when provided by the block; otherwise all model fields are shown.
+- Pivot outputs always append dynamic value columns (like months or categories) after the selected identity/extra fields.
+
+Notes
+- Filter choices can be async via `choices_url`.
+- Use `apply_filter_registry(block_name, qs, filters, user)` inside `build_pivot` or `get_base_queryset` to centralize filtering with handlers.
+
 ## Developer Notes
 
 - Blocks should be added to the registry exactly once (app `ready()` is a good place).
