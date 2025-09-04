@@ -1,5 +1,6 @@
 from apps.blocks.block_types.table.table_block import TableBlock
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
+from apps.blocks.block_types.pivot.generic_pivot_block import GenericPivotBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation, Item, BusinessPartner
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
@@ -175,3 +176,54 @@ class ProductionOrderOperationTableBlock(TableBlock):
         }
 
 
+class ProductionGenericPivot(GenericPivotBlock):
+    def __init__(self):
+        super().__init__("production_generic_pivot")
+
+    def get_model(self):
+        return ProductionOrder
+
+    def get_allowed_sources(self, user):
+        from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+        meta = get_model_fields_for_column_config(ProductionOrder, user)
+        allowed = [f["name"] for f in meta]
+        return {
+            "production_order": {
+                "model": "common.ProductionOrder",
+                "allowed_fields": allowed,
+            }
+        }
+
+    def get_filter_schema(self, request):
+        def item_choices(user, query=""):
+            qs = Item.objects.all()
+            if query:
+                qs = qs.filter(Q(code__icontains=query) | Q(description__icontains=query))
+            # Use Item.code as the value so saved filters store and retrieve the code, not the PK
+            return [(i.code, f"{i.code} - {i.description}".strip()) for i in qs.order_by("code")[:50]]
+
+        return {
+            "status": {
+                "label": "Status",
+                "type": "text",
+                "handler": lambda qs, val: qs.filter(status__icontains=val) if val else qs,
+            },
+            "item": {
+                "label": "Item",
+                "type": "select",
+                "choices": item_choices,
+                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                # Filter by item code (string), not by PK
+                "handler": lambda qs, val: qs.filter(item__code=str(val)) if val else qs,
+            },
+            "due_start": {
+                "label": "Due From",
+                "type": "text",
+                "handler": lambda qs, val: qs.filter(due_date__gte=val) if val else qs,
+            },
+            "due_end": {
+                "label": "Due To",
+                "type": "text",
+                "handler": lambda qs, val: qs.filter(due_date__lte=val) if val else qs,
+            },
+        }

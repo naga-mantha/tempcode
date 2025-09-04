@@ -1,6 +1,9 @@
 from django.urls import path
 from apps.blocks.views import table as table_views
 from apps.blocks.views import chart as chart_views
+from apps.blocks.views import pivot as pivot_views
+from apps.blocks.views.pivot_config import PivotConfigView
+from apps.blocks.views.pivot_filter_config import PivotFilterConfigView
 from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
 from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
@@ -35,5 +38,16 @@ urlpatterns = [
         "filter-options/<str:block_name>/<str:key>/",
         FilterChoicesView.as_view(),
         name="block_filter_choices",
+    ),
+    path("pivot/<str:block_name>/", pivot_views.render_pivot_block, name="render_pivot_block"),
+    path(
+        "pivot/<str:block_name>/settings/",
+        PivotConfigView.as_view(),
+        name="pivot_config_view",
+    ),
+    path(
+        "pivot/<str:block_name>/filters/",
+        PivotFilterConfigView.as_view(),
+        name="pivot_filter_config",
     ),
 ]

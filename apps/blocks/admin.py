@@ -20,3 +20,8 @@ class BlockFilterConfigAdmin(admin.ModelAdmin):
 class FieldDisplayRuleAdmin(admin.ModelAdmin):
     list_display = ("model_label", "field_name", "is_mandatory", "is_excluded" )
     search_fields = ("model_label", "field_name", "is_mandatory", "is_excluded",)
+
+@admin.register(PivotConfig)
+class PivotConfigAdmin(admin.ModelAdmin):
+    list_display = ("source_model", )
+    search_fields = ("source_model",)
