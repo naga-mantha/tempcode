@@ -183,16 +183,7 @@ class ProductionGenericPivot(GenericPivotBlock):
     def get_model(self):
         return ProductionOrder
 
-    def get_allowed_sources(self, user):
-        from apps.blocks.helpers.column_config import get_model_fields_for_column_config
-        meta = get_model_fields_for_column_config(ProductionOrder, user)
-        allowed = [f["name"] for f in meta]
-        return {
-            "production_order": {
-                "model": "common.ProductionOrder",
-                "allowed_fields": allowed,
-            }
-        }
+    # Single-source pivot; no Source selection required.
 
     def get_filter_schema(self, request):
         def item_choices(user, query=""):

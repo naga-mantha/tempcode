@@ -1,4 +1,3 @@
-from django.apps import apps as django_apps
 from django.db.models import Count, Sum, Avg, Min, Max
 
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
@@ -8,9 +7,6 @@ from apps.blocks.services.filtering import apply_filter_registry
 
 class GenericPivotBlock(PivotBlock):
     """User-configurable pivot with saved schemas (PivotConfig)."""
-
-    def get_allowed_sources(self, user):
-        raise NotImplementedError
 
     def _select_pivot_config(self, request, instance_id=None):
         user = request.user
@@ -38,14 +34,9 @@ class GenericPivotBlock(PivotBlock):
             active = configs.filter(is_default=True).first()
         if not active:
             return [], []
-        allowed = self.get_allowed_sources(user) or {}
-        src = allowed.get(active.source_model) or {}
-        model_label = src.get("model") if isinstance(src, dict) else (src if isinstance(src, str) else None)
-        if not model_label:
-            return [], []
+        model = None
         try:
-            app_label, model_name = model_label.split(".")
-            model = django_apps.get_model(app_label, model_name)
+            model = self.get_model()
         except Exception:
             return [], []
 

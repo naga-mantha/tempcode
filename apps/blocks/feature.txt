@@ -38,13 +38,11 @@ Labels/field resolution helpers
 GenericPivotBlock (concrete, user-configurable)
 6. Pivot settings storage
 
-- Model: PivotConfig(block, user, name, is_default, source_model, schema JSON).
+- Model: PivotConfig(block, user, name, is_default, schema JSON).
 - Uniqueness: (block, user, name) unique; single default semantics like other config models.
 
 7. Allowed sources
-    - Subclass hook get_allowed_sources(user) returns:
-     - A dict mapping keys (e.g., "production_order") to `{model: "app_label.Model", allowed_fields: [...]}`.
-     - Allowed fields should be derived permission-aware (typically via `get_model_fields_for_column_config(model, user)`).
+    - Removed. Each concrete pivot targets a single model via get_model().
 
 8. Settings view + URLs
     - URL: GET|POST /blocks/pivot/<block_name>/settings/.
@@ -90,7 +88,7 @@ GenericPivotBlock (concrete, user-configurable)
 
 12. Permissions + labels
 
-- Only allow fields from allowed_fields (permission-aware).
+- Only allow fields the user can read (permission-aware).
 - Titles for rows use label_for_field and fallback to “path title-cased”.
 
 13. Downloads
@@ -146,8 +144,7 @@ Answer: Yes add PivotConfig
     - ProductionGenericPivot on ProductionOrder (code: production_generic_pivot), registered in
 apps/production/blocks_registry.py.
 
-Fields: block (FK), user (FK), name (str), is_default (bool), source_model (str), schema (JSON). OK to
-add migrations under apps/blocks/migrations?
+Fields: block (FK), user (FK), name (str), is_default (bool), schema (JSON). OK to add migrations under apps/blocks/migrations?
 - Yes
 
 Filter config page for pivots

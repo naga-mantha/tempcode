@@ -23,5 +23,5 @@ class FieldDisplayRuleAdmin(admin.ModelAdmin):
 
 @admin.register(PivotConfig)
 class PivotConfigAdmin(admin.ModelAdmin):
-    list_display = ("source_model", )
-    search_fields = ("source_model",)
+    list_display = ("block", "user", "name", "is_default")
+    search_fields = ("name",)

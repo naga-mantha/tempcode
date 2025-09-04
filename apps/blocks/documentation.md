@@ -39,6 +39,11 @@ Defined in `apps/blocks/urls.py`:
   - `GET|POST /blocks/chart/<block_name>/filters/` → manage saved filters
   - `POST /blocks/chart/<block_name>/filters/<config_id>/delete/` → delete saved filter
 
+- Pivots
+  - `GET /blocks/pivot/<block_name>/` → render pivot page (includes partial)
+  - `GET|POST /blocks/pivot/<block_name>/settings/` → manage pivot settings (rows/column/measure)
+  - `GET|POST /blocks/pivot/<block_name>/filters/` → manage saved filters for pivots
+
 Notes
 - Add `?embedded=1` to render only the partial for embedding inside other pages.
 - Standalone pages include a header and include the partial internally.
@@ -51,9 +56,15 @@ Notes
 - Chart page: `blocks/chart/chart_block_page.html`
 - Filter editor partial: `components/filter_fields.html`
 
+- Pivot partial: `blocks/pivot/pivot_table.html`
+- Pivot page: `blocks/pivot/pivot_block_page.html`
+- Pivot settings page: `blocks/pivot/pivot_config_view.html`
+- Pivot filters page: `blocks/pivot/pivot_filter_config_view.html`
+
 Both table and chart partials include a “Manage Filters” link and dynamic filter UI. Tables additionally include a “View” selector and “Manage Views” (column sets). There are also convenience links to open a standalone page:
 - Tables: “Table Link” → `{% url 'render_table_block' block_name %}`
 - Charts: “Chart Link” → `{% url 'render_chart_block' block_name %}`
+Pivots include “Manage Settings” and a “Pivot Link” → `{% url 'render_pivot_block' block_name %}`. The header also shows “Saved Pivots” and “Saved Filters” dropdowns that persist selections using namespaced GET params.
 
 ## Filters (shared)
 
@@ -70,6 +81,8 @@ Persisted filters
 - Model: `BlockFilterConfig(block, user, name, values, is_default)`.
 - Behavior: First saved config per block/user becomes default. Marking another as default clears others. Delete endpoint enforces at least one config remains.
 - UI: Filter management views use the block’s runtime schema to render inputs.
+
+Pivot filters use the same storage and schema, with a dedicated UI at `/blocks/pivot/<block>/filters/` to allow future pivot-specific tweaks. The pivot page clears ad‑hoc overrides when switching between saved filters to ensure the saved values apply cleanly.
 
 ## Tables
 
@@ -178,6 +191,43 @@ block_registry.register("project_table", ProjectTable())
 Create a `Block` record in admin with `code="project_table"` and a friendly name.
 
 Visit: `/blocks/table/project_table/`.
+
+## Pivots
+
+Base class: `PivotBlock` (`block_types/pivot/pivot_block.py`)
+- Template: `blocks/pivot/pivot_table.html` (Tabulator-based grid of aggregated results)
+- Supported features: `["filters"]`
+- Must implement in a concrete subclass:
+  - `get_model()` → Django model used to derive labels, permissions, and default queryset.
+  - `get_filter_schema(request)` → same schema structure as tables/charts; handlers operate on the base queryset before aggregation.
+  - `build_columns_and_rows(user, filter_values)` in custom subclasses; `GenericPivotBlock` provides a ready data engine from a saved schema.
+
+Generic, user-configurable pivot: `GenericPivotBlock` (`block_types/pivot/generic_pivot_block.py`)
+- Storage model: `PivotConfig(block, user, name, is_default, schema)`.
+- Schema fields:
+  - `rows`: list of grouping field paths (checked items order defines grouping order)
+  - `cols`: optional single column-dimension (0–1)
+  - `measures`: list with one entry for MVP: `{source: <numeric field>, agg: sum|count|avg|min|max, label?: <title>}`
+- Settings UI (`/blocks/pivot/<block>/settings/`):
+  - Saved settings selector with set‑default/delete actions.
+  - Top row inputs: Name | Column | Measure | Label | Aggregation.
+  - “Rows” below as a sortable checklist (drag to reorder; checked items are applied in order).
+  - Save updates existing config (when editing) or creates a new one.
+- Runtime UI (pivot page):
+  - Header shows “Saved Pivots” and “Saved Filters” dropdowns and links: “Manage Settings”, “Manage Filters”, and “Pivot Link”.
+  - Filter Conditions panel uses the block’s filter schema with namespaced GET params.
+  - Downloads: Excel and PDF via Tabulator client-side download helpers; options provided by the block.
+
+Data engine (GenericPivotBlock)
+- Applies saved filter config plus live overrides, then builds an annotated queryset: `values(*rows, *cols)` + the configured aggregation(s).
+- Sanitizes aggregation aliases for safe SQL identifiers and uses label mapping for column titles.
+- Shapes the output into Tabulator `columns` and `data` based on the selected rows/cols/measures.
+- Supports at most one column dimension in MVP; no subtotals/grand totals yet.
+
+Persistence and selection
+- Saved Pivots: `PivotConfig` per block/user with single-default semantics (via `BaseUserConfig`).
+- Saved Filters: same `BlockFilterConfig` model used by tables and charts.
+- URL/state: the pivot template uses namespaced GET params `"<block>__<instance>__pivot_config_id"` and `"<block>__<instance>__filter_config_id"` so selections persist across reloads and when applying live filters.
 
 ## Implementing a New Chart Block
 
