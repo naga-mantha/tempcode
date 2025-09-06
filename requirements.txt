@@ -9,3 +9,4 @@ django-pandas
 python-dateutil
 numpy
 plotly
+openpyxl

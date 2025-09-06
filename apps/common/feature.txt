@@ -1,16 +1,38 @@
-I have SalesOrderLines model (apps/common/models/sales_order_lines.py). Please refer to the link for the fields.
-In this model, I will have our company sales order lines data. Company is "MAI" and can be read from the .env file
+I want a management script.
 
-I have another model called CustomerPurchaseOrder (apps/common/models/customer_purchase_orders.py). Please refer to the link for the fields.
-In this model, I will have our customer purchase order data. Customer is any BusinessPartner (apps/common/models/business_partners.py) that doesnt have a parent. This can be treated as the 'company'
+Inputs:
+1. Excel path + file name
+2. Model Name
+3. Column to field mapping (as a dictionary)
 
-I have the SoValidateAggregate model (apps/common/models/so_validate.py). I might need some changes
-This model should have the following fields:
-1. Item
-2. Company (For SalesOrderLines it will read from .env file. For CustomerPurchaseOrder it will be same as Customer, see #3)
-3. Customer (For SalesOrderLines/CustomerPurchaseOrder it will be the BusinessPartner without a parent)
-4. period (Stores the first of the month in the format MM-YY)
-5. Value (Summed back_order value for that month)
+What it should do:
+1. Read the Excel file.
+2. Map the columns to the model fields. (Define a dictionary for mapping)
+3. Create or update records in the database based on the model name and mapped fields.
+4. If there are foreign key relationships, ensure that the related records exist or create them if they don't.
+5. Handle any errors gracefully and log them for review.
 
-The SoValidateTableBlock (apps/production/blocks.py) should be updated to reflect the above changes.
-The user should be able to filter the Parent BusinessPartner and Start/End Period (MM-YY).
+Q&A
+- Model target
+    - Should --model be a dotted label like app_label.ModelName? Or are all models under apps.common? --> better be "app_label.ModelName"
+    - For updates, which fields should define uniqueness? Do you want a --lookup-fields list (e.g., ["code"]), or should I infer from the mapping if id/pk is present? --> It should read the model unique_together and unique fields to determine uniqueness.
+-
+Mapping format
+    - Can I accept the mapping as JSON via CLI (e.g., --mapping '{"Excel Col":"field","Item Code":"item__code"}') and also support --mapping-file pointing to a JSON file? -- I guess so
+    - For foreign keys, is related_field via item__code syntax acceptable (Django-style double-underscore traversal)? I’d use that to lookup/create related rows. --- Yes, that is acceptable.
+-
+Related creation
+    - When creating missing related records (e.g., Item(code=...)), there may be other non-nullable fields. OK to fail and log if creation violates constraints, or should we allow
+--defaults '{"field":"value"}' for related models? --> Fail and log if creation violates constraints.
+-
+Excel specifics
+    - Should I support --sheet (name or index)? Default to the first sheet otherwise? --> Default to the first sheet.
+    - pandas requires openpyxl for .xlsx. It’s not in requirements.txt. May I add openpyxl to requirements, or do you already have it installed? --> You may add openpyxl to requirements.
+-
+Error handling and logs
+    - Is writing a log file under logs/import_excel_<timestamp>.log acceptable, in addition to console output? --> Yes, that is acceptable.
+    - Continue on row errors (collect and report), or abort on first error? I plan to continue and summarize. --> Continue and summarize.
+-
+Extras
+    - Need a --dry-run option to validate mapping and show planned changes without writing? --> No
+    - Any date/number parsing constraints, or is pandas’ default parsing fine? --> pandas' default parsing is fine. Lets see

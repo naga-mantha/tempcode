@@ -3,8 +3,8 @@ from apps.common.models import *
 from datetime import datetime, time, timedelta, date
 
 class Command(BaseCommand):
-    help = 'Create Calendar Days'
+    help = 'Delete'
 
     def handle(self, *args, **kwargs):
-        SoValidateAggregate.objects.all().delete()
+        PurchaseOrderLine.objects.all().delete()
 

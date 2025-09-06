@@ -3,8 +3,8 @@ from apps.common.models import Item, Currency, SalesOrder
 from django_pandas.managers import DataFrameManager
 
 class SalesOrderLine(models.Model):
-    sales_order = models.ForeignKey(SalesOrder, on_delete=models.PROTECT, blank=True, null=True)
-    sales_order_line = models.PositiveIntegerField(blank=True, null=True)
+    order = models.ForeignKey(SalesOrder, on_delete=models.PROTECT, blank=True, null=True)
+    line = models.PositiveIntegerField(blank=True, null=True)
     sequence = models.PositiveIntegerField(blank=True, null=True)
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
     d1_date = models.DateField(blank=True, null=True)
@@ -27,9 +27,9 @@ class SalesOrderLine(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=('sales_order', 'sales_order_line', 'sequence',), name='unique_sales_order_line_sequence'),
+            models.UniqueConstraint(fields=('order', 'line', 'sequence',), name='unique_sales_order_line_sequence'),
         ]
 
     def __str__(self):
         """String for representing the Model object."""
-        return str(self.sales_order)
+        return str(self.order)

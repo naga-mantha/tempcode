@@ -3,7 +3,7 @@ from django.db import models
 class Currency(models.Model):
     base_currency = models.CharField(max_length=5)
     quote_currency = models.CharField(max_length=5)
-    price = models.FloatField()
+    price = models.FloatField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

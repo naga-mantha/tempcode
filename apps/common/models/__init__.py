@@ -1,3 +1,4 @@
+from apps.common.models.unit_of_measuries import UOM
 from apps.common.models.business_partners import BusinessPartner
 from apps.common.models.currencies import Currency
 from apps.common.models.items import Item
