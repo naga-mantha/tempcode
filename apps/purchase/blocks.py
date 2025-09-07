@@ -1,13 +1,19 @@
 from apps.blocks.block_types.table.table_block import TableBlock
+from apps.blocks.base import BaseBlock
+from apps.blocks.block_types.repeater.repeater_block import RepeaterBlock
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.blocks.block_types.pivot.generic_pivot_block import GenericPivotBlock
-from apps.common.models import PurchaseOrderLine
+from apps.common.models import PurchaseOrderLine, Item
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.urls import reverse
 import pandas as pd
 import environ
+from django.utils import timezone
+from django.db.models import Count
+from django.template.loader import render_to_string
+from apps.accounts.models import CustomUser
 
 env = environ.Env()
 
@@ -217,3 +223,91 @@ class PurchaseGenericPivot(GenericPivotBlock):
                 "handler": lambda qs, val: qs.filter(due_date__lte=val) if val else qs,
             },
         }
+
+
+class PurchaseOverdueByBuyerPivot(PivotBlock):
+    """Simple pivot: count of lines with final_receive_date in the past, grouped by buyer."""
+
+    def __init__(self):
+        super().__init__("purchase_overdue_by_buyer")
+
+    def get_model(self):
+        return PurchaseOrderLine
+
+    # Provide enumeration queryset for the Repeater to derive panels
+    def get_enumeration_queryset(self, user):
+        return PurchaseOrderLine.objects.filter(final_receive_date__lt=timezone.now().date())
+
+    def get_filter_schema(self, request):
+        # Optional buyer filter to allow narrowing to a given buyer (or unassigned)
+        def buyer_choices(user, query=""):
+            qs = CustomUser.objects.all()
+            if query:
+                qs = qs.filter(username__icontains=query)
+            out = [(u.id, u.username) for u in qs.order_by("username")[:50]]
+            # Add an explicit Unassigned option
+            out.insert(0, ("__none__", "(Unassigned)"))
+            return out
+
+        return {
+            "buyer": {
+                "label": "Buyer",
+                "type": "select",
+                "choices": buyer_choices,
+                # Handles both numeric ID and the special '__none__' sentinel
+                "handler": lambda qs, val: (
+                    qs.filter(order__buyer__isnull=True)
+                    if str(val) == "__none__"
+                    else qs.filter(order__buyer_id=int(val)) if val else qs
+                ),
+            },
+        }
+
+    def build_columns_and_rows(self, user, filter_values):
+        today = timezone.now().date()
+        # Base queryset filtered to overdue lines
+        qs = PurchaseOrderLine.objects.filter(final_receive_date__lt=today)
+        # Apply optional buyer filter if provided via filter schema
+        qs = apply_filter_registry(self.block_name, qs, filter_values or {}, user)
+        qs = qs.values("order__buyer__username").annotate(overdue_count=Count("id")).order_by("order__buyer__username")
+        rows = []
+        for r in qs:
+            buyer = r.get("order__buyer__username") or "(Unassigned)"
+            rows.append({"Buyer": buyer, "Overdue Lines": r.get("overdue_count", 0)})
+        columns = [
+            {"title": "Buyer", "field": "Buyer"},
+            {"title": "Overdue Lines", "field": "Overdue Lines"},
+        ]
+        return columns, rows
+
+
+class PurchaseBuyerOverdueRepeaterBlock(RepeaterBlock):
+    """Repeater that renders the overdue-by-buyer child pivot per buyer."""
+
+    template_name = "purchase/buyer_pivot_repeater.html"
+
+    def __init__(self):
+        super().__init__("purchase_buyer_overdue_repeater")
+
+    def get_fixed_child_block_code(self) -> str | None:
+        return "purchase_overdue_by_buyer"
+
+    def _build_panels(self, request, user, active_config):
+        # Provide a sensible default schema if user has no saved settings
+        if not active_config or not getattr(active_config, "schema", None):
+            default_schema = {
+                "group_by": "order__buyer",
+                "label_field": "order__buyer__username",
+                "include_null": True,
+                "null_sentinel": "__none__",
+                "cols": 6,
+                "child_filters_map": {"buyer": "value"},
+                "sort": "asc",
+                "title_template": "{label}",
+            }
+            class _Temp:
+                pass
+            t = _Temp()
+            t.schema = default_schema
+            return super()._build_panels(request, user, t)
+        return super()._build_panels(request, user, active_config)

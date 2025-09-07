@@ -1,211 +1,32 @@
+RepeaterBlock
 
-Here’s a clean, implementation-ready requirements list to recreate the Pivot system exactly as we ended up with — split by PivotBlock (base) and GenericPivotBlock
-(concrete, user-configurable), plus the small supporting pieces they depend on.
+Requirements
+Can we abstract it into a RepeaterBlock? I am thinking of the following:
+1. RepeaterBlock should take an input of a registered blockName
+2. It should take an input of what the repeater should be based on (ex: Buyer)
+3. It should take an input of how many cols per row (Basically bootstrap columns)
+4. I am thinking the column settings/filter settings should be saved at the RepeaterBlock level
 
-PivotBlock (base)
+Q&A
+- Supported child types: Should it repeat any registered block (tables, pivots, charts), or only those with filters?
+    > Any registered block type
+- Dimension source: How should we enumerate panels?                                                                                                           
+    - Provide a model + field path (e.g., apps.common.PurchaseOrderLine, order__buyer), or a callable? Include “Unassigned/null”?                             
+    - For your current use-case, do we restrict enumeration to overdue lines (final_receive_date < today)?
+- Child filter mapping: What filter key should the child block receive (e.g., buyer)? Is this always a single filter key, or sometimes multiple?
+     >  Multiple filter keys
+- Child configs: When you say “column settings/filter settings saved at RepeaterBlock level,” do you want the repeater to store and inject:                   
+    - a specific child BlockFilterConfig (by name or id), and                                                                                                 
+    - a specific child BlockColumnConfig (by name or id),
+into every repeated child instance?
+    >  Yes, both.
 
-1. Template and rendering
-    - Use a pivot-specific partial blocks/pivot/pivot_table.html.
-    - Use a pivot page wrapper blocks/pivot/pivot_block_page.html.
-    - Implement render(request, instance_id=None) via BaseBlock; do not reuse Table templates.
-    - Implement render(request, instance_id=None) via BaseBlock; do not reuse Table templates.
-2.
-Features and config pipeline
-    - Supported features: ["filters"] (no Table “column_config” reuse).
-    - Implement get_config(request, instance_id=None) and get_data(request, instance_id=None) that:
-     - Resolve saved filters (BlockFilterConfig) + live overrides via FilterResolutionMixin.
-     - Provide `filter_schema` and `selected_filter_values` for the pivot partial.
-     - Return Tabulator options and serialized download options:
-       - `xlsx_download` and `pdf_download` as JSON strings (what the template expects).
-- Enforce row-level visibility before data shaping if using a queryset (if subclass opts in).
-
-3. Subclass hooks
-    - get_model(): base/fact model for labels/permissions.
-    - get_filter_schema(request): pivot-native filter schema (same structure as Table/Charts) with handlers.
-    - A data-building entry point: Either
-     - `build_pivot(queryset, selected_fields, filters, user)` returning `(columns, rows)`, or
-     - A concrete subclass defines its own `build_*` method (GenericPivotBlock uses `_pivot_from_config`).
-
-4. Filter integration (shared)
-    - Use FilterResolutionMixin’s _resolve_filter_schema and _collect_filters.
-    - Use apply_filter_registry(block_name, queryset, filters, user) to apply filter handlers.
-    - Use apply_filter_registry(block_name, queryset, filters, user) to apply filter handlers.
-5.
-Labels/field resolution helpers
-    - For dynamic column/field titles, use django.contrib.admin.utils.label_for_field.
-    - Use permission-aware helpers for readable field choices (when needed by subclass).
-
-GenericPivotBlock (concrete, user-configurable)
-6. Pivot settings storage
-
-- Model: PivotConfig(block, user, name, is_default, schema JSON).
-- Uniqueness: (block, user, name) unique; single default semantics like other config models.
-
-7. Allowed sources
-    - Removed. Each concrete pivot targets a single model via get_model().
-
-8. Settings view + URLs
-    - URL: GET|POST /blocks/pivot/<block_name>/settings/.
-    - View: PivotConfigView (like column config UI) with:
-     - Saved settings selector.
-     - Friendly fields:
-       - `rows` (multi-select of allowed fields)
-       - `col` (single select; optional; 0–1 column dimension)
-       - `measure_field` (single select of numeric fields)
-       - `measure_agg` (Sum/Count/Avg/Min/Max)
-       - `measure_label` (optional; user-entered label for the single measure)
-     - “Save Settings” creates/updates `PivotConfig`; “Set Default” toggles is_default; delete requires >1 config remains.
-
-9. Table view + URLs
-    - Dedicated route: GET /blocks/pivot/<block_name>/ renders the pivot page (no Table “Manage Views” link).
-    - The pivot partial shows:
-     - “Saved Pivots” (PivotConfig dropdown) → sets `pivot_config_id` in the URL.
-     - “Saved Filters” (BlockFilterConfig dropdown) → sets `filter_config_id` in the URL.
-     - Dynamic filter UI (from `get_filter_schema`).
-     - Download Excel/PDF buttons (using provided JSON options).
-- Optional “Embedded” support via ?embedded=1 to render only the partial.
-
-10. Filter schema and choices
-
-- Define get_filter_schema(request) with handlers:
-     - Use async choices endpoints for large FK fields via `choices_url` (`/blocks/filter-options/<block>/<key>/`).
-     - Filter handlers operate on the source queryset(s).
-- Use BlockFilterConfig to save and load pivot filters (no new model required).
-
-11. Data engine (ORM aggregation)
-
-- Read active PivotConfig (by pivot_config_id or default).
-- Schema supports: rows: [..], cols: [..0 or 1..], measures: [{source, agg, label?}].
-- Build queryset: values(*rows, *cols) then annotate with measure aggregations.
-- Sanitize annotation aliases:
-     - Use safe SQL identifiers (letters, digits, underscore; no leading digit); map alias → display title (label).
-- Column dimension:
-     - Support at most 1 column dimension initially; compute unique values (sorted order).
-- Output shaping:
-     - Data rows contain row dimensions, then measures (or col-value + measure pairs).
-     - Columns list in the same order.
- 
-
-12. Permissions + labels
-
-- Only allow fields the user can read (permission-aware).
-- Titles for rows use label_for_field and fallback to “path title-cased”.
-
-13. Downloads
-
-- Provide xlsx_download / pdf_download as JSON-encoded dicts in get_config.
-- The template uses Tabulator’s download("xlsx"|"pdf", filename, options).
-
-14. Sorting and stability
-
-- Row group ordering: natural order from queryset group-by.
-- Column dimension ordering: stable order based on first-seen or sorted by value type.
-- No server pagination (Tabulator local pagination is fine for pivot-scale datasets).
-
-15. Non-goals for MVP (documented)
-
-- Multi-measure with per-measure labels/agg (future).
-- Subtotals/grand totals, Top/Bottom N, conditional formatting (future).
-- Multi-column dimensions (future).
-
-16. Error handling
-
-- If no active PivotConfig or no measures → render empty table (no crash).
-- If choices lookup fails → degrade gracefully to no choices.
-- If extras can’t resolve uniquely → set blanks rather than erroring.
-
-17. Registry and admin
-
-- Final app registers its GenericPivotBlock instance with the global registry under its block code.
-- Admin Block row exists with that block code to link saved configs/filters.
-
-18. Dev ergonomics
-
-- No modifications to TableBlock or its templates.
-- Pivot code lives under apps/blocks/block_types/pivot/ and its views/templates/urls are additive.
-- Keep pivot code paths independent and minimal, reusing only filter plumbing and permission helpers.
-
-
-Q&A:
-Routing
-/blocks/pivot/<block_name>
-/blocks/pivot/<block_name>/settings/
-/blocks/pivot/<block_name>/filters/
-
-Storage: You want PivotConfig or prefer to reuse an existing model?
-Answer: Yes add PivotConfig
-
-- Names per spec?
-    - Partial: blocks/pivot/pivot_table.html
-    - Page: blocks/pivot/pivot_block_page.html
-    - Settings: blocks/pivot/pivot_config_view.html
-
-- Which block should I wire first as an example?
-    - ProductionGenericPivot on ProductionOrder (code: production_generic_pivot), registered in
-apps/production/blocks_registry.py.
-
-Fields: block (FK), user (FK), name (str), is_default (bool), schema (JSON). OK to add migrations under apps/blocks/migrations?
-- Yes
-
-Filter config page for pivots
-    - Route: /blocks/pivot/<block_name>/filters/ should point to the same BlockFilterConfig view used by
-tables/charts (i.e., we’ll reuse the existing “Manage Filters” view, not create a separate one).
-    - No. Create a new template so that we can modify it based on the needs, if required, in future.
-
-
-Production example
-    - Implement ProductionGenericPivot on ProductionOrder with code production_generic_pivot.
-    - Register it in apps/production/blocks_registry.py.
-    - Filters for this example: status (text), item (async select on Item), due_start/due_end (date strings).
-OK?
-    - Yes
-
-Allowed fields
-    - Use get_model_fields_for_column_config(ProductionOrder, user) to generate rows/measure choices (and one optional column dimension)
-choices. That includes related fields (e.g., item__code) and respects read permissions. Confirm.
--   OK
-
-Template UI bits
-    - “Saved Pivots” uses PivotConfig; “Saved Filters” uses BlockFilterConfig.        - OK
-    - The pivot page will not show “Manage Views” (table-only).             - Why? Instead of "Manage Views", we will have "Manage Settings" which will link to the pivot settings page.
-    - Measure is a single-select with one agg.   - OK
-    - Downloads: use client-side Tabulator download; I’ll return JSON options as specified.  - OK
-
-Behavior when schema incomplete
-    - If no active PivotConfig or no measure selected, render empty table with headers only (no crash). OK?
-    - Yes
-
-
-ADDITIONS:
-codex
-I’ve scanned the pivot code and requirements; here’s what’s missing or inconsistent.
-
-Routing/Links
-
-- Pivot settings URL: Not wired. Add path("pivot/<str:block_name>/settings/", PivotConfigView.as_view(), name="pivot_config_view") in apps/blocks/urls.py.
-- Pivot filters URL: Not wired. Add path("pivot/<str:block_name>/filters/", PivotFilterConfigView.as_view(), name="pivot_filter_config") in apps/blocks/urls.py.
-- Manage Filters link: Points to table_filter_config. In blocks/pivot/pivot_table.html, switch to pivot_filter_config.
-
-Saved Config UI
-
-- Saved Pivots dropdown: Not implemented. The partial should show a PivotConfig selector and push pivot_config_id into the URL.
-- Saved Filters dropdown: Not implemented. The partial should show a BlockFilterConfig selector and push filter_config_id into the URL.
-
-Context/Selection Plumbing
-
-- Pivot config selection: GenericPivotBlock._select_pivot_config() exists but isn’t used. PivotBlock._build_context() doesn’t expose pivot_configs or active_pivot_config_id, and
-build_columns_and_rows() can’t read the selection (signature lacks request/instance_id).
-- Fix needed: Select the active PivotConfig from GET (namespaced), include pivot_configs and active_pivot_config_id in context, and make build_columns_and_rows read the chosen
-config (pass it in or set on self for the call).
-
-Download Options
-
-- Missing methods: PivotBlock calls get_xlsx_download_default_options() and get_pdf_download_default_options() but they’re not defined on PivotBlock or BaseBlock. This will raise
-AttributeError.
-- Fix needed: Implement XLSX/PDF default/options-overrides/options-merging methods in PivotBlock (mirroring TableBlock) and use get_xlsx_download_options() /
-get_pdf_download_options() when building context.
-
-Permissions/Visibility
-
-- Row-level visibility enforcement: Not present. Requirement says “if subclass opts in”; currently neither PivotBlock nor GenericPivotBlock apply permission-based queryset
-filtering. If needed, add a hook and call your permission filter before aggregation.
+- Layout of panels: For “cols per row,” is selecting a Bootstrap span okay (1,2,3,4,6,12), or do you prefer “N panels per row” and I’ll compute col = 12 // N?
+    >  Bootstrap span (1,2,3,4,6,12) so that it can be consistent with other blocks
+- Ordering/limits: Do you want sorting of panels (e.g., by label or by a computed metric) and/or a “top N” limit?
+    >  Make the sorting a variable
+- Panel titles: Use the raw dimension label (e.g., buyer username) and a custom label for null (e.g., “Unassigned”)?
+    > Make it configurable
+- Settings UX: Mirror Pivot’s saved settings pattern (RepeaterConfig per user/block with default selection), with its own “Manage Settings” page?
+    > Yes. Program its own "Manage Settings" page
+                  

@@ -25,3 +25,33 @@ class FieldDisplayRuleAdmin(admin.ModelAdmin):
 class PivotConfigAdmin(admin.ModelAdmin):
     list_display = ("block", "user", "name", "is_default")
     search_fields = ("name",)
+
+@admin.register(RepeaterConfig)
+class RepeaterConfigAdmin(admin.ModelAdmin):
+    list_display = ("block", "user", "name")
+    search_fields = ("name",)
+
+# Template models (admin-defined defaults)
+from apps.blocks.models.config_templates import (
+    ColumnConfigTemplate,
+    PivotConfigTemplate,
+    RepeaterConfigTemplate,
+)
+
+@admin.register(ColumnConfigTemplate)
+class ColumnConfigTemplateAdmin(admin.ModelAdmin):
+    list_display = ("block", "name", "is_default", "site_key")
+    list_filter = ("is_default",)
+    search_fields = ("name", "site_key")
+
+@admin.register(PivotConfigTemplate)
+class PivotConfigTemplateAdmin(admin.ModelAdmin):
+    list_display = ("block", "name", "is_default", "site_key")
+    list_filter = ("is_default",)
+    search_fields = ("name", "site_key")
+
+@admin.register(RepeaterConfigTemplate)
+class RepeaterConfigTemplateAdmin(admin.ModelAdmin):
+    list_display = ("block", "name", "is_default", "site_key")
+    list_filter = ("is_default",)
+    search_fields = ("name", "site_key")

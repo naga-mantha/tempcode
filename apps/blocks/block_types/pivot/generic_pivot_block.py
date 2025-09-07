@@ -3,6 +3,7 @@ from django.db.models import Count, Sum, Avg, Min, Max
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.blocks.models.pivot_config import PivotConfig
 from apps.blocks.services.filtering import apply_filter_registry
+from apps.blocks.models.config_templates import PivotConfigTemplate
 
 
 class GenericPivotBlock(PivotBlock):
@@ -16,6 +17,24 @@ class GenericPivotBlock(PivotBlock):
             or request.GET.get("pivot_config_id")
         )
         qs = PivotConfig.objects.filter(block=self.block, user=user)
+        # Lazy seed from admin-defined template when user has no pivot configs
+        if not qs.exists():
+            try:
+                tpl = (
+                    PivotConfigTemplate.objects.filter(block=self.block, is_default=True).first()
+                    or PivotConfigTemplate.objects.filter(block=self.block).first()
+                )
+                if tpl:
+                    PivotConfig.objects.create(
+                        block=self.block,
+                        user=user,
+                        name=tpl.name or "Default",
+                        schema=dict(tpl.schema or {}),
+                        is_default=True,
+                    )
+                    qs = PivotConfig.objects.filter(block=self.block, user=user)
+            except Exception:
+                pass
         active = None
         if config_id:
             try:

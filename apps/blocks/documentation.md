@@ -229,6 +229,58 @@ Persistence and selection
 - Saved Filters: same `BlockFilterConfig` model used by tables and charts.
 - URL/state: the pivot template uses namespaced GET params `"<block>__<instance>__pivot_config_id"` and `"<block>__<instance>__filter_config_id"` so selections persist across reloads and when applying live filters.
 
+## Repeaters
+
+Base class: `RepeaterBlock` (`block_types/repeater/repeater_block.py`)
+- Template (partial): `blocks/repeater/repeater_block.html`
+- Page wrapper: `blocks/repeater/repeater_block_page.html`
+- Settings page: `blocks/repeater/repeater_config_view.html`
+- Supported features: Saved settings (no filters/downloads at repeater level)
+
+URLs
+- Render: `GET /blocks/repeater/<block_name>/` (adds `?embedded=1` for partial only)
+- Manage settings: `GET|POST /blocks/repeater/<block_name>/settings/`
+
+Saved settings UI
+- The partial header shows a “Saved Settings” dropdown populated from the user’s `RepeaterConfig` rows for this block and marks the active one.
+- Switching saved settings updates the namespaced `repeater_config_id` in the URL: `"<block>__<instance>__repeater_config_id"` when embedded; plain `repeater_config_id` on the standalone page.
+- “Manage Settings” links to the settings page; “Repeater Link” opens the standalone page.
+
+Enumeration and child rendering
+- The repeater renders the configured child block once per distinct value of a group-by field.
+- Enumeration base is provided by the child:
+  - Preferred: child implements `get_enumeration_queryset(user)` returning a pre-filtered queryset.
+  - Fallback: child exposes `get_model()`; the repeater uses `model.objects.all()`.
+- Distinct values are derived from `group_by`; optional `label_field` provides human-readable titles.
+- An “Unassigned” panel may be added for null values when `include_null` is enabled.
+
+Fixed child vs generic
+- Concrete repeaters may lock the child by overriding `get_fixed_child_block_code()`; the settings UI will not expose a “Child Block” selector.
+- If the child is fixed, the schema’s `block_code` is enforced internally.
+- A truly generic repeater (if ever exposed) can allow the child selector in its own settings page.
+
+Admin-defined defaults (templates)
+- `RepeaterConfigTemplate(block, name, is_default, schema, site_key?)` can be created in admin.
+- When a user has no `RepeaterConfig` for a repeater block, the block or settings page lazily clones the template to the user as their default.
+
+Field reference (Repeater settings)
+- Name: Saved configuration name for this repeater.
+- Cols (Bootstrap span): Width of each panel (1,2,3,4,6,12) in a 12-column grid; e.g., 6 → two panels per row.
+- Group By: Field path on the child’s model used to enumerate one panel per distinct value (e.g., `order__buyer`).
+- Label Field: Field path used to title each panel; defaults to the group-by value. Commonly a readable display field (e.g., `order__buyer__username`).
+- Include Null: Adds a panel for rows with `group_by` = null (e.g., “Unassigned”) if any exist.
+- Limit: Optional cap on number of panels to render.
+- Sort: `asc` | `desc` | `none` to order panels by label (or leave as DB order).
+- Panel Title Template: String template for panel headers; supports `{label}` and `{value}`.
+- Child Filters Map (JSON): Mapping of child filter keys → source for the value:
+  - `"value"`: use the raw group-by value (e.g., an id)
+  - `"label"`: use the label field’s value
+  - any literal string: pass as-is
+  Example: `{ "buyer": "value" }`.
+- Null Sentinel: Value to send to the child when the group value is null (e.g., `"__none__"`).
+- Child Filter Config Name: Name of a saved filter config on the child to apply to every repeated instance.
+- Child Column Config Name: Name of a saved column/view on the child to apply to every repeated instance.
+
 ## Implementing a New Chart Block
 
 ```python
@@ -267,4 +319,5 @@ Register with the registry and add a `Block` record with `code="task_status_donu
 - The database `Block.code` must match the registry code to link saved configs.
 - Chart blocks only support filter configurations; table blocks support both filter and column configurations.
 - The chart template expects Plotly (loaded via CDN) and the table template expects Tabulator (also via CDN).
+
 

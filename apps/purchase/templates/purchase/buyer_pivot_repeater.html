@@ -1,0 +1,50 @@
+{% comment %}
+Renders a grid of embedded pivot blocks, one per buyer.
+Expects context: block_title, panels: [{title, html}]
+{% endcomment %}
+
+<div class="buyer-repeater-block">
+  {% if block_title %}
+    <div class="mb-2 fw-bold d-flex align-items-center flex-wrap">
+      <span class="me-2">{{ block_title }}</span>
+      <label class="me-2 mb-0">Saved Settings:</label>
+      <select id="repeater-select-{{ block_name }}-{{ instance_id }}" class="form-select form-select-sm w-auto me-2">
+        <option value="">-- Select --</option>
+        {% for c in repeater_configs %}
+          <option value="{{ c.id }}" {% if c.id == active_repeater_config_id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+        {% endfor %}
+      </select>
+      <a class="btn btn-link btn-sm" href="{% url 'repeater_config_view' block_name %}">Manage Settings</a>
+      <a class="btn btn-link btn-sm ms-2" href="{% url 'render_repeater_block' block_name %}">Repeater Link</a>
+    </div>
+  {% endif %}
+  <div class="row g-3">
+    {% for p in panels %}
+      <div class="col-12 col-md-6">
+        <div class="card h-100">
+          <div class="card-header py-2 fw-semibold">{{ p.title }}</div>
+          <div class="card-body p-2">
+            {{ p.html|safe }}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const sel = document.getElementById('repeater-select-{{ block_name }}-{{ instance_id }}');
+  if (!sel) return;
+  const ns = '{{ block_name }}__{{ instance_id }}__';
+  sel.addEventListener('change', function(){
+    const url = new URL(window.location);
+    if (this.value) {
+      url.searchParams.set(ns + 'repeater_config_id', this.value);
+    } else {
+      url.searchParams.delete(ns + 'repeater_config_id');
+    }
+    window.location = url.toString();
+  });
+});
+</script>

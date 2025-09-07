@@ -2,6 +2,7 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.models.config_templates import ColumnConfigTemplate
 from apps.workflow.permissions import (
     get_readable_fields_state,
     get_editable_fields_state,
@@ -282,6 +283,24 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             or request.GET.get("filter_config_id")
         )
         column_configs = self.get_column_config_queryset(user)
+        # Lazy seed from admin-defined template when user has no column configs
+        if not column_configs.exists():
+            try:
+                tpl = (
+                    ColumnConfigTemplate.objects.filter(block=self.block, is_default=True).first()
+                    or ColumnConfigTemplate.objects.filter(block=self.block).first()
+                )
+                if tpl:
+                    BlockColumnConfig.objects.create(
+                        block=self.block,
+                        user=user,
+                        name=tpl.name or "Default",
+                        fields=list(tpl.fields or []),
+                        is_default=True,
+                    )
+                    column_configs = self.get_column_config_queryset(user)
+            except Exception:
+                pass
         filter_configs = self.get_filter_config_queryset(user)
         active_column_config = None
         if column_config_id:
@@ -461,3 +480,4 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             if editable_flags:
                 row["__editable"] = editable_flags
         return json.dumps(data)
+
