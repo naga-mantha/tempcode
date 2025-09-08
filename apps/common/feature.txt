@@ -1,38 +1,39 @@
-I want a management script.
+I want a ToDo model in the "common" app with the following fields:
+1. Title - CharField, max_length=200
+2. Description - TextField
+3. Status - "Not Started", "In Progress", "Completed"
+4. Created_at - DateTimeField, auto_now_add=True
+5. Updated_at - DateTimeField, auto_now=True
+6. Dependencies - ManyToManyField to self, blank=True
 
-Inputs:
-1. Excel path + file name
-2. Model Name
-3. Column to field mapping (as a dictionary)
+For the template, I would need a page which
+1. Lists all ToDo items placed in a Bootstrap accordion
+2. The accordion should contain:
+    - Title
+    - Dependencies. Use pill badges (https://getbootstrap.com/docs/5.3/components/badge/#pill-badges). The background color of the badge should be in accordance with the status of the ToDo item (See below for coloring)
+3. The description should be in the accordion body
+4. The background color of the accordion should be in accordance with the status of the ToDo item
+   - Not Started - Secondary
+   - In Progress - Primary
+   - Completed - Success
+ You can use the Bootstrap classes for this
+ 5. The accordion should be draggable to change the priority. You can use SortJS for this.
 
-What it should do:
-1. Read the Excel file.
-2. Map the columns to the model fields. (Define a dictionary for mapping)
-3. Create or update records in the database based on the model name and mapped fields.
-4. If there are foreign key relationships, ensure that the related records exist or create them if they don't.
-5. Handle any errors gracefully and log them for review.
 
-Q&A
-- Model target
-    - Should --model be a dotted label like app_label.ModelName? Or are all models under apps.common? --> better be "app_label.ModelName"
-    - For updates, which fields should define uniqueness? Do you want a --lookup-fields list (e.g., ["code"]), or should I infer from the mapping if id/pk is present? --> It should read the model unique_together and unique fields to determine uniqueness.
--
-Mapping format
-    - Can I accept the mapping as JSON via CLI (e.g., --mapping '{"Excel Col":"field","Item Code":"item__code"}') and also support --mapping-file pointing to a JSON file? -- I guess so
-    - For foreign keys, is related_field via item__code syntax acceptable (Django-style double-underscore traversal)? I’d use that to lookup/create related rows. --- Yes, that is acceptable.
--
-Related creation
-    - When creating missing related records (e.g., Item(code=...)), there may be other non-nullable fields. OK to fail and log if creation violates constraints, or should we allow
---defaults '{"field":"value"}' for related models? --> Fail and log if creation violates constraints.
--
-Excel specifics
-    - Should I support --sheet (name or index)? Default to the first sheet otherwise? --> Default to the first sheet.
-    - pandas requires openpyxl for .xlsx. It’s not in requirements.txt. May I add openpyxl to requirements, or do you already have it installed? --> You may add openpyxl to requirements.
--
-Error handling and logs
-    - Is writing a log file under logs/import_excel_<timestamp>.log acceptable, in addition to console output? --> Yes, that is acceptable.
-    - Continue on row errors (collect and report), or abort on first error? I plan to continue and summarize. --> Continue and summarize.
--
-Extras
-    - Need a --dry-run option to validate mapping and show planned changes without writing? --> No
-    - Any date/number parsing constraints, or is pandas’ default parsing fine? --> pandas' default parsing is fine. Lets see
+ Q&A
+  - Priority field: To support drag-to-reorder, can I add an IntegerField priority (with model Meta.ordering = ['priority'])?
+        > Yes
+  - Status choices: OK to implement via TextChoices with default “Not Started”?
+        > Dropdown
+  - Description required: Should description be optional (blank=True) or required?
+        > Optional
+  - Dependencies coloring: Should each dependency badge color match the dependency item’s own status or the parent item’s status?
+        > Dependency item’s own status
+  - Sortable library: You wrote “SortJS” — do you mean SortableJS via CDN?
+        > Yes
+  - URL + template: OK to add path('todos/', todo_list, name='todo_list') and template at apps/common/templates/todo_list.html?
+        > Yes
+  - Reorder endpoint: OK to add a POST endpoint path('todos/reorder/', ...) that accepts an ordered list of IDs and updates priorities?
+        > Yes
+  - Admin/CRUD: Do you want Django admin registration and/or basic create/edit views now, or is listing + drag-reorder sufficient?
+        > I would need admin too

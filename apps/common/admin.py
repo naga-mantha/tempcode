@@ -110,3 +110,11 @@ class UOMAdmin(admin.ModelAdmin):
 class WorkCenterAdmin(admin.ModelAdmin):
     list_display = ("code", "name", )
     search_fields = ("code", "name",)
+
+
+@admin.register(ToDo)
+class ToDoAdmin(admin.ModelAdmin):
+    list_display = ("title", "status", "priority", "created_at", "updated_at")
+    list_filter = ("status",)
+    search_fields = ("title", "description")
+    filter_horizontal = ("dependencies",)
