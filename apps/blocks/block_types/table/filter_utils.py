@@ -1,3 +1,7 @@
+from datetime import date, timedelta
+from calendar import monthrange
+
+
 class FilterResolutionMixin:
     """Common filter resolution helpers for table blocks and views."""
 
@@ -22,6 +26,24 @@ class FilterResolutionMixin:
     def _collect_filters(qd, schema, base=None, *, prefix="filters.", allow_flat=True):
         """Collect filter values from a QueryDict overlaying optional base values."""
         base = dict(base or {})
+
+        def _resolve_token(val):
+            if not isinstance(val, str):
+                return val
+            token = val.strip().lower()
+            today = date.today()
+            if token in {"__today__", "today"}:
+                return today.isoformat()
+            if token in {"__start_of_month__", "start_of_month"}:
+                return today.replace(day=1).isoformat()
+            if token in {"__end_of_month__", "end_of_month"}:
+                last_day = monthrange(today.year, today.month)[1]
+                return today.replace(day=last_day).isoformat()
+            return val
+
+        # Pre-resolve any dynamic tokens in provided base values
+        for k, v in list(base.items()):
+            base[k] = _resolve_token(v)
         if not schema:
             return base
 

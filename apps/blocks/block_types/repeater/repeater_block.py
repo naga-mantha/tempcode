@@ -10,6 +10,7 @@ from apps.blocks.models.config_templates import RepeaterConfigTemplate
 from django.http import QueryDict
 from django.utils.text import slugify
 from django.db.models import Model
+from django.db.models import Count, Sum, Avg, Min, Max
 import json
 import uuid
 
@@ -150,12 +151,20 @@ class RepeaterBlock(BaseBlock):
         include_null = bool(schema.get("include_null"))
         cols = int(schema.get("cols") or 12)
         child_filters_map = schema.get("child_filters_map") or {}
+        # Optional: separate filters for metric evaluation (child mode)
+        metric_filters_map = schema.get("metric_filters") or {}
         null_sentinel = schema.get("null_sentinel")
         child_filter_name = (schema.get("child_filter_config_name") or "").strip()
         child_column_name = (schema.get("child_column_config_name") or "").strip()
-        sort = (schema.get("sort") or "none").lower()
+        # Ordering and limit
+        order_by = (schema.get("order_by") or "label").lower()  # 'label' | 'metric'
+        order = (schema.get("order") or schema.get("sort") or "none").lower()  # 'asc' | 'desc' | 'none'
         limit = schema.get("limit")
         title_template = (schema.get("title_template") or "{label}").strip()
+        # Metric config
+        metric_mode = (schema.get("metric_mode") or "aggregate").lower()  # 'aggregate' | 'child'
+        metric_agg = (schema.get("metric_agg") or "count").lower()  # 'count'|'sum'|'avg'|'min'|'max'
+        metric_field = schema.get("metric_field")  # required for sum/avg/min/max
 
         if not block_code:
             return [], cols, ""
@@ -176,26 +185,103 @@ class RepeaterBlock(BaseBlock):
         except Exception:
             base_qs = None
 
+        # Build aggregation function mapping
+        agg_map = {
+            "count": lambda f: Count(f or "id"),
+            "sum": lambda f: Sum(f),
+            "avg": lambda f: Avg(f),
+            "min": lambda f: Min(f),
+            "max": lambda f: Max(f),
+        }
+
         if base_qs is not None and group_by:
-            fields = [group_by]
-            if label_field and label_field != group_by:
-                fields.append(label_field)
-            qs = base_qs.values(*fields).distinct()
-            if not include_null:
-                qs = qs.exclude(**{f"{group_by}__isnull": True})
-            # sorting by label if available
-            if sort in ("asc", "desc"):
-                order = label_field or group_by
-                if sort == "desc":
-                    order = f"-{order}"
-                qs = qs.order_by(order)
-            if isinstance(limit, int) and limit > 0:
-                qs = qs[:limit]
-            for r in qs:
-                values.append({
+            # Two modes: label-ordered vs metric-ordered
+            if order_by == "metric":
+                if metric_mode == "aggregate":
+                    fields = [group_by]
+                    if label_field and label_field != group_by:
+                        fields.append(label_field)
+                    qs = base_qs.values(*fields)
+                    if not include_null:
+                        qs = qs.exclude(**{f"{group_by}__isnull": True})
+                    try:
+                        agg_fn_builder = agg_map.get(metric_agg or "count") or agg_map["count"]
+                        if metric_agg == "count":
+                            # count does not require a concrete field
+                            metric_ann = agg_fn_builder("id")
+                        else:
+                            if not metric_field:
+                                raise ValueError("metric_field is required for aggregate metric mode (sum/avg/min/max)")
+                            metric_ann = agg_fn_builder(metric_field)
+                        qs = qs.annotate(metric=metric_ann)
+                        # Order and limit
+                        if order in ("asc", "desc"):
+                            order_field = "metric" if order == "asc" else "-metric"
+                            qs = qs.order_by(order_field)
+                        if isinstance(limit, int) and limit > 0:
+                            qs = qs[:limit]
+                        for r in qs:
+                            values.append({
+                                "value": r.get(group_by),
+                                "label": r.get(label_field) if label_field else r.get(group_by),
+                                "metric": r.get("metric"),
+                            })
+                    except Exception as exc:
+                        # Fall back to label ordering if aggregation fails
+                        values = []
+                        order_by = "label"
+                else:  # metric_mode == 'child'
+                    # First enumerate distinct values+labels (unsorted)
+                    fields = [group_by]
+                    if label_field and label_field != group_by:
+                        fields.append(label_field)
+                    qs = base_qs.values(*fields).distinct()
+                    if not include_null:
+                        qs = qs.exclude(**{f"{group_by}__isnull": True})
+                    for r in qs:
+                        values.append({
+                            "value": r.get(group_by),
+                            "label": r.get(label_field) if label_field else r.get(group_by),
+                        })
+                    # Resolve metric_filters by mapping schema entries
+                    metric_filters = {}
+                    for key, source in (metric_filters_map.items() if isinstance(metric_filters_map, dict) else []):
+                        # In this context we pass literal values; 'value'/'label' placeholders are not meaningful globally
+                        metric_filters[key] = source
+                    # Ask child to compute per-group metrics
+                    metrics = {}
+                    try:
+                        if hasattr(child, "get_repeater_metrics"):
+                            metrics = child.get_repeater_metrics(user, group_by, base_qs, metric_filters)  # type: ignore[attr-defined]
+                    except Exception:
+                        metrics = {}
+                    # Attach metrics and sort
+                    for it in values:
+                        it["metric"] = metrics.get(it["value"], 0)
+                    if order in ("asc", "desc"):
+                        rev = order == "desc"
+                        values.sort(key=lambda x: (x.get("metric") is None, x.get("metric", 0)), reverse=rev)
+                    if isinstance(limit, int) and limit > 0:
+                        values = values[:limit]
+            # Fallback: label ordering or when order_by degraded to 'label'
+            if order_by != "metric":
+                fields = [group_by]
+                if label_field and label_field != group_by:
+                    fields.append(label_field)
+                qs = base_qs.values(*fields).distinct()
+                if not include_null:
+                    qs = qs.exclude(**{f"{group_by}__isnull": True})
+                if order in ("asc", "desc"):
+                    order_field = label_field or group_by
+                    if order == "desc":
+                        order_field = f"-{order_field}"
+                    qs = qs.order_by(order_field)
+                if isinstance(limit, int) and limit > 0:
+                    qs = qs[:limit]
+                values = [{
                     "value": r.get(group_by),
                     "label": r.get(label_field) if label_field else r.get(group_by),
-                })
+                } for r in qs]
 
         # Construct each panel by rendering the child with namespaced filters
         panels = []

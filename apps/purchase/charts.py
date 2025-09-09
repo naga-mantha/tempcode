@@ -140,3 +140,107 @@
 #     "ProductionOrdersPerItemLineChart",
 # ]
 #
+from django.urls import reverse
+
+from apps.blocks.block_types.chart.dial_block import DialChartBlock
+from apps.common.models import BusinessPartner
+from apps.common.models.receipts import ReceiptLine, PurchaseSettings
+from django.db.models import Count, Q
+
+
+class PurchaseOtdDialChart(DialChartBlock):
+    """Dial chart showing OTD% over a period, optionally filtered by supplier.
+
+    OTD% = 100 * count(classification.counts_for_ontime=True) / count(all)
+    """
+
+    def __init__(self):
+        super().__init__("purchase_otd_dial")
+
+    def get_filter_schema(self, request):
+        def supplier_choices(user, query=""):
+            qs = BusinessPartner.objects.all()
+            if query:
+                qs = qs.filter(name__icontains=query)
+            return [(bp.id, f"{bp.code} - {bp.name}".strip(" -")) for bp in qs.order_by("code")[:50]]
+
+        return {
+            "supplier": {
+                "label": "Supplier",
+                "type": "select",
+                "choices": supplier_choices,
+                "choices_url": reverse("block_filter_choices", args=[self.block_name, "supplier"]),
+            },
+            "receipt_date_from": {
+                "label": "Receipt From",
+                "type": "date",
+            },
+            "receipt_date_to": {
+                "label": "Receipt To",
+                "type": "date",
+            },
+        }
+
+    # Allow repeaters to enumerate distinct group values from receipt lines
+    def get_enumeration_queryset(self, user):
+        return ReceiptLine.objects.all()
+
+    def _apply_filters(self, qs, filters):
+        supplier = filters.get("supplier")
+        if supplier:
+            try:
+                supplier_id = int(supplier)
+                qs = qs.filter(po_line__order__supplier_id=supplier_id)
+            except Exception:
+                pass
+        f = filters.get("receipt_date_from")
+        t = filters.get("receipt_date_to")
+        if f:
+            qs = qs.filter(receipt_date__gte=f)
+        if t:
+            qs = qs.filter(receipt_date__lte=t)
+        return qs
+
+    def get_value(self, user, filters) -> float:
+        qs = ReceiptLine.objects.all()
+        qs = self._apply_filters(qs, filters)
+        total = qs.count()
+        if total == 0:
+            return 0.0
+        ontime = qs.filter(classification__counts_for_ontime=True).count()
+        return round((ontime / total) * 100.0, 2)
+
+    def get_target(self, user, filters) -> float:
+        settings = PurchaseSettings.objects.first()
+        return float(getattr(settings, "otd_target_percent", 95) or 95)
+
+    # Expose OTD% as a per-group metric for repeaters
+    # Returns mapping: { group_value: otd_percent_float }
+    def get_repeater_metrics(self, user, group_by: str, base_qs, metric_filters: dict | None = None):
+        qs = base_qs
+        metric_filters = metric_filters or {}
+        f = metric_filters.get("receipt_date_from")
+        t = metric_filters.get("receipt_date_to")
+        if f:
+            qs = qs.filter(receipt_date__gte=f)
+        if t:
+            qs = qs.filter(receipt_date__lte=t)
+        data = (
+            qs.values(group_by)
+            .annotate(
+                total=Count("id"),
+                ontime=Count("id", filter=Q(classification__counts_for_ontime=True)),
+            )
+        )
+        out = {}
+        for r in data:
+            total = r.get("total") or 0
+            ontime = r.get("ontime") or 0
+            pct = round((ontime / total) * 100.0, 2) if total else 0.0
+            out[r.get(group_by)] = pct
+        return out
+
+
+__all__ = [
+    "PurchaseOtdDialChart",
+]

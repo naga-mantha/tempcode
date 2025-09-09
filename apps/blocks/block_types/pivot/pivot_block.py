@@ -1,6 +1,7 @@
 from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.models.config_templates import FilterConfigTemplate
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 import json
 import uuid
@@ -81,6 +82,44 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
     def _build_context(self, request, instance_id):
         user = request.user
         filter_configs = self.get_filter_config_queryset(user)
+        # Lazy seed filter config from admin template if none, or only the placeholder exists
+        try:
+            tpl = (
+                FilterConfigTemplate.objects.filter(block=self.block, is_default=True).first()
+                or FilterConfigTemplate.objects.filter(block=self.block).first()
+            )
+        except Exception:
+            tpl = None
+        if not filter_configs.exists() and tpl:
+            try:
+                BlockFilterConfig.objects.create(
+                    block=self.block,
+                    user=user,
+                    name=tpl.name or "Default",
+                    values=dict(tpl.values or {}),
+                    is_default=True,
+                )
+                filter_configs = self.get_filter_config_queryset(user)
+            except Exception:
+                pass
+        elif tpl:
+            placeholders = list(filter_configs.filter(name="None", values={}))
+            if placeholders and filter_configs.count() == 1:
+                try:
+                    BlockFilterConfig.objects.create(
+                        block=self.block,
+                        user=user,
+                        name=tpl.name or "Default",
+                        values=dict(tpl.values or {}),
+                        is_default=True,
+                    )
+                    for ph in placeholders:
+                        if ph.is_default:
+                            ph.is_default = False
+                            ph.save(update_fields=["is_default"])
+                    filter_configs = self.get_filter_config_queryset(user)
+                except Exception:
+                    pass
         active_filter_config = None
         ns = f"{self.block_name}__{instance_id}__"
         filter_config_id = (

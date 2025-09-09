@@ -118,3 +118,52 @@ class ToDoAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("title", "description")
     filter_horizontal = ("dependencies",)
+
+
+@admin.register(Receipt)
+class ReceiptAdmin(admin.ModelAdmin):
+    list_display = ("number", "created_at", "updated_at")
+    search_fields = ("number",)
+
+
+@admin.register(ReceiptLine)
+class ReceiptLineAdmin(admin.ModelAdmin):
+    list_display = (
+        "receipt",
+        "line",
+        "po_line",
+        "receipt_date",
+        "days_offset",
+        "classification",
+        "amount_home_currency",
+    )
+    list_filter = ("receipt_date", "classification")
+    search_fields = ("receipt__number",)
+
+
+@admin.register(PurchaseTimelinessClassification)
+class PurchaseTimelinessClassificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "priority",
+        "active",
+        "counts_for_ontime",
+        "min_days",
+        "min_inclusive",
+        "max_days",
+        "max_inclusive",
+        "color",
+    )
+    list_filter = ("active",)
+    search_fields = ("name",)
+    ordering = ("priority", "id")
+
+
+@admin.register(PurchaseSettings)
+class PurchaseSettingsAdmin(admin.ModelAdmin):
+    list_display = ("otd_target_percent",)
+
+
+@admin.register(GlobalSettings)
+class GlobalSettingsAdmin(admin.ModelAdmin):
+    list_display = ("fiscal_year_start_month", "fiscal_year_start_day")

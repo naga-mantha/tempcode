@@ -6,5 +6,8 @@ class Command(BaseCommand):
     help = 'Delete'
 
     def handle(self, *args, **kwargs):
+        ReceiptLine.objects.all().delete()
+        Receipt.objects.all().delete()
         PurchaseOrderLine.objects.all().delete()
+        PurchaseOrder.objects.all().delete()
 

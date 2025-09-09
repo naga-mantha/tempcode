@@ -24,13 +24,22 @@ class RepeaterConfigForm(forms.Form):
     label_field = forms.ChoiceField(required=False)
     include_null = forms.BooleanField(required=False)
     cols = forms.ChoiceField(required=False, choices=[(str(c), str(c)) for c in (12, 6, 4, 3, 2, 1)])
+    # Ordering for label-based mode (legacy). New fields below supersede this.
     sort = forms.ChoiceField(required=False, choices=[("none", "None"), ("asc", "Ascending"), ("desc", "Descending")])
+    # New ordering options
+    order_by = forms.ChoiceField(required=False, choices=[("label", "Label"), ("metric", "Metric")])
+    order = forms.ChoiceField(required=False, choices=[("asc", "Ascending / Bottom"), ("desc", "Descending / Top")])
     limit = forms.IntegerField(required=False, min_value=1)
     title_template = forms.CharField(required=False)
     child_filters_map = forms.CharField(required=False, widget=forms.Textarea, help_text="JSON mapping of child filter keys to 'value'|'label' or literal.")
     null_sentinel = forms.CharField(required=False)
     child_filter_config_name = forms.CharField(required=False)
     child_column_config_name = forms.CharField(required=False)
+    # Metric configuration
+    metric_mode = forms.ChoiceField(required=False, choices=[("aggregate", "Aggregate (DB)"), ("child", "Child (custom)")])
+    metric_agg = forms.ChoiceField(required=False, choices=[("count", "Count"), ("sum", "Sum"), ("avg", "Average"), ("min", "Minimum"), ("max", "Maximum")])
+    metric_field = forms.CharField(required=False, help_text="Django field path for aggregate modes, e.g., 'received_quantity'. Not required for count.")
+    metric_filters = forms.CharField(required=False, widget=forms.Textarea, help_text="JSON of filters passed to child metrics (e.g., date range).")
 
     def __init__(self, *args, **kwargs):
         dim_choices = kwargs.pop("dimension_choices", [])
@@ -128,12 +137,18 @@ class RepeaterConfigView(LoginRequiredMixin, FormView):
             "include_null": bool(s.get("include_null")),
             "cols": str(s.get("cols") or ""),
             "sort": s.get("sort") or "none",
+            "order_by": s.get("order_by") or "label",
+            "order": s.get("order") or (s.get("sort") if s.get("sort") in ("asc","desc") else "asc"),
             "limit": s.get("limit") or None,
             "title_template": s.get("title_template") or "{label}",
             "child_filters_map": json_dumps_compact(s.get("child_filters_map") or {}),
             "null_sentinel": s.get("null_sentinel") or "",
             "child_filter_config_name": s.get("child_filter_config_name") or "",
             "child_column_config_name": s.get("child_column_config_name") or "",
+            "metric_mode": s.get("metric_mode") or "aggregate",
+            "metric_agg": s.get("metric_agg") or "count",
+            "metric_field": s.get("metric_field") or "",
+            "metric_filters": json_dumps_compact(s.get("metric_filters") or {}),
         })
         return initial
 
@@ -144,7 +159,7 @@ class RepeaterConfigView(LoginRequiredMixin, FormView):
         if action == "create":
             # Build schema from form
             s = {}
-            for key in ("group_by", "label_field", "cols", "sort", "title_template", "null_sentinel", "child_filter_config_name", "child_column_config_name"):
+            for key in ("group_by", "label_field", "cols", "sort", "order_by", "order", "title_template", "null_sentinel", "child_filter_config_name", "child_column_config_name", "metric_mode", "metric_agg", "metric_field"):
                 v = form.cleaned_data.get(key)
                 if v not in (None, ""):
                     s[key] = v if key != "cols" else int(v)
@@ -169,6 +184,16 @@ class RepeaterConfigView(LoginRequiredMixin, FormView):
             except Exception:
                 fmap = {}
             s["child_filters_map"] = fmap
+            # metric_filters as JSON
+            mfilters_raw = form.cleaned_data.get("metric_filters") or "{}"
+            try:
+                import json
+                mfilters = json.loads(mfilters_raw)
+                if not isinstance(mfilters, dict):
+                    mfilters = {}
+            except Exception:
+                mfilters = {}
+            s["metric_filters"] = mfilters
 
             target_id = form.cleaned_data.get("config_id") or self.request.POST.get("config_id")
             if target_id:

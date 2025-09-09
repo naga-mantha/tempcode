@@ -7,24 +7,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Example inputs
         excel_path = "C:/Users/n.mantha/Desktop/datafiles/po_lines_receipts.xlsx"
-        model_label = "common.PurchaseOrderLine"
+        model_label = "common.ReceiptLine"
 
         # Example mapping: Excel column names -> model fields
         mapping = {
-            "Order": "order__order",
-            "Line": "line",
-            "Sequence": "sequence",
-            "Item (child)": "item__code",
-            "Order Date": "order_date",
-            "Planned Receipt Date": "initial_receive_date",
-            "Confirmed Receipt Date": "supplier_confirmed_date",
-            "Changed Receipt Date": "modified_receive_date",
-            "Ordered Quantity": "total_quantity",
+            # Receipt header and line number
+            "Receipt Number": "receipt__number",
+            "Receipt Number (child)": "line",
+
+            # Map PO + Line + Squence to the po_line FK via composite lookup
+            # Adjust the left-hand keys to match your exact Excel headers
+            "Order": "po_line__order__order",
+            "Line": "po_line__line",
+            "Sequence": "po_line__sequence",
+
+            # Other fields on ReceiptLine
             "Received Quantity": "received_quantity",
-            "Price": "unit_price",
-            # "Ordered Quantity (child)": "uom__code",
-            "Price (child)": "currency__base_currency",
-            # "Notes": "comments",
+            "Actual Receipt Date": "receipt_date",
         }
 
         # Call the import_excel command programmatically

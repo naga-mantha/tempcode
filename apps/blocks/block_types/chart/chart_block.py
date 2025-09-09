@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.models.config_templates import FilterConfigTemplate
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.permissions.checks import (
     filter_viewable_queryset as filter_viewable_queryset_generic,
@@ -90,6 +91,45 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             or request.GET.get("filter_config_id")
         )
         filter_configs = self.get_filter_config_queryset(user)
+        # Lazy seed from admin-defined template when user has no filter configs
+        # or only has an auto-generated 'None' placeholder with empty values.
+        try:
+            tpl = (
+                FilterConfigTemplate.objects.filter(block=self.block, is_default=True).first()
+                or FilterConfigTemplate.objects.filter(block=self.block).first()
+            )
+        except Exception:
+            tpl = None
+        if not filter_configs.exists() and tpl:
+            try:
+                BlockFilterConfig.objects.create(
+                    block=self.block,
+                    user=user,
+                    name=tpl.name or "Default",
+                    values=dict(tpl.values or {}),
+                    is_default=True,
+                )
+                filter_configs = self.get_filter_config_queryset(user)
+            except Exception:
+                pass
+        elif tpl:
+            placeholders = list(filter_configs.filter(name="None", values={}))
+            if placeholders and filter_configs.count() == 1:
+                try:
+                    BlockFilterConfig.objects.create(
+                        block=self.block,
+                        user=user,
+                        name=tpl.name or "Default",
+                        values=dict(tpl.values or {}),
+                        is_default=True,
+                    )
+                    for ph in placeholders:
+                        if ph.is_default:
+                            ph.is_default = False
+                            ph.save(update_fields=["is_default"])
+                    filter_configs = self.get_filter_config_queryset(user)
+                except Exception:
+                    pass
         active_filter_config = None
         if filter_config_id:
             try:

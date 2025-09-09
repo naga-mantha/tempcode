@@ -214,6 +214,8 @@ class Command(BaseCommand):
             try:
                 # Prepare collected values and related instances
                 assignments: Dict[str, Any] = {}
+                # Collect per-root relation constraints to support composite lookups
+                rel_constraints: Dict[str, Dict[str, Any]] = {}
 
                 # Resolve mapping per column
                 for excel_col, path in mapping.items():
@@ -224,48 +226,76 @@ class Command(BaseCommand):
                     if _is_null(raw_value):
                         continue
                     if "__" in path:
-                        # Resolve relation chain and set FK on the root model
+                        # Defer relation resolution; collect constraints to allow composite lookups
                         root_field, *subpath = path.split("__")
                         fobj = field_map.get(root_field)
                         if not fobj or not (hasattr(fobj, 'remote_field') and fobj.remote_field):
                             raise ValueError(f"Mapping points to relation '{root_field}' which is not a ForeignKey/OneToOne")
-                        rel_model = fobj.remote_field.model
-                        # Build lookup on the related model from the remaining path and raw_value
-                        if not subpath:
-                            # Direct FK value (assume PK provided)
-                            rel_instance = rel_model.objects.filter(pk=raw_value).first()
-                            if not rel_instance:
-                                # Attempt creation by assigning PK directly if allowed
-                                try:
-                                    rel_instance = rel_model.objects.create(pk=raw_value)
-                                except Exception:
-                                    raise ValueError(f"Related {rel_model.__name__} with pk={raw_value} not found and could not be created.")
-                        else:
-                            lookup_field = "__".join(subpath)
-                            # Only support single-field equality lookups on related for now
-                            rel_qs = rel_model.objects.filter(**{lookup_field: raw_value})
-                            rel_instance = rel_qs.first()
-                            if not rel_instance:
-                                # Try to create minimal related row
-                                try:
-                                    create_kwargs = {lookup_field: raw_value}
-                                    # If creating a user-like model that requires a username,
-                                    # use the same value as a sensible default when not provided.
-                                    rel_field_names = {f.name for f in rel_model._meta.get_fields() if hasattr(f, 'attname')}
-                                    if 'username' in rel_field_names and 'username' not in create_kwargs:
-                                        create_kwargs['username'] = str(raw_value)
-                                    rel_instance = rel_model.objects.create(**create_kwargs)
-                                except Exception as exc:
-                                    raise ValueError(
-                                        f"Related {rel_model.__name__} lookup {lookup_field}={raw_value!r} not found and could not be created: {exc}"
-                                    )
-                        assignments[root_field] = rel_instance
+                        # Store constraints for this relation; join the rest of the path (could be nested like order__order)
+                        if root_field not in rel_constraints:
+                            rel_constraints[root_field] = {}
+                        lookup_field = "__".join(subpath)
+                        # If no subpath, treat as assigning PK directly later
+                        if lookup_field == "":
+                            lookup_field = "pk"
+                        rel_constraints[root_field][lookup_field] = raw_value
                     else:
                         # Coerce value types for concrete fields (e.g., DateField)
                         fobj = field_map.get(path)
                         if fobj is not None:
                             raw_value = _coerce_value_for_field(fobj, raw_value)
                         assignments[path] = raw_value
+
+                # Resolve all deferred relations with composite lookup support
+                for root_field, constraints in rel_constraints.items():
+                    fobj = field_map.get(root_field)
+                    rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
+
+                    # Try exact match on all collected constraints
+                    try:
+                        rel_instance = rel_model.objects.filter(**constraints).first()
+                    except Exception:
+                        rel_instance = None
+
+                    if not rel_instance:
+                        # Build create kwargs, resolving nested relations like 'order__order'
+                        create_kwargs: Dict[str, Any] = {}
+                        for key, val in constraints.items():
+                            if "__" not in key or key == "pk":
+                                # Simple field or direct PK
+                                field_name = key if key != "pk" else rel_model._meta.pk.name
+                                create_kwargs[field_name] = val
+                                continue
+
+                            # Resolve nested relation path
+                            parts = key.split("__")
+                            base_field_name = parts[0]
+                            nested_lookup = "__".join(parts[1:])
+                            try:
+                                base_field = rel_model._meta.get_field(base_field_name)
+                                nested_model = base_field.remote_field.model  # type: ignore[attr-defined]
+                            except Exception as exc:
+                                raise ValueError(f"Invalid relation path '{key}' for {rel_model.__name__}: {exc}")
+
+                            # Find or create the nested instance
+                            nested_obj = nested_model.objects.filter(**{nested_lookup: val}).first()
+                            if not nested_obj:
+                                try:
+                                    nested_obj = nested_model.objects.create(**{nested_lookup: val})
+                                except Exception as exc:
+                                    raise ValueError(
+                                        f"Related {nested_model.__name__} not found for {nested_lookup}={val!r} and could not be created: {exc}"
+                                    )
+                            create_kwargs[base_field_name] = nested_obj
+
+                        try:
+                            rel_instance = rel_model.objects.create(**create_kwargs)
+                        except Exception as exc:
+                            raise ValueError(
+                                f"Unable to resolve/create related {rel_model.__name__} with constraints {constraints}: {exc}"
+                            )
+
+                    assignments[root_field] = rel_instance
 
                 # Determine existing row via unique constraints
                 instance = None

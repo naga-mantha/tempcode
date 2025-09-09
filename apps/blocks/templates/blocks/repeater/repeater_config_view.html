@@ -79,14 +79,22 @@
 
     <div class="row g-3 mb-3">
       <div class="col-md-4">
-        <label class="form-label">Sort</label>
-        <select name="sort" class="form-select">
-          {% for val,label in form.sort.field.choices %}
-            <option value="{{ val }}" {% if form.initial.sort == val %}selected{% endif %}>{{ label }}</option>
+        <label class="form-label">Order By</label>
+        <select name="order_by" class="form-select">
+          {% for val,label in form.order_by.field.choices %}
+            <option value="{{ val }}" {% if form.initial.order_by == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-8">
+      <div class="col-md-4">
+        <label class="form-label">Order</label>
+        <select name="order" class="form-select">
+          {% for val,label in form.order.field.choices %}
+            <option value="{{ val }}" {% if form.initial.order == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
         <label class="form-label">Panel Title Template</label>
         <input type="text" name="title_template" class="form-control" value="{{ form.initial.title_template|default:'{label}' }}" placeholder="e.g., {label}">
       </div>
@@ -112,6 +120,39 @@
         <input type="text" name="child_column_config_name" class="form-control" value="{{ form.initial.child_column_config_name|default:'' }}" placeholder="Optional">
       </div>
     </div>
+
+    <details class="border rounded mb-3">
+      <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">Metric Settings</summary>
+      <div class="p-3">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label">Metric Mode</label>
+            <select name="metric_mode" class="form-select">
+              {% for val,label in form.metric_mode.field.choices %}
+                <option value="{{ val }}" {% if form.initial.metric_mode == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Aggregate</label>
+            <select name="metric_agg" class="form-select">
+              {% for val,label in form.metric_agg.field.choices %}
+                <option value="{{ val }}" {% if form.initial.metric_agg == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Metric Field (for sum/avg/min/max)</label>
+            <input type="text" name="metric_field" class="form-control" value="{{ form.initial.metric_field|default:'' }}" placeholder="e.g., received_quantity">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Metric Filters (JSON)</label>
+          <textarea name="metric_filters" class="form-control" rows="3" placeholder='{"receipt_date_from": "2025-08-01", "receipt_date_to": "2025-08-31"}'>{{ form.initial.metric_filters|default:'{}' }}</textarea>
+          <small class="text-muted">Applies only to child metric mode. Passed to the child block's metric hook.</small>
+        </div>
+      </div>
+    </details>
 
     <div class="mt-2">
       <button type="submit" class="btn btn-primary">Save Settings</button>

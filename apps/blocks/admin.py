@@ -33,6 +33,7 @@ class RepeaterConfigAdmin(admin.ModelAdmin):
 
 # Template models (admin-defined defaults)
 from apps.blocks.models.config_templates import (
+    FilterConfigTemplate,
     ColumnConfigTemplate,
     PivotConfigTemplate,
     RepeaterConfigTemplate,
@@ -40,6 +41,12 @@ from apps.blocks.models.config_templates import (
 
 @admin.register(ColumnConfigTemplate)
 class ColumnConfigTemplateAdmin(admin.ModelAdmin):
+    list_display = ("block", "name", "is_default", "site_key")
+    list_filter = ("is_default",)
+    search_fields = ("name", "site_key")
+
+@admin.register(FilterConfigTemplate)
+class FilterConfigTemplateAdmin(admin.ModelAdmin):
     list_display = ("block", "name", "is_default", "site_key")
     list_filter = ("is_default",)
     search_fields = ("name", "site_key")

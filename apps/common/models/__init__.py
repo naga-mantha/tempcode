@@ -21,3 +21,10 @@ from apps.common.models.order_categories import OrderCategory
 from apps.common.models.sales_orders import SalesOrder
 from apps.common.models.sales_order_lines import SalesOrderLine
 from apps.common.models.todo import ToDo
+from apps.common.models.receipts import (
+    Receipt,
+    ReceiptLine,
+    PurchaseTimelinessClassification,
+    PurchaseSettings,
+    GlobalSettings,
+)
