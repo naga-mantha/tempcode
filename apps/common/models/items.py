@@ -3,8 +3,8 @@ from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 
 class Item(WorkflowModelMixin):
-    code = models.CharField(max_length=100)
-    description = models.CharField(max_length=100, blank=True, default="")
+    code = models.CharField(max_length=100, verbose_name="Item Code")
+    description = models.CharField(max_length=100, blank=True, default="", verbose_name="Item Description")
 
     objects = models.Manager()
     df_objects = DataFrameManager()

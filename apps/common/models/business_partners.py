@@ -7,10 +7,10 @@ class BusinessPartner(models.Model):
         ('inactive', 'Inactive'),
     )
 
-    code = models.CharField(max_length=15, blank=True, default="")
-    name = models.CharField(max_length=100, blank=True, default="")
-    status = models.CharField(max_length=10, choices=STATUS, default='-')
-    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.PROTECT)
+    code = models.CharField(max_length=15, blank=True, default="", verbose_name="Business Partner Code")
+    name = models.CharField(max_length=100, blank=True, default="", verbose_name="Business Partner Name")
+    status = models.CharField(max_length=10, choices=STATUS, default='-', verbose_name="Business Partner Status")
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.PROTECT, verbose_name="Parent Business Partner")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -5,7 +5,7 @@ from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 
 class PurchaseOrder(WorkflowModelMixin):
-    order = models.CharField(max_length=10)
+    order = models.CharField(max_length=10, verbose_name="Purchase Order")
     buyer = models.ForeignKey(CustomUser, on_delete=models.PROTECT, blank=True, null=True)
     supplier = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
     category = models.ForeignKey('OrderCategory', null=True, blank=True, on_delete=models.PROTECT)

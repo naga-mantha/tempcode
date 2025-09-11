@@ -18,9 +18,9 @@ class MrpRescheduleDaysClassification(models.Model):
     Bounds are inclusive when specified.
     """
 
-    name = models.CharField(max_length=50, unique=True)
-    min_days = models.IntegerField(null=True, blank=True)
-    max_days = models.IntegerField(null=True, blank=True)
+    name = models.CharField(max_length=50, unique=True, verbose_name="MRP Reschedule Days Classification Name")
+    min_days = models.IntegerField(null=True, blank=True, verbose_name="Minimum Days")
+    max_days = models.IntegerField(null=True, blank=True, verbose_name="Maximum Days")
 
     class Meta:
         ordering = ("min_days", "id")
@@ -44,18 +44,18 @@ class PlannedOrder(models.Model):
         ("PPRO", "Planned Production Order"),
     )
 
-    order = models.CharField(max_length=20, verbose_name='Order')
+    order = models.CharField(max_length=20, verbose_name='Planned Order')
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
-    quantity = models.FloatField(blank=True, null=True)
+    quantity = models.FloatField(blank=True, null=True, verbose_name="Planned Quantity")
     uom = models.ForeignKey(UOM, on_delete=models.PROTECT, blank=True, null=True)
-    type = models.CharField(max_length=4, choices=TYPE_CHOICES, blank=True, null=True)
+    type = models.CharField(max_length=4, choices=TYPE_CHOICES, blank=True, null=True, verbose_name="Type")
 
     buyer = models.ForeignKey(CustomUser, on_delete=models.PROTECT, blank=True, null=True)
     supplier = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
 
-    planned_start_date = models.DateField(blank=True, null=True)
-    planned_end_date = models.DateField(blank=True, null=True)
-    required_date = models.DateField(blank=True, null=True)
+    planned_start_date = models.DateField(blank=True, null=True, verbose_name="Planned Start Date")
+    planned_end_date = models.DateField(blank=True, null=True, verbose_name="Planned End Date")
+    required_date = models.DateField(blank=True, null=True, verbose_name="Required Date")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -91,11 +91,11 @@ class MrpMessage(models.Model):
         related_name="mrp_message",
     )
 
-    mrp_message = models.TextField(blank=True, default="")
-    mrp_reschedule_date = models.DateField(blank=True, null=True, db_index=True)
+    mrp_message = models.TextField(blank=True, default="", verbose_name="MRP Message")
+    mrp_reschedule_date = models.DateField(blank=True, null=True, db_index=True, verbose_name="MRP Reschedule Date")
 
-    reschedule_delta_days = models.IntegerField(blank=True, null=True, db_index=True)
-    direction = models.CharField(max_length=8, choices=DIRECTION_CHOICES, blank=True, null=True, db_index=True)
+    reschedule_delta_days = models.IntegerField(blank=True, null=True, db_index=True, verbose_name="Reschedule Delta Days")
+    direction = models.CharField(max_length=8, choices=DIRECTION_CHOICES, blank=True, null=True, db_index=True, verbose_name="Reschedule Direction")
     classification = models.ForeignKey(
         MrpRescheduleDaysClassification,
         on_delete=models.SET_NULL,

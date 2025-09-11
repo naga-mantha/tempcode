@@ -16,7 +16,10 @@ from apps.permissions.checks import (
     filter_viewable_queryset as filter_viewable_queryset_generic,
 )
 from apps.blocks.helpers.field_rules import get_field_display_rules
+from apps.blocks.helpers.column_config import get_user_column_config
 from django.db import models
+from django.core.exceptions import FieldDoesNotExist
+from django.contrib.admin.utils import label_for_field
 import json
 from .filter_utils import FilterResolutionMixin
 import uuid
@@ -52,27 +55,100 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         raise NotImplementedError("You must override get_model()")
 
     def get_queryset(self, user, filters, active_column_config):
-        raise NotImplementedError("You must override get_queryset(user, filters, active_column_config)")
+        """Default queryset builder for table blocks.
 
-    def get_column_defs(self, user, column_config):
-        """Return the column definitions used by the table.
+        - Starts from get_base_queryset(user)
+        - Infers forward relations from selected fields and applies select_related
+        - Applies registered filters via apply_filter_registry
 
-        This should return a list of dictionaries describing each column. Every
-        dictionary must include at least the keys ``field`` (the model field
-        name) and ``title`` (the human-readable label). Example::
-
-            [
-                {"field": "name", "title": "Name"},
-                {"field": "status", "title": "Status"},
-            ]
-
-        Subclasses must override this method to provide the appropriate column
-        configuration.
-
+        Subclasses can override get_base_queryset() for base filtering, or
+        override this method entirely if the defaults are not sufficient.
         """
-        raise NotImplementedError(
-            "You must override get_column_defs(user, column_config)"
-        )
+        # Late import to avoid circulars
+        from apps.blocks.services.filtering import apply_filter_registry
+
+        selected_fields = active_column_config.fields if active_column_config else []
+        select_paths, prefetch_paths = self._infer_related_paths(selected_fields, max_depth=5)
+        qs = self.get_base_queryset(user)
+        if select_paths:
+            qs = qs.select_related(*sorted(select_paths))
+        if prefetch_paths:
+            qs = qs.prefetch_related(*sorted(prefetch_paths))
+        return apply_filter_registry(self.block_name, qs, filters, user)
+
+    def get_base_queryset(self, user):
+        """Base queryset hook; override in subclasses for default filters."""
+        return self.get_model().objects.all()
+
+    def _infer_related_paths(self, selected_fields, max_depth=5):
+        """Infer select_related and prefetch_related paths from selected fields.
+
+        - Forward FK/OneToOne -> select_related
+        - Reverse OneToOne -> select_related
+        - Forward/Reverse M2M -> prefetch_related
+        - Reverse ForeignKey (ManyToOne) -> prefetch_related
+        Stops at max_depth relations.
+        """
+        model = self.get_model()
+        select_paths = set()
+        prefetch_paths = set()
+
+        for f in selected_fields or []:
+            if "__" not in f:
+                continue
+            parts = f.split("__")
+            current_model = model
+            path_elems = []
+            for i, part in enumerate(parts):
+                if i >= max_depth:
+                    break
+                try:
+                    field = current_model._meta.get_field(part)
+                except FieldDoesNotExist:
+                    break
+                is_relation = getattr(field, "is_relation", False)
+                is_m2m = getattr(field, "many_to_many", False)
+                is_auto = getattr(field, "auto_created", False)
+                if not is_relation:
+                    break
+                path_elems.append(part)
+                path = "__".join(path_elems)
+                # Reverse relations have auto_created=True
+                if is_m2m:
+                    prefetch_paths.add(path)
+                elif is_auto:
+                    # Reverse: OneToOneRel -> select_related; ManyToOneRel -> prefetch
+                    rel_class_name = type(field).__name__.lower()
+                    if "one" in rel_class_name and "toone" in rel_class_name:
+                        select_paths.add(path)
+                    else:
+                        prefetch_paths.add(path)
+                else:
+                    # Forward: OneToOne/FK -> select_related
+                    select_paths.add(path)
+                # Descend for further traversal where possible
+                try:
+                    current_model = field.remote_field.model
+                except Exception:
+                    break
+        return select_paths, prefetch_paths
+
+    def get_column_defs(self, user, column_config=None):
+        """Default column defs based on active column config.
+
+        Returns a list of {"field": <path>, "title": <label>} entries,
+        skipping any invalid/missing fields gracefully.
+        """
+        fields = column_config.fields if column_config else get_user_column_config(user, self.block)
+        model = self.get_model()
+        defs = []
+        for field in fields or []:
+            try:
+                label = label_for_field(field, model, return_attr=False)
+            except Exception:
+                continue
+            defs.append({"field": field, "title": label})
+        return defs
 
     def get_tabulator_default_options(self, user):
         """Base defaults for Tabulator options across all TableBlocks.
@@ -82,9 +158,9 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         changes that are merged on top of these defaults.
         """
         return {
-            "layout": "fitColumns",
+            "layout": "fitData",
             "pagination": "local",
-            "paginationSize": 20,
+            "paginationSize": 10,
             "paginationSizeSelector": [10, 20, 50, 100],
         }
 
@@ -489,16 +565,22 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                 attr_name = field
                 if "__" in field:
                     related_field, sub_field = field.split("__", 1)
-                    related_obj = getattr(obj, related_field, None)
+                    try:
+                        related_obj = getattr(obj, related_field)
+                    except Exception:
+                        related_obj = None
                     target_instance = related_obj
                     target_model = type(related_obj) if related_obj is not None else None
                     attr_name = sub_field
 
                 # Compute value first
-                value = getattr(target_instance or obj, attr_name if target_instance else field, None)
+                try:
+                    value = getattr(target_instance or obj, attr_name if target_instance else field)
+                except Exception:
+                    value = None
 
                 # Mask if unreadable by base or state permission
-                if user and target_model and target_instance is not None:
+                if user and isinstance(target_instance, models.Model):
                     if not can_read_field_generic(user, target_model, attr_name, target_instance) or not can_read_field_state(
                         user, target_model, attr_name, target_instance
                     ):
@@ -519,7 +601,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                         row[field] = str(value)
 
                 # Per-row edit flags
-                if user and target_model and target_instance is not None:
+                if user and isinstance(target_instance, models.Model):
                     can_write = can_write_field_generic(user, target_model, attr_name, target_instance) and can_write_field_state(
                         user, target_model, attr_name, target_instance
                     )

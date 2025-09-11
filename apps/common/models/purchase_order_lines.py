@@ -9,27 +9,27 @@ class PurchaseOrderLine(WorkflowModelMixin):
         ("closed", "Closed"),
     )
     order = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, blank=True, null=True)
-    line = models.PositiveIntegerField(blank=True, null=True)
-    sequence = models.PositiveIntegerField(blank=True, null=True)
-    item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open", db_index=True)
+    line = models.PositiveIntegerField(blank=True, null=True, verbose_name="PO Line")
+    sequence = models.PositiveIntegerField(blank=True, null=True, verbose_name="Sequence")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Item")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open", db_index=True, verbose_name="Purchase Order Line Status")
 
-    order_date = models.DateField(blank=True, null=True)
-    initial_receive_date = models.DateField(blank=True, null=True)
-    supplier_confirmed_date = models.DateField(blank=True, null=True)
-    modified_receive_date = models.DateField(blank=True, null=True)
-    final_receive_date = models.DateField(blank=True, null=True)  # This is the "report date"
+    order_date = models.DateField(blank=True, null=True, verbose_name="Order Date")
+    initial_receive_date = models.DateField(blank=True, null=True, verbose_name="Initial Receive Date")
+    supplier_confirmed_date = models.DateField(blank=True, null=True, verbose_name="Supplier Confirmed Date")
+    modified_receive_date = models.DateField(blank=True, null=True, verbose_name="Modified Receive Date")
+    final_receive_date = models.DateField(blank=True, null=True, verbose_name="Report Date")  # This is the "report date"
 
-    total_quantity = models.FloatField(blank=True, null=True)
-    received_quantity = models.FloatField(blank=True, null=True)
-    back_order = models.FloatField(blank=True, null=True)
+    total_quantity = models.FloatField(blank=True, null=True, verbose_name="Total Quantity")
+    received_quantity = models.FloatField(blank=True, null=True, verbose_name="Received Quantity")
+    back_order = models.FloatField(blank=True, null=True, verbose_name="Back Order")
 
-    unit_price = models.FloatField(blank=True, null=True)
+    unit_price = models.FloatField(blank=True, null=True, verbose_name="Unit Price")
     uom = models.ForeignKey(UOM, on_delete=models.PROTECT, blank=True, null=True)
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, blank=True, null=True)
-    amount_original_currency = models.FloatField(blank=True, null=True)
-    amount_home_currency = models.FloatField(blank=True, null=True)
-    comments = models.TextField(blank=True, null=True, default="")
+    amount_original_currency = models.FloatField(blank=True, null=True, verbose_name="Amount (Orig. Curr.)")
+    amount_home_currency = models.FloatField(blank=True, null=True, verbose_name="Amount (Home Curr.)")
+    comments = models.TextField(blank=True, null=True, default="", verbose_name="Comments")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

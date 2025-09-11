@@ -5,7 +5,7 @@ from apps.common.models.purchase_order_lines import PurchaseOrderLine
 
 
 class Receipt(models.Model):
-    number = models.CharField(max_length=50, unique=True)
+    number = models.CharField(max_length=50, unique=True, verbose_name="Receipt Number")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -28,15 +28,15 @@ class PurchaseTimelinessClassification(models.Model):
     Rules are evaluated by ascending priority; first match wins.
     """
 
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50, unique=True, verbose_name="Supplier OTD Classification Name")
     priority = models.PositiveIntegerField(default=0, help_text="Lower runs first")
     active = models.BooleanField(default=True)
-    counts_for_ontime = models.BooleanField(default=False, help_text="If true, rows with this class count toward OTD%")
+    counts_for_ontime = models.BooleanField(default=False, help_text="If true, rows with this class count toward OTD%", verbose_name="Counts for OTD%")
 
-    min_days = models.IntegerField(null=True, blank=True)
-    min_inclusive = models.BooleanField(default=True)
-    max_days = models.IntegerField(null=True, blank=True)
-    max_inclusive = models.BooleanField(default=True)
+    min_days = models.IntegerField(null=True, blank=True, verbose_name="Minimum Days Offset")
+    min_inclusive = models.BooleanField(default=True, verbose_name="Min Inclusive")
+    max_days = models.IntegerField(null=True, blank=True, verbose_name="Maximum Days Offset")
+    max_inclusive = models.BooleanField(default=True, verbose_name="Max Inclusive")
 
     color = models.CharField(max_length=20, blank=True, default="")
     description = models.TextField(blank=True, default="")
@@ -90,11 +90,10 @@ class GlobalSettings(models.Model):
 
 class ReceiptLine(models.Model):
     receipt = models.ForeignKey(Receipt, on_delete=models.PROTECT, related_name="lines")
-    line = models.PositiveIntegerField()
-    po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="receipt_lines", db_index=True)
-
-    received_quantity = models.FloatField(blank=True, null=True)
-    receipt_date = models.DateField(blank=True, null=True, db_index=True)
+    line = models.PositiveIntegerField(verbose_name="Receipt Line")
+    po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="receipt_lines", db_index=True, verbose_name="PO Line (Obj)")
+    received_quantity = models.FloatField(blank=True, null=True, verbose_name="Received Quantity")
+    receipt_date = models.DateField(blank=True, null=True, db_index=True, verbose_name="Receipt Date")
 
     # Derived/computed fields
     days_offset = models.IntegerField(blank=True, null=True)
