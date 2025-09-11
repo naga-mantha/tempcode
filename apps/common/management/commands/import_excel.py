@@ -149,6 +149,7 @@ class Command(BaseCommand):
         parser.add_argument("--mapping-file", help="Path to JSON file with the mapping dictionary")
         parser.add_argument("--sheet", help="Optional sheet name or index (defaults to first)")
         parser.add_argument("--log-file", help="Optional path to log file")
+        parser.add_argument("--value-map", help="JSON mapping of Excel column -> {from_value: to_value} for pre-assignment value transforms")
 
     def handle(self, *args, **options):
         log = _setup_logger(options.get("--log-file") or options.get("log_file"))
@@ -158,6 +159,7 @@ class Command(BaseCommand):
         # Mapping
         mapping_raw = options.get("mapping")
         mapping_file = options.get("mapping_file")
+        value_map_raw = options.get("value_map") or options.get("--value-map")
         if mapping_file:
             try:
                 with open(mapping_file, "r", encoding="utf-8") as fh:
@@ -174,6 +176,16 @@ class Command(BaseCommand):
 
         if not isinstance(mapping, dict) or not mapping:
             raise CommandError("Mapping must be a non-empty JSON object: {excel_col: 'field' or 'rel__field'}")
+
+        # Value transforms
+        value_map = {}
+        if value_map_raw:
+            try:
+                value_map = json.loads(value_map_raw)
+                if not isinstance(value_map, dict):
+                    value_map = {}
+            except Exception as exc:
+                raise CommandError(f"Invalid --value-map JSON: {exc}")
 
         try:
             app_label, model_name = model_label.split(".")
@@ -223,6 +235,21 @@ class Command(BaseCommand):
                         log.warning("Row %s: column '%s' not in sheet; skipping this mapping", row_no, excel_col)
                         continue
                     raw_value = row[excel_col]
+                    # Apply value transformation if provided for this column
+                    try:
+                        col_map = value_map.get(excel_col) if isinstance(value_map, dict) else None
+                        if isinstance(col_map, dict):
+                            # Try exact match, then case-insensitive string match
+                            if raw_value in col_map:
+                                raw_value = col_map[raw_value]
+                            elif isinstance(raw_value, str):
+                                low = raw_value.strip().lower()
+                                for k, v in col_map.items():
+                                    if isinstance(k, str) and k.strip().lower() == low:
+                                        raw_value = v
+                                        break
+                    except Exception:
+                        pass
                     if _is_null(raw_value):
                         continue
                     if "__" in path:

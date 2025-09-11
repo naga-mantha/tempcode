@@ -1,4 +1,10 @@
 from django.db.models import Count, Sum, Avg, Min, Max
+from django.db.models.functions import (
+    TruncDate,
+    TruncMonth,
+    TruncQuarter,
+    TruncYear,
+)
 
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.blocks.models.pivot_config import PivotConfig
@@ -68,9 +74,68 @@ class GenericPivotBlock(PivotBlock):
 
         qs = model.objects.all()
         qs = apply_filter_registry(self.block_name, qs, filter_values or {}, user)
-        group_fields = [*rows, *cols]
+
+        # ---------------------------------------------
+        # Support date bucketing for dimensions
+        # rows/cols entries can be strings (field paths) or dicts
+        # {"source": "<field>", "bucket": "day|month|quarter|year", "label": "...", "alias": "..."}
+        # ---------------------------------------------
+        def normalize_dim(entry):
+            if isinstance(entry, str):
+                return {
+                    "source": entry,
+                    "bucket": None,
+                    "label": None,
+                    "alias": entry,
+                }
+            if isinstance(entry, dict):
+                src = entry.get("source") or entry.get("field")
+                bucket = (entry.get("bucket") or entry.get("date_bucket") or None)
+                alias = entry.get("alias") or (f"{src}__{bucket}" if bucket else src)
+                return {
+                    "source": src,
+                    "bucket": bucket,
+                    "label": entry.get("label"),
+                    "alias": alias,
+                }
+            return None
+
+        row_defs = [normalize_dim(r) for r in (rows or [])]
+        col_defs = [normalize_dim(c) for c in (cols or [])]
+        row_defs = [r for r in row_defs if r and r.get("source")]
+        col_defs = [c for c in col_defs if c and c.get("source")]
+
+        # Build annotations for any bucketed date dimensions
+        annotations = {}
+
+        def build_bucket_annotation(src, bucket):
+            if not bucket:
+                return None
+            b = str(bucket).lower()
+            if b in ("day", "date"):
+                return TruncDate(src)
+            if b == "month":
+                return TruncMonth(src)
+            if b == "quarter":
+                return TruncQuarter(src)
+            if b == "year":
+                return TruncYear(src)
+            # Unknown bucket: ignore (fallback to raw field)
+            return None
+
+        for d in [*row_defs, *col_defs]:
+            expr = build_bucket_annotation(d["source"], d.get("bucket"))
+            if expr is not None:
+                annotations[d["alias"]] = expr
+
+        if annotations:
+            qs = qs.annotate(**annotations)
+
+        # Build the list of group-by fields using aliases if present
+        group_fields = [*(d["alias"] for d in row_defs), *(d["alias"] for d in col_defs)]
         if not group_fields:
-            group_fields = rows or cols or [measures[0].get("source")]
+            # No rows/cols defined: try to group by the first measure source
+            group_fields = [measures[0].get("source")]
         qs = qs.values(*group_fields)
 
         import re
@@ -108,19 +173,60 @@ class GenericPivotBlock(PivotBlock):
         if not records:
             return [], []
 
+        # Helper to format bucketed dimension values for display
+        from datetime import date, datetime as dt
+
+        def format_dim_value(dim_def, value):
+            bucket = (dim_def or {}).get("bucket")
+            if not bucket:
+                return value
+            b = str(bucket).lower()
+            if value is None:
+                return value
+            # Normalize to date object where relevant
+            if isinstance(value, dt):
+                vdate = value.date()
+            else:
+                vdate = value if isinstance(value, date) else None
+            if b in ("day", "date") and vdate:
+                return vdate.strftime("%Y-%m-%d")
+            if b == "month" and vdate:
+                return vdate.strftime("%Y-%m")
+            if b == "year" and vdate:
+                return str(vdate.year)
+            if b == "quarter" and vdate:
+                q = (vdate.month - 1) // 3 + 1
+                return f"{vdate.year}-Q{q}"
+            return value
+
+        # Collect column distinct values (supporting a single column dimension as before)
         col_values = []
-        if cols:
-            col_key = cols[0]
+        if col_defs:
+            col_def = col_defs[0]
+            col_key = col_def["alias"]
             seen = set()
             for r in records:
                 v = r.get(col_key)
                 if v not in seen:
                     seen.add(v)
                     col_values.append(v)
+            # For date/datetime (or bucketed) columns, sort ascending chronologically
+            def as_date_for_sort(v):
+                if v is None:
+                    return None
+                if isinstance(v, dt):
+                    return v.date()
+                if isinstance(v, date):
+                    return v
+                return v
+            is_bucketed_date = bool(col_def.get("bucket"))
+            are_dateish = all((v is None) or isinstance(v, (date, dt)) for v in col_values)
+            if is_bucketed_date or are_dateish:
+                col_values.sort(key=lambda v: (v is None, as_date_for_sort(v)))
 
         from collections import defaultdict
         grouped = defaultdict(list)
-        row_keys = rows or []
+        row_keys = [d["alias"] for d in row_defs] if row_defs else []
         for r in records:
             k = tuple(r.get(x) for x in row_keys) if row_keys else ("All",)
             grouped[k].append(r)
@@ -129,31 +235,39 @@ class GenericPivotBlock(PivotBlock):
         for key, items in grouped.items():
             out = {}
             for i, rk in enumerate(row_keys):
-                out[rk] = key[i]
-            if not cols:
+                # Map back to the corresponding row_def to format if bucketed
+                rdef = row_defs[i] if i < len(row_defs) else None
+                out[rk] = format_dim_value(rdef, key[i])
+            if not col_defs:
                 first = items[0]
                 for alias, title in alias_to_title.items():
                     out[title] = first.get(alias)
             else:
-                col_key = cols[0]
+                col_def = col_defs[0]
+                col_key = col_def["alias"]
                 by_col = {it.get(col_key): it for it in items}
-                for col_val in col_values:
-                    rec = by_col.get(col_val)
+                for raw_col_val in col_values:
+                    rec = by_col.get(raw_col_val)
+                    disp_val = format_dim_value(col_def, raw_col_val)
                     for alias, title in alias_to_title.items():
-                        col_name = f"{col_val} {title}"
+                        col_name = f"{disp_val} {title}"
                         out[col_name] = rec.get(alias) if rec else 0
             data.append(out)
 
         # Columns
         columns = []
-        for rk in row_keys:
-            columns.append({"title": rk.replace("__", " ").title(), "field": rk})
-        if not cols:
+        # Row dimension columns with better titles if provided
+        for i, rk in enumerate(row_keys):
+            rdef = row_defs[i] if i < len(row_defs) else None
+            title = (rdef.get("label") if rdef else None) or rk.replace("__", " ").title()
+            columns.append({"title": title, "field": rk})
+        if not col_defs:
             for alias, title in alias_to_title.items():
                 columns.append({"title": title, "field": title})
         else:
-            for col_val in col_values:
+            for raw_col_val in col_values:
+                disp_val = format_dim_value(col_defs[0], raw_col_val)
                 for alias, title in alias_to_title.items():
-                    col_name = f"{col_val} {title}"
+                    col_name = f"{disp_val} {title}"
                     columns.append({"title": col_name, "field": col_name})
         return columns, data

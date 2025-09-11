@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'apps.blocks',
     'apps.production',
     'apps.purchase',
+    'apps.planning',
     'apps.layout',
     'apps.workflow',
     'apps.permissions',

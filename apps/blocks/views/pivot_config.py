@@ -80,9 +80,25 @@ class PivotConfigView(LoginRequiredMixin, FormView):
                 else:
                     return isinstance(fld, (djm.IntegerField, djm.FloatField, djm.DecimalField, djm.PositiveIntegerField, djm.SmallIntegerField, djm.BigIntegerField))
             return False
+        def is_temporal(model, path):
+            parts = path.split("__"); m = model
+            for i,p in enumerate(parts):
+                try:
+                    fld = m._meta.get_field(p)
+                except Exception:
+                    return False
+                if i < len(parts)-1:
+                    if getattr(fld, "is_relation", False):
+                        m = fld.related_model
+                    else:
+                        return False
+                else:
+                    return isinstance(fld, (djm.DateField, djm.DateTimeField))
+            return False
         measure_choices = [(n, labels.get(n, n)) for n,_ in dim_choices if model and is_numeric(model, n)]
         self.dimension_choices = dim_choices
         self.measure_choices = measure_choices
+        self.temporal_fields = set([n for n,_ in dim_choices if model and is_temporal(model, n)])
         return super().dispatch(request, block_name, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -94,7 +110,28 @@ class PivotConfigView(LoginRequiredMixin, FormView):
             "configs": configs,
             "active_config": self.active_config,
             "block_name": getattr(self.block_instance, "block_name", None) or getattr(self.block, "code", None),
+            "temporal_fields": sorted(list(getattr(self, "temporal_fields", set()))),
         })
+        # Add initial bucket mappings for rows/col when editing
+        if self.active_config:
+            schema = self.active_config.schema or {}
+            row_bucket_map = {}
+            rows = schema.get("rows") or []
+            for r in rows:
+                if isinstance(r, dict):
+                    src = r.get("source") or r.get("field")
+                    b = r.get("bucket") or r.get("date_bucket")
+                    if src and b:
+                        row_bucket_map[src] = b
+            col_bucket = None
+            col_entry = (schema.get("cols") or [None])
+            col_entry = col_entry[0] if col_entry else None
+            if isinstance(col_entry, dict):
+                col_bucket = col_entry.get("bucket") or col_entry.get("date_bucket")
+            ctx.update({
+                "row_bucket_map": row_bucket_map,
+                "col_bucket": col_bucket,
+            })
         return ctx
 
     def get_form_kwargs(self):
@@ -113,11 +150,23 @@ class PivotConfigView(LoginRequiredMixin, FormView):
         schema = cfg.schema or {}
         measures = schema.get("measures") or []
         m = measures[0] if measures else {}
+        # Normalize rows/cols to primitive values for UI selections
+        norm_rows = []
+        for r in (schema.get("rows") or []):
+            if isinstance(r, dict):
+                src = r.get("source") or r.get("field")
+                if src:
+                    norm_rows.append(src)
+            else:
+                norm_rows.append(r)
+        col_entry = (schema.get("cols") or [""])
+        col_entry = col_entry[0] if col_entry else ""
+        norm_col = col_entry.get("source") if isinstance(col_entry, dict) else (col_entry or "")
         initial.update({
             "config_id": cfg.id,
             "name": cfg.name,
-            "rows": schema.get("rows") or [],
-            "col": (schema.get("cols") or [""])[0] or "",
+            "rows": norm_rows,
+            "col": norm_col,
             "measure_field": m.get("source") or "",
             "measure_label": m.get("label") or "",
             "measure_agg": (m.get("agg") or "sum").lower(),
@@ -140,7 +189,33 @@ class PivotConfigView(LoginRequiredMixin, FormView):
                 if m_label:
                     entry["label"] = m_label
                 measures.append(entry)
-            schema = {"rows": rows, "cols": [col] if col else [], "measures": measures}
+            # Collect row buckets from POST; preserve row order from POST
+            request_rows = self.request.POST.getlist("rows")
+            row_buckets = {}
+            for key, val in self.request.POST.items():
+                if key.startswith("row_bucket__"):
+                    src = key[len("row_bucket__"):]
+                    if val:
+                        row_buckets[src] = val
+            schema_rows = []
+            for r in request_rows:
+                b = row_buckets.get(r)
+                if b:
+                    schema_rows.append({"source": r, "bucket": b})
+                else:
+                    schema_rows.append(r)
+
+            # Column bucket
+            col_bucket = self.request.POST.get("col_bucket") or None
+            if col:
+                if col_bucket:
+                    schema_cols = [{"source": col, "bucket": col_bucket}]
+                else:
+                    schema_cols = [col]
+            else:
+                schema_cols = []
+
+            schema = {"rows": schema_rows, "cols": schema_cols, "measures": measures}
             # If a config_id is provided, update that specific row
             target_id = form.cleaned_data.get("config_id") or self.request.POST.get("config_id")
             if target_id:

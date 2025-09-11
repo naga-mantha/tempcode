@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from calendar import monthrange
+from apps.common.models import GlobalSettings
 
 
 class FilterResolutionMixin:
@@ -39,6 +40,45 @@ class FilterResolutionMixin:
             if token in {"__end_of_month__", "end_of_month"}:
                 last_day = monthrange(today.year, today.month)[1]
                 return today.replace(day=last_day).isoformat()
+            if token in {"__start_of_year__", "start_of_year"}:
+                return today.replace(month=1, day=1).isoformat()
+            if token in {"__end_of_year__", "end_of_year"}:
+                return today.replace(month=12, day=31).isoformat()
+            if token in {"__start_of_quarter__", "start_of_quarter"}:
+                q = (today.month - 1) // 3
+                start_month = q * 3 + 1
+                return today.replace(month=start_month, day=1).isoformat()
+            if token in {"__end_of_quarter__", "end_of_quarter"}:
+                q = (today.month - 1) // 3
+                end_month = q * 3 + 3
+                last_day = monthrange(today.year, end_month)[1]
+                return today.replace(month=end_month, day=last_day).isoformat()
+            # Fiscal year tokens from GlobalSettings
+            if token in {
+                "__current_fiscal_year_start__",
+                "current_fiscal_year_start",
+                "fiscal_year_start",
+            } or token.startswith("__fy_start__"):
+                gs = GlobalSettings.objects.first()
+                fy_month = (gs.fiscal_year_start_month if gs else 1) or 1
+                fy_day = (gs.fiscal_year_start_day if gs else 1) or 1
+                start_candidate = date(today.year, fy_month, fy_day)
+                if today < start_candidate:
+                    start_candidate = date(today.year - 1, fy_month, fy_day)
+                return start_candidate.isoformat()
+            if token in {
+                "__current_fiscal_year_end__",
+                "current_fiscal_year_end",
+                "fiscal_year_end",
+            } or token.startswith("__fy_end__"):
+                gs = GlobalSettings.objects.first()
+                fy_month = (gs.fiscal_year_start_month if gs else 1) or 1
+                fy_day = (gs.fiscal_year_start_day if gs else 1) or 1
+                start_candidate = date(today.year, fy_month, fy_day)
+                if today < start_candidate:
+                    start_candidate = date(today.year - 1, fy_month, fy_day)
+                next_start = date(start_candidate.year + 1, fy_month, fy_day)
+                return (next_start - timedelta(days=1)).isoformat()
             return val
 
         # Pre-resolve any dynamic tokens in provided base values
@@ -67,6 +107,10 @@ class FilterResolutionMixin:
                 else:
                     raw = qd.get(name)
                     if raw not in (None, ""):
-                        base[key] = raw
+                        # Resolve tokens for request-provided values as well
+                        if cfg.get("type") in {"date", "text"}:
+                            base[key] = _resolve_token(raw)
+                        else:
+                            base[key] = raw
                         break
         return base

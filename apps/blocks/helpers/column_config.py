@@ -1,6 +1,6 @@
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.permissions.checks import can_read_field
-from apps.workflow.permissions import can_read_field_state
+from apps.workflow.permissions import can_read_field_state  # noqa: F401 (reserved for future use)
 from django.db import models
 from apps.blocks.helpers.field_rules import get_field_display_rules
 
@@ -8,62 +8,81 @@ def get_user_column_config(user, block):
     config = BlockColumnConfig.objects.filter(block=block, user=user, is_default=True).first()
     return config.fields if config else []
 
-def get_model_fields_for_column_config(model, user):
+def get_model_fields_for_column_config(model, user, *, max_depth=10):
     """
-        Returns a list of dicts describing DB fields on `model`,
-        expanding ForeignKey subfields (like 'workflow__status').
+    Return field metadata for `model`, expanding ForeignKey chains up to `max_depth`.
 
-        Applies field display rules and user read permissions.
-        """
-    model_label = f"{model._meta.app_label}.{model.__name__}"
-    rules = get_field_display_rules(model_label=model_label)
-    rule_map = {r.field_name: r for r in rules}
+    - Respects field display rules and user read permissions at each level.
+    - Skips related primary key (`id`) fields.
+    - Marks only top-level, non-FK fields as editable.
+    - Prevents cycles by not revisiting models in the current traversal path.
+    """
 
-    # dummy_instance = model()
+    def rules_for(m):
+        lbl = f"{m._meta.app_label}.{m.__name__}"
+        r = get_field_display_rules(model_label=lbl)
+        return {x.field_name: x for x in r}
+
     fields = []
-    for field in model._meta.fields:
-        rule = rule_map.get(field.name)
-        if rule and rule.is_excluded:
-            continue
 
-        # Include mandatory fields even if base read permission is missing
-        if user and not can_read_field(user, model, field.name):
-            if not (rule and rule.is_mandatory):
+    def walk(current_model, prefix="", depth=0, path=None):
+        nonlocal fields
+        path = tuple(path or ())
+        rule_map = rules_for(current_model)
+        for f in current_model._meta.fields:
+            # Hide fields excluded by display rules
+            rule = rule_map.get(f.name)
+            if rule and rule.is_excluded:
                 continue
 
-        if isinstance(field, models.ForeignKey):
-            rel_model = field.remote_field.model
-            rel_label = f"{rel_model._meta.app_label}.{rel_model.__name__}"
-            rel_rules = get_field_display_rules(model_label=rel_label)
-            rel_rmap = {r.field_name: r for r in rel_rules}
-            for sub in rel_model._meta.fields:
-                if sub.name == "id":
+            # Permission check (allow mandatory fields regardless)
+            if user and not can_read_field(user, current_model, f.name):
+                if not (rule and rule.is_mandatory):
                     continue
 
-                rel_rule = rel_rmap.get(sub.name)
-                if rel_rule and rel_rule.is_excluded:
+            if isinstance(f, models.ForeignKey):
+                # Do not add the FK itself; expand into related model fields
+                if depth >= max_depth:
                     continue
+                rel_model = f.remote_field.model
+                # Prevent infinite loops on cyclic relationships
+                if rel_model in path:
+                    continue
+                walk(rel_model, prefix=f"{prefix}{f.name}__", depth=depth + 1, path=path + (current_model,))
+                continue
 
-                # Include mandatory related fields even if base read is missing
-                if user and not can_read_field(user, rel_model, sub.name):
-                    if not (rel_rule and rel_rule.is_mandatory):
-                        continue
+            # For related models (prefix non-empty), skip their primary key
+            if prefix and f.name == "id":
+                continue
 
-                fields.append({
-                    "name": f"{field.name}__{sub.name}",
-                    "label": f"{sub.verbose_name}",
-                    "model": f"{rel_model._meta.label}",
-                    "mandatory": rel_rule.is_mandatory if rel_rule else False,
-                    "editable": False,
-                })
-        else:
-            fields.append({
-                "name": field.name,
-                "label": field.verbose_name,
-                "model": f"{model._meta.label}",
-                "mandatory": rule.is_mandatory if rule else False,
-                "editable": True,
-            })
+            fields.append(
+                {
+                    "name": f"{prefix}{f.name}",
+                    "label": f.verbose_name,
+                    "model": f"{current_model._meta.label}",
+                    "mandatory": rule.is_mandatory if rule else False,
+                    "editable": (depth == 0),
+                }
+            )
 
+        # Also expand reverse OneToOne relations (e.g., PurchaseOrderLine -> MrpMessage)
+        # Treat them like forward FKs for traversal purposes
+        for rel in getattr(current_model._meta, "related_objects", []):
+            try:
+                is_o2o = isinstance(rel, models.OneToOneRel)
+            except Exception:
+                is_o2o = False
+            if not is_o2o:
+                continue
+            if depth >= max_depth:
+                continue
+            rel_model = rel.related_model
+            if rel_model in path:
+                continue
+            accessor = rel.get_accessor_name() or rel.name
+            # Walk into the related model using the reverse accessor name
+            walk(rel_model, prefix=f"{prefix}{accessor}__", depth=depth + 1, path=path + (current_model,))
+
+    walk(model, prefix="", depth=0, path=(model,))
     return fields
 

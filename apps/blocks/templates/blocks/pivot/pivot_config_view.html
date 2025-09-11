@@ -41,11 +41,21 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">Column</label>
-        <select name="col" class="form-select">
+        <select name="col" id="col-select" class="form-select">
           {% for val,label in form.col.field.choices %}
             <option value="{{ val }}" {% if form.initial.col == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
+        <div id="col-bucket-wrapper" class="mt-2" style="display:none;">
+          <label class="form-label">Column Bucket</label>
+          <select name="col_bucket" id="col-bucket" class="form-select">
+            <option value="">-- None --</option>
+            <option value="day" {% if col_bucket == 'day' %}selected{% endif %}>Day</option>
+            <option value="month" {% if col_bucket == 'month' %}selected{% endif %}>Month</option>
+            <option value="quarter" {% if col_bucket == 'quarter' %}selected{% endif %}>Quarter</option>
+            <option value="year" {% if col_bucket == 'year' %}selected{% endif %}>Year</option>
+          </select>
+        </div>
       </div>
       <div class="col-md-4">
         <label class="form-label">Measure</label>
@@ -74,10 +84,23 @@
       <label class="form-label">Rows</label>
       <ul id="rows-list" class="list-group">
         {% for val,label in form.rows.field.choices %}
-          <li class="list-group-item d-flex align-items-center" data-name="{{ val }}">
-            <input type="checkbox" class="form-check-input me-2" name="rows" value="{{ val }}"
-                   {% if form.initial.rows and val in form.initial.rows %}checked{% endif %}>
-            {{ label }}
+          <li class="list-group-item d-flex align-items-center justify-content-between" data-name="{{ val }}">
+            <div class="d-flex align-items-center">
+              <input type="checkbox" class="form-check-input me-2" name="rows" value="{{ val }}"
+                     {% if form.initial.rows and val in form.initial.rows %}checked{% endif %}>
+              <span>{{ label }}</span>
+            </div>
+            {% if val in temporal_fields %}
+              <div class="ms-2">
+                <select class="form-select form-select-sm row-bucket-select" name="row_bucket__{{ val }}" data-source="{{ val }}">
+                  <option value="">No bucket</option>
+                  <option value="day">Day</option>
+                  <option value="month">Month</option>
+                  <option value="quarter">Quarter</option>
+                  <option value="year">Year</option>
+                </select>
+              </div>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>
@@ -149,6 +172,28 @@
         });
       }
     } catch (e) {}
+
+    // Column bucket show/hide based on whether selected col is temporal
+    const TEMPORAL_FIELDS = new Set({{ temporal_fields|default:'[]'|safe }});
+    const colSel = document.getElementById('col-select');
+    const colBucketWrap = document.getElementById('col-bucket-wrapper');
+    const colBucket = document.getElementById('col-bucket');
+    function updateColBucketVisibility(){
+      const val = colSel?.value || '';
+      const show = TEMPORAL_FIELDS.has(val) && !!val;
+      colBucketWrap.style.display = show ? '' : 'none';
+      if (!show) { colBucket.value = ''; }
+    }
+    colSel?.addEventListener('change', updateColBucketVisibility);
+    updateColBucketVisibility();
+
+    // Initialize row bucket selects from server-provided values
+    const ROW_BUCKETS = {{ row_bucket_map|default:'{}'|safe }};
+    document.querySelectorAll('.row-bucket-select').forEach(sel => {
+      const src = sel.getAttribute('data-source');
+      const val = ROW_BUCKETS[src] || '';
+      if (val) sel.value = val;
+    });
   });
 </script>
 {% endblock %}

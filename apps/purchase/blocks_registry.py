@@ -5,6 +5,8 @@ from apps.purchase.blocks import (
     PurchaseOtdRepeaterBlock,
     ReceiptLinesTableBlock,
     SupplierByMonthSummaryTableBlock,
+    PurchaseOrderLineTableBlock,
+    PurchaseOrderLinePivot,
 )
 from apps.purchase.charts import PurchaseOtdDialChart
 
@@ -19,3 +21,8 @@ def register(registry):
     registry.register("supplier_by_month_summary_table", SupplierByMonthSummaryTableBlock())
     registry.register("purchase_otd_dial", PurchaseOtdDialChart())
     registry.register("purchase_otd_repeater", PurchaseOtdRepeaterBlock())
+    registry.register("purchase_order_lines_table", PurchaseOrderLineTableBlock())
+    registry.register("purchase_order_line_pivot", PurchaseOrderLinePivot())
+
+
+

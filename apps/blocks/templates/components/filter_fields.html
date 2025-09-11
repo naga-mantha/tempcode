@@ -6,7 +6,7 @@
 
 {% for key, cfg in filter_schema.items %}
   {% with val=initial_values|get_item:key %}
-  <div class="mb-3">
+  <div class="mb-4 filter-field">
     <label class="form-label">{{ cfg.label }}</label>
 
     {% if cfg.type == 'select' %}
@@ -46,7 +46,30 @@
       <input type="number" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
 
     {% elif cfg.type == 'date' %}
-      <input type="date" class="form-control" name="{{ name_prefix|default:'filters.' }}{{ key }}" value="{{ val|default:'' }}"/>
+      <div class="date-filter-wrapper" data-key="{{ key }}">
+        <div class="d-flex gap-2 align-items-start flex-wrap">
+          <input type="text" class="form-control date-token-input" style="min-width: 220px;"
+                 name="{{ name_prefix|default:'filters.' }}{{ key }}"
+                 value="{{ val|default:'' }}"
+                 placeholder="YYYY-MM-DD or token"/>
+          <div>
+            <button class="btn btn-outline-secondary btn-sm pick-date-btn" type="button">Pick Date</button>
+            <input type="date" class="date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" tabindex="-1" aria-hidden="true"/>
+          </div>
+          <select class="form-select form-select-sm date-quick-select" style="min-width: 200px;">
+            <option value="">Quick pick…</option>
+            <option value="__today__">Today</option>
+            <option value="__start_of_month__">Start of Month</option>
+            <option value="__end_of_month__">End of Month</option>
+            <option value="__start_of_quarter__">Start of Quarter</option>
+            <option value="__end_of_quarter__">End of Quarter</option>
+            <option value="__start_of_year__">Start of Year</option>
+            <option value="__end_of_year__">End of Year</option>
+            <option value="__current_fiscal_year_start__">Current FY Start</option>
+            <option value="__current_fiscal_year_end__">Current FY End</option>
+          </select>
+        </div>
+      </div>
 
     {% elif cfg.type == 'boolean' %}
       <div class="form-check">
@@ -108,4 +131,26 @@
       // console.warn('TomSelect init failed', e);
     }
   });
+
+  // Wire up date pickers + quick tokens to the date text input
+  document.querySelectorAll('.date-filter-wrapper').forEach(function(wrap){
+    try {
+      const textInput = wrap.querySelector('.date-token-input');
+      const hiddenPicker = wrap.querySelector('.date-picker');
+      const pickBtn = wrap.querySelector('.pick-date-btn');
+      const quickSel = wrap.querySelector('.date-quick-select');
+      pickBtn?.addEventListener('click', function(){ hiddenPicker?.showPicker ? hiddenPicker.showPicker() : hiddenPicker?.click(); });
+      hiddenPicker?.addEventListener('change', function(){ if (textInput) textInput.value = hiddenPicker.value || ''; });
+      quickSel?.addEventListener('change', function(){ if (quickSel.value && textInput) { textInput.value = quickSel.value; } });
+    } catch(e) {}
+  });
 </script>
+<style>
+  /* Ensure consistent spacing under each filter field */
+  .filter-field { margin-bottom: 1rem; }
+  /* In case of tight containers, enforce bottom spacing */
+  .filter-field:last-child { margin-bottom: 1rem; }
+  /* Compact spacing for inline controls within date fields */
+  .date-filter-wrapper .form-text { margin-top: 0.25rem; }
+  .date-filter-wrapper .btn.pick-date-btn { white-space: nowrap; }
+</style>

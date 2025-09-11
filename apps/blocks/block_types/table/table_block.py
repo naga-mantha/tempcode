@@ -108,6 +108,15 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         merged = {**defaults, **overrides}
         return merged
 
+    # ----- column config depth -----------------------------------------------
+    def get_column_config_max_depth(self) -> int:
+        """Maximum ForeignKey traversal depth for Manage Columns.
+
+        Blocks can override to customize how deep related fields expand.
+        Default is 10.
+        """
+        return 10
+
     def get_xlsx_download_default_options(self, request, instance_id=None):
         """Base defaults for XLSX download across all TableBlocks."""
         return {

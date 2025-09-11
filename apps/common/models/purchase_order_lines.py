@@ -4,10 +4,15 @@ from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 
 class PurchaseOrderLine(WorkflowModelMixin):
+    STATUS_CHOICES = (
+        ("open", "Open"),
+        ("closed", "Closed"),
+    )
     order = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, blank=True, null=True)
     line = models.PositiveIntegerField(blank=True, null=True)
     sequence = models.PositiveIntegerField(blank=True, null=True)
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open", db_index=True)
 
     order_date = models.DateField(blank=True, null=True)
     initial_receive_date = models.DateField(blank=True, null=True)

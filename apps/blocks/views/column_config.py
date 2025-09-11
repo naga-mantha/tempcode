@@ -54,7 +54,12 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
                 allowed = set(self.block_instance.get_manageable_fields(self.user) or [])
             except Exception:
                 allowed = None
-        all_fields = get_model_fields_for_column_config(self.model, self.user)
+        # Allow per-block control of traversal depth
+        try:
+            max_depth = int(getattr(self.block_instance, "get_column_config_max_depth")())
+        except Exception:
+            max_depth = 10
+        all_fields = get_model_fields_for_column_config(self.model, self.user, max_depth=max_depth)
         if allowed:
             self.fields_metadata = [f for f in all_fields if f.get("name") in allowed]
         else:

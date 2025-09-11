@@ -6,7 +6,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # Example inputs
-        excel_path = "C:/Users/n.mantha/Desktop/datafiles/po_lines_receipts.xlsx"
+        excel_path = "C:/Users/n.mantha/Desktop/datafiles/open_po.xlsx"
         model_label = "common.PurchaseOrderLine"
 
         # Example mapping: Excel column names -> model fields

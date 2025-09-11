@@ -10,4 +10,5 @@ class Command(BaseCommand):
         Receipt.objects.all().delete()
         PurchaseOrderLine.objects.all().delete()
         PurchaseOrder.objects.all().delete()
+        PlannedOrder.objects.all().delete()
 

@@ -167,3 +167,32 @@ class PurchaseSettingsAdmin(admin.ModelAdmin):
 @admin.register(GlobalSettings)
 class GlobalSettingsAdmin(admin.ModelAdmin):
     list_display = ("fiscal_year_start_month", "fiscal_year_start_day")
+
+
+@admin.register(PlannedOrder)
+class PlannedOrderAdmin(admin.ModelAdmin):
+    list_display = ("order", "item", "quantity", "uom", "type", "required_date")
+    list_filter = ("type",)
+    search_fields = ("order", "item__code", "item__description")
+
+
+@admin.register(MrpMessage)
+class MrpMessageAdmin(admin.ModelAdmin):
+    list_display = (
+        "model_label",
+        "pol",
+        "production_order",
+        "mrp_message",
+        "mrp_reschedule_date",
+        "reschedule_delta_days",
+        "direction",
+        "classification",
+    )
+    list_filter = ("direction", "mrp_reschedule_date")
+    search_fields = ("mrp_message",)
+
+
+@admin.register(MrpRescheduleDaysClassification)
+class MrpRescheduleDaysClassificationAdmin(admin.ModelAdmin):
+    list_display = ("name", "min_days", "max_days")
+    search_fields = ("name",)
