@@ -158,7 +158,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         changes that are merged on top of these defaults.
         """
         return {
-            "layout": "fitData",
+            "layout": "fitDataFill",
             "pagination": "local",
             "paginationSize": 10,
             "paginationSizeSelector": [10, 20, 50, 100],
@@ -560,29 +560,34 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                 pass
             editable_flags = {}
             for field in selected_fields:
-                target_instance = obj
-                target_model = type(obj)
+                # Traverse multi-hop relations safely to the leaf parent
+                leaf_parent = obj
+                leaf_parent_model = type(obj)
                 attr_name = field
                 if "__" in field:
-                    related_field, sub_field = field.split("__", 1)
-                    try:
-                        related_obj = getattr(obj, related_field)
-                    except Exception:
-                        related_obj = None
-                    target_instance = related_obj
-                    target_model = type(related_obj) if related_obj is not None else None
-                    attr_name = sub_field
+                    parts = field.split("__")
+                    # walk all but the last segment to reach the leaf parent
+                    for part in parts[:-1]:
+                        if leaf_parent is None:
+                            break
+                        try:
+                            leaf_parent = getattr(leaf_parent, part)
+                        except Exception:
+                            leaf_parent = None
+                            break
+                    leaf_parent_model = type(leaf_parent) if isinstance(leaf_parent, models.Model) else None
+                    attr_name = parts[-1]
 
-                # Compute value first
+                # Compute value from the leaf parent
                 try:
-                    value = getattr(target_instance or obj, attr_name if target_instance else field)
+                    value = getattr(leaf_parent or obj, attr_name if leaf_parent is not None else field)
                 except Exception:
                     value = None
 
                 # Mask if unreadable by base or state permission
-                if user and isinstance(target_instance, models.Model):
-                    if not can_read_field_generic(user, target_model, attr_name, target_instance) or not can_read_field_state(
-                        user, target_model, attr_name, target_instance
+                if user and isinstance(leaf_parent, models.Model):
+                    if not can_read_field_generic(user, leaf_parent_model, attr_name, leaf_parent) or not can_read_field_state(
+                        user, leaf_parent_model, attr_name, leaf_parent
                     ):
                         row[field] = "***"
                         # still compute edit flags
@@ -601,9 +606,9 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
                         row[field] = str(value)
 
                 # Per-row edit flags
-                if user and isinstance(target_instance, models.Model):
-                    can_write = can_write_field_generic(user, target_model, attr_name, target_instance) and can_write_field_state(
-                        user, target_model, attr_name, target_instance
+                if user and isinstance(leaf_parent, models.Model):
+                    can_write = can_write_field_generic(user, leaf_parent_model, attr_name, leaf_parent) and can_write_field_state(
+                        user, leaf_parent_model, attr_name, leaf_parent
                     )
                     editable_flags[field] = bool(can_write)
                 else:
@@ -612,4 +617,3 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             if editable_flags:
                 row["__editable"] = editable_flags
         return json.dumps(data)
-

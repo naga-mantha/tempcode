@@ -31,7 +31,7 @@ class PurchaseOrderLineTableBlock(TableBlock):
         return PurchaseOrderLine
 
     def get_base_queryset(self, user):
-        return PurchaseOrderLine.objects.filter(status="open")
+        return PurchaseOrderLine.objects.filter(status="open").exclude(back_order=0)
 
     def get_filter_schema(self, request):
         return {
@@ -44,3 +44,8 @@ class PurchaseOrderLinePivot(GenericPivotBlock):
 
     def get_model(self):
         return PurchaseOrderLine
+
+    def get_base_queryset(self, user):
+        # Limit pivot to open purchase order lines by default
+        return PurchaseOrderLine.objects.filter(status="open").exclude(back_order=0)
+

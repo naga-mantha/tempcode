@@ -34,11 +34,20 @@
 
   <body>
     <header class="d-flex justify-content-center bg-dark px-3 py-1 justify-content-between">
-      <a href="{% url 'layout_list' %}" class="align-self-center">
-        <img src="{% static 'images/logo.png' %}" alt="logo" class="logo">
-      </a>
-
-      <h1></h1>
+      <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0"> <!--  Menu Container -->
+              <li class="nav-item">
+                <a class="nav-link active" aria-current="page" href="{% url 'layout_list' %}">Layouts</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
     </header>
 
     {% block content %}{% endblock %}

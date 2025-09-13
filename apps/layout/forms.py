@@ -32,13 +32,18 @@ class AddBlockForm(forms.ModelForm):
         # Limit selectable blocks to those registered in the runtime registry.
         valid_codes = list(block_registry.all().keys())
         field = self.fields["block"]
-        field.queryset = Block.objects.filter(code__in=valid_codes)
-        # Label format: APPNAME>BLOCKNAME using registry metadata only
-        def _label(obj: Block):
+        qs = Block.objects.filter(code__in=valid_codes)
+        field.queryset = qs
+        # Build sorted choices by (app_name, block name) for display
+        blocks = list(qs)
+        def _app(obj: Block) -> str:
             meta = block_registry.metadata(obj.code) or {}
-            app_name = meta.get("app_name") or ""
-            return f"{app_name}>{obj.name}"
-        field.label_from_instance = _label
+            return (meta.get("app_name") or "").strip()
+        blocks.sort(key=lambda b: (_app(b).lower(), (b.name or "").lower()))
+        # ModelChoiceField uses to_field_name='code', so values must be block.code
+        field.widget.choices = [
+            (b.code, f"{_app(b)}>{b.name}") for b in blocks
+        ]
 
     # No responsive fields on add; all inherit by default
 

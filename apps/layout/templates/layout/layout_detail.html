@@ -50,7 +50,10 @@
       <div class="alert alert-info">{{ layout.description|linebreaksbr }}</div>
     {% endif %}
 
-    <div class="row g-3">
+     <h3 class="mt-5">Blocks</h3>
+      <hr>
+
+    <div class="row g-5">
       {% for b in blocks %}
         <div class="{{ b.col_classes }}">
           {% if b.title %}<div class="mb-2 fw-bold">{{ b.title }}</div>{% endif %}

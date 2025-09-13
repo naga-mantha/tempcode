@@ -187,9 +187,9 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
 
     def get_tabulator_default_options(self, user):
         return {
-            "layout": "fitColumns",
+            "layout": "fitDataFill",
             "pagination": "local",
-            "paginationSize": 20,
+            "paginationSize": 10,
             "paginationSizeSelector": [10, 20, 50, 100],
         }
 

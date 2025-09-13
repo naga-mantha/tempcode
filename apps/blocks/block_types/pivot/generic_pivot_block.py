@@ -15,6 +15,17 @@ from apps.blocks.models.config_templates import PivotConfigTemplate
 class GenericPivotBlock(PivotBlock):
     """User-configurable pivot with saved schemas (PivotConfig)."""
 
+    def get_base_queryset(self, user):
+        """Base queryset for the pivot prior to filters/grouping.
+
+        Subclasses can override to scope data (e.g., status="open").
+        """
+        try:
+            model = self.get_model()
+        except Exception:
+            return None
+        return model.objects.all()
+
     def _select_pivot_config(self, request, instance_id=None):
         user = request.user
         ns = f"{self.block_name}__{instance_id}__" if instance_id else f"{self.block_name}__"
@@ -59,10 +70,9 @@ class GenericPivotBlock(PivotBlock):
             active = configs.filter(is_default=True).first()
         if not active:
             return [], []
-        model = None
-        try:
-            model = self.get_model()
-        except Exception:
+        # Resolve base queryset
+        qs = self.get_base_queryset(user)
+        if qs is None:
             return [], []
 
         schema = active.schema or {}
@@ -72,8 +82,16 @@ class GenericPivotBlock(PivotBlock):
         if not measures:
             return [], []
 
-        qs = model.objects.all()
+        # Apply registered filters then permission/state scoping (align with TableBlock)
         qs = apply_filter_registry(self.block_name, qs, filter_values or {}, user)
+        try:
+            from apps.permissions.checks import filter_viewable_queryset as filter_viewable_queryset_generic
+            from apps.workflow.permissions import filter_viewable_queryset_state
+            qs = filter_viewable_queryset_generic(user, qs)
+            qs = filter_viewable_queryset_state(user, qs)
+        except Exception:
+            # If permission utilities unavailable for any reason, proceed without them
+            pass
 
         # ---------------------------------------------
         # Support date bucketing for dimensions

@@ -21,6 +21,8 @@ class PlannedPurchaseOrderTableBlock(TableBlock):
 
         return {
             "item": item_multiselect_filter(self.block_name, "item__code"),
+            "planned_start_date_from": date_from_filter("planned_start_date_from", "Planned Start From", "planned_start_date"),
+            "planned_start_date_to": date_to_filter("planned_start_date_to", "Planned Start To", "planned_start_date"),
         }
 
 class PlannedOrderPivot(GenericPivotBlock):
@@ -29,6 +31,10 @@ class PlannedOrderPivot(GenericPivotBlock):
 
     def get_model(self):
         return PlannedOrder
+
+    def get_base_queryset(self, user):
+        # Default pivot scope: planned purchase orders only (PPUR)
+        return PlannedOrder.objects.filter(type="PPUR")
 
     def get_filter_schema(self, request):
         # Allow filtering by PlannedOrder.type (e.g., PPUR/PPRO) and optionally Item

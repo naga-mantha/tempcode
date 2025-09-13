@@ -59,7 +59,18 @@ class PurchaseOrderLine(WorkflowModelMixin):
             or self.initial_receive_date
         )
 
+    def compute_back_order(self):
+        """Return back order as total_quantity - received_quantity, treating NULLs as 0.
+
+        Mirrors the logic used by the fill_back_order management command.
+        """
+        total = self.total_quantity if self.total_quantity is not None else 0.0
+        received = self.received_quantity if self.received_quantity is not None else 0.0
+        return total - received
+
     def save(self, *args, **kwargs):
         # Keep final_receive_date in sync before saving
         self.final_receive_date = self.compute_final_receive_date()
+        # Keep back_order in sync before saving
+        self.back_order = self.compute_back_order()
         super().save(*args, **kwargs)
