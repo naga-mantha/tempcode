@@ -11,8 +11,10 @@ class Command(BaseCommand):
         # Receipt.objects.all().delete()
         # PurchaseOrderLine.objects.all().delete()
         # PurchaseOrder.objects.all().delete()
-        # PlannedOrder.objects.all().delete()
-        MrpMessage.objects.all().delete()
+        # PlannedPurchaseOrder.objects.all().delete()
+        # PlannedProductionOrder.objects.all().delete()
+        PurchaseMrpMessage.objects.all().delete()
+        ProductionMrpMessage.objects.all().delete()
 
         # # PO Headers
         # call_command('excel_po_header')

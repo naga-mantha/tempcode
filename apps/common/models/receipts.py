@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
-
+from apps.workflow.models import WorkflowModelMixin
+from django_pandas.managers import DataFrameManager
+from apps.common.models.auto_compute_mixin import AutoComputeMixin
 from apps.common.models.purchase_order_lines import PurchaseOrderLine
 
 
@@ -83,12 +85,16 @@ class GlobalSettings(models.Model):
 
     fiscal_year_start_month = models.PositiveSmallIntegerField(default=1)
     fiscal_year_start_day = models.PositiveSmallIntegerField(default=1)
+    home_currency_code = models.CharField(max_length=5, default="CAD")
 
     def __str__(self):
-        return f"Global Settings (FY start {self.fiscal_year_start_month}/{self.fiscal_year_start_day})"
+        return (
+            f"Global Settings (FY start {self.fiscal_year_start_month}/{self.fiscal_year_start_day}, "
+            f"home {self.home_currency_code})"
+        )
 
 
-class ReceiptLine(models.Model):
+class ReceiptLine(AutoComputeMixin, WorkflowModelMixin):
     receipt = models.ForeignKey(Receipt, on_delete=models.PROTECT, related_name="lines")
     line = models.PositiveIntegerField(verbose_name="Receipt Line")
     po_line = models.ForeignKey(PurchaseOrderLine, on_delete=models.PROTECT, related_name="receipt_lines", db_index=True, verbose_name="PO Line (Obj)")
@@ -145,24 +151,6 @@ class ReceiptLine(models.Model):
         delta = self.receipt_date - final_date
         return delta.days
 
-    def compute_amount_home_currency(self):
-        if self.received_quantity is None:
-            return None
-        # Prefer explicit unit price in home currency if available
-        unit_price_home = getattr(self.po_line, "unit_price_home_currency", None)
-        if unit_price_home is not None:
-            return unit_price_home * self.received_quantity
-
-        # Derive unit price from PO line totals if possible
-        total_amount_home = getattr(self.po_line, "amount_home_currency", None)
-        total_qty = getattr(self.po_line, "total_quantity", None)
-        if total_amount_home is not None and total_qty:
-            try:
-                return (total_amount_home / total_qty) * self.received_quantity
-            except ZeroDivisionError:
-                return None
-        return None
-
     def classify(self, days_offset: int):
         if days_offset is None:
             return None
@@ -172,9 +160,14 @@ class ReceiptLine(models.Model):
                 return rule
         return None
 
-    def save(self, *args, **kwargs):
-        # Keep derived fields current before saving
-        self.days_offset = self.compute_days_offset()
-        self.amount_home_currency = self.compute_amount_home_currency()
-        self.classification = self.classify(self.days_offset)
-        super().save(*args, **kwargs)
+    def compute_classification(self):
+        days = self.days_offset
+        if days is None:
+            days = self.compute_days_offset()
+        return self.classify(days)
+
+    # Declare auto-computed fields for the mixin
+    AUTO_COMPUTE = {
+        "days_offset": "compute_days_offset",
+        "classification": "compute_classification",
+    }

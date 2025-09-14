@@ -23,7 +23,7 @@ class Command(BaseCommand):
             "Received Quantity": "received_quantity",
             "Price": "unit_price",
             # "Ordered Quantity (child)": "uom__code",
-            "Price (child)": "currency__base_currency",
+            "Price (child)": "currency__code",
             # "Notes": "comments",
         }
 

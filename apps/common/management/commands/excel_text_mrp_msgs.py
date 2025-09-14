@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from apps.common.models import (
-    MrpMessage,
+    PurchaseMrpMessage,
     PurchaseOrder,
     PurchaseOrderLine,
 )
@@ -55,8 +55,8 @@ class Command(BaseCommand):
                                 sequence=sequence,
                             )
 
-                            # Build the message instance; set content_object to the actual instance
-                            obj = MrpMessage(
+                            # Build the message instance for Purchase order lines
+                            obj = PurchaseMrpMessage(
                                 pol=pol,
                                 mrp_message=mrp_message,
                             )

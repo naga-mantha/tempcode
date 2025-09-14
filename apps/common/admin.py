@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import *
+from apps.common.admin_mixins import BaseAutoComputeAdmin
 
 @admin.register(BusinessPartner)
 class BusinessPartnerAdmin(admin.ModelAdmin):
@@ -23,8 +24,8 @@ class CalendarAdmin(admin.ModelAdmin):
 
 @admin.register(Currency)
 class CurrencyAdmin(admin.ModelAdmin):
-    list_display = ("base_currency", "quote_currency", "price")
-    search_fields = ("base_currency", "quote_currency",)
+    list_display = ("code",)
+    search_fields = ("code",)
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
@@ -51,9 +52,19 @@ class MachineAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "calendar", )
     search_fields = ("code", "name",)
 
-@admin.register(OrderCategory)
-class OrderCategoryAdmin(admin.ModelAdmin):
-    list_display = ("code", "description", "model_ct", "parent")
+@admin.register(PurchaseOrderCategory)
+class PurchaseOrderCategoryAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "parent")
+    search_fields = ("code", "description",)
+
+@admin.register(SalesOrderCategory)
+class SalesOrderCategoryAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "parent")
+    search_fields = ("code", "description",)
+
+@admin.register(ProductionOrderCategory)
+class ProductionOrderCategoryAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "parent")
     search_fields = ("code", "description",)
 
 @admin.register(ProductionOrderOperation)
@@ -72,9 +83,24 @@ class ProductionOrderAdmin(admin.ModelAdmin):
     search_fields = ("production_order", "status", "quantity", "due_date",)
 
 @admin.register(PurchaseOrderLine)
-class PurchaseOrderLineAdmin(admin.ModelAdmin):
+class PurchaseOrderLineAdmin(BaseAutoComputeAdmin):
     list_display = ("order", "line", "sequence", "final_receive_date")
     search_fields = ("line", "sequence", "final_receive_date",)
+    # To skip back_order recompute on admin save for import-heavy clients,
+    # set this to {"back_order"} or override get_auto_compute_save_kwargs.
+    # auto_compute_recalc_exclude = {"back_order"}
+
+    def get_auto_compute_save_kwargs(self, request, obj, form, change):
+        kwargs = super().get_auto_compute_save_kwargs(request, obj, form, change) or {}
+        try:
+            from django.conf import settings
+            if getattr(settings, "PURCHASE_ADMIN_SKIP_BACK_ORDER_RECALC", False):
+                excl = set(kwargs.get("recalc_exclude", set()))
+                excl.add("back_order")
+                kwargs["recalc_exclude"] = excl
+        except Exception:
+            pass
+        return kwargs
 
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
@@ -166,21 +192,38 @@ class PurchaseSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(GlobalSettings)
 class GlobalSettingsAdmin(admin.ModelAdmin):
-    list_display = ("fiscal_year_start_month", "fiscal_year_start_day")
+    list_display = ("fiscal_year_start_month", "fiscal_year_start_day", "home_currency_code")
 
 
-@admin.register(PlannedOrder)
-class PlannedOrderAdmin(admin.ModelAdmin):
-    list_display = ("order", "item", "quantity", "uom", "type", "required_date")
-    list_filter = ("type",)
+@admin.register(PlannedPurchaseOrder)
+class PlannedPurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ("order", "item", "quantity", "uom", "required_date")
     search_fields = ("order", "item__code", "item__description")
 
 
-@admin.register(MrpMessage)
-class MrpMessageAdmin(admin.ModelAdmin):
+@admin.register(PlannedProductionOrder)
+class PlannedProductionOrderAdmin(admin.ModelAdmin):
+    list_display = ("order", "item", "quantity", "uom", "required_date")
+    search_fields = ("order", "item__code", "item__description")
+
+
+@admin.register(PurchaseMrpMessage)
+class PurchaseMrpMessageAdmin(admin.ModelAdmin):
     list_display = (
-        "model_label",
         "pol",
+        "mrp_message",
+        "mrp_reschedule_date",
+        "reschedule_delta_days",
+        "direction",
+        "classification",
+    )
+    list_filter = ("direction", "mrp_reschedule_date")
+    search_fields = ("mrp_message",)
+
+
+@admin.register(ProductionMrpMessage)
+class ProductionMrpMessageAdmin(admin.ModelAdmin):
+    list_display = (
         "production_order",
         "mrp_message",
         "mrp_reschedule_date",
@@ -196,3 +239,12 @@ class MrpMessageAdmin(admin.ModelAdmin):
 class MrpRescheduleDaysClassificationAdmin(admin.ModelAdmin):
     list_display = ("name", "min_days", "max_days")
     search_fields = ("name",)
+
+@admin.register(ExchangeRate)
+class ExchangeRateAdmin(admin.ModelAdmin):
+    list_display = ("base", "quote", "rate_date", "rate", "source")
+    list_filter = ("base", "quote", "rate_date")
+    search_fields = ("base__code", "quote__code", "source")
+
+
+    

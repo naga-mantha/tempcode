@@ -14,36 +14,40 @@ debug_logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Update Purchase Orders"
+    help = "Update Purchase MRP Messages"
 
     def handle(self, *args, **kwargs):
         try:
             if status == "DEV":
-                prefix = "C:/Users/n.mantha/Desktop/datafiles/Purchase-Orders-BP-"
+                prefix = "C:/Users/n.mantha/Desktop/datafiles/Purchase-Orders-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Purchase-Orders-BP-"
+                prefix = "C:/inetpub/wwwroot/reports/Purchase-Orders-"
 
-            # Create a cleaned copy of the latest date-stamped file
+            # Source columns example:
+            # Order | Pos | Sq | PN | Description | Order.Date | Pl.Del.Dte | Conf.Date | Modify Dt | Whs | Cur | Ord. | Un.Price | Tot.Amnt | Buyer | Notes on P.O.Line | Itm Gr | Exception Msg | Res.Dt | Suppli
+
             file_copy = files_utils.read_text_contents(prefix, ["Order", "-"])
             try:
                 result = import_rows_from_text(
-                    model="common.PurchaseOrder",
+                    model="common.PurchaseMrpMessage",
                     file_path=file_copy,
                     delimiter="|",
                     has_header=False,
                     ignore_prefixes=[],  # already cleaned in the copy
                     mapping={
-                        "0": "order",
-                        "19": "buyer__username",
-                        "12": "supplier__code",
+                        "0": "pol__order__order",      # PO number
+                        "1": "pol__line",              # PO line (Pos)
+                        "2": "pol__sequence",          # PO sequence (Sq)
+                        "17": "mrp_message",           # Exception Msg
+                        "18": "mrp_reschedule_date",   # Res.Dt
                     },
-                    method="save_per_instance",
-                    unique_fields=("order",),
-                    recalc={"category"},
+                    method="save_per_instance",  # compute delta/direction/classification on save
+                    unique_fields=("pol",),       # OneToOne(pol) implies unique
+                    recalc={"reschedule_delta_days", "direction", "classification"},
                     recalc_always_save=True,
                 )
                 debug_logger.info(
-                    "PurchaseOrders import: total=%s created=%s updated=%s skipped=%s errors=%s",
+                    "PurchaseMrpMessages import: total=%s created=%s updated=%s skipped=%s errors=%s",
                     result.total, result.created, result.updated, result.skipped, result.errors,
                 )
             finally:
@@ -52,7 +56,7 @@ class Command(BaseCommand):
                 except Exception:
                     pass
 
-            debug_logger.info("Updated Purchase Orders via importer")
+            debug_logger.info("Updated Purchase MRP Messages via importer")
 
         except Exception as e:
             error_logger.error(e, exc_info=True)

@@ -11,6 +11,7 @@ class ProductionOrder(WorkflowModelMixin):
     quantity = models.FloatField(blank=True, null=True)
     due_date = models.DateField(blank=True, null=True)
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
+    category = models.ForeignKey('ProductionOrderCategory', null=True, blank=True, on_delete=models.PROTECT)
 
     objects = models.Manager()
     df_objects = DataFrameManager()

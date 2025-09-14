@@ -7,6 +7,7 @@ from apps.common.models.purchase_order_lines import PurchaseOrderLine
 from apps.common.models.production_orders import ProductionOrder
 from apps.common.models.business_partners import BusinessPartner
 from apps.accounts.models import CustomUser
+from apps.common.models.auto_compute_mixin import AutoComputeMixin
 
 
 class MrpRescheduleDaysClassification(models.Model):
@@ -38,17 +39,11 @@ class MrpRescheduleDaysClassification(models.Model):
         return True
 
 
-class PlannedOrder(models.Model):
-    TYPE_CHOICES = (
-        ("PPUR", "Planned Purchase Order"),
-        ("PPRO", "Planned Production Order"),
-    )
-
+class BasePlannedOrder(models.Model):
     order = models.CharField(max_length=20, verbose_name='Planned Order')
     item = models.ForeignKey(Item, on_delete=models.PROTECT, blank=True, null=True)
     quantity = models.FloatField(blank=True, null=True, verbose_name="Planned Quantity")
     uom = models.ForeignKey(UOM, on_delete=models.PROTECT, blank=True, null=True)
-    type = models.CharField(max_length=4, choices=TYPE_CHOICES, blank=True, null=True, verbose_name="Type")
 
     buyer = models.ForeignKey(CustomUser, on_delete=models.PROTECT, blank=True, null=True)
     supplier = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
@@ -61,34 +56,31 @@ class PlannedOrder(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=("order", "type"), name="unique_planned_order_per_type"),
-        ]
+        abstract = True
+        ordering = ("order",)
 
     def __str__(self):
-        return f"{self.order} ({self.get_type_display()})"
+        return f"{self.order}"
 
 
-class MrpMessage(models.Model):
+class PlannedPurchaseOrder(BasePlannedOrder):
+    class Meta(BasePlannedOrder.Meta):
+        constraints = [
+            models.UniqueConstraint(fields=("order",), name="unique_planned_purchase_order"),
+        ]
+
+
+class PlannedProductionOrder(BasePlannedOrder):
+    class Meta(BasePlannedOrder.Meta):
+        constraints = [
+            models.UniqueConstraint(fields=("order",), name="unique_planned_production_order"),
+        ]
+
+
+class BaseMrpMessage(AutoComputeMixin, models.Model):
     DIRECTION_CHOICES = (
         ("PULL_IN", "Pull In"),
         ("PUSH_OUT", "Push Out"),
-    )
-
-    # Typed relations: exactly one of these must be set
-    pol = models.OneToOneField(
-        PurchaseOrderLine,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="mrp_message",
-    )
-    production_order = models.OneToOneField(
-        ProductionOrder,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="mrp_message",
     )
 
     mrp_message = models.TextField(blank=True, default="", verbose_name="MRP Message")
@@ -101,7 +93,7 @@ class MrpMessage(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="mrp_messages",
+        related_name="%(app_label)s_%(class)s_set",
         db_index=True,
     )
 
@@ -109,51 +101,76 @@ class MrpMessage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.CheckConstraint(
-                check=(
-                    (Q(pol__isnull=False) & Q(production_order__isnull=True))
-                    | (Q(pol__isnull=True) & Q(production_order__isnull=False))
-                ),
-                name="mrp_message_exactly_one_target",
-            ),
-        ]
+        abstract = True
+        ordering = ("-mrp_reschedule_date", "id")
 
-    def __str__(self):
-        return f"MRP Message for {self.model_label}: {self.mrp_message[:30]}".strip()
+    # --- Auto-compute helpers (generic) ---
+    def compute_reschedule_delta_days(self):
+        return None
 
-    @property
-    def model_label(self) -> str:
-        if self.pol_id:
-            return "Purchase Order Line"
-        if self.production_order_id:
-            return "Production Order"
-        return "Object"
+    def compute_direction(self):
+        delta = getattr(self, "reschedule_delta_days", None)
+        if delta is None:
+            try:
+                delta = self.compute_reschedule_delta_days()
+            except Exception:
+                delta = None
+        if delta is None:
+            return None
+        return "PULL_IN" if delta < 0 else "PUSH_OUT"
 
-    def _compute_delta_and_direction(self):
-        # Only applicable for PurchaseOrderLine
-        pol = self.pol
-        if not pol or not self.mrp_reschedule_date:
-            return None, None
-        final_date = getattr(pol, "final_receive_date", None)
-        if not final_date:
-            return None, None
-        delta_days = (self.mrp_reschedule_date - final_date).days
-        direction = "PULL_IN" if delta_days < 0 else "PUSH_OUT"
-        return delta_days, direction
-
-    def _classify_reschedule(self, days: int):
-        if days is None:
+    def compute_classification(self):
+        try:
+            days = getattr(self, "reschedule_delta_days", None)
+            if days is None:
+                days = self.compute_reschedule_delta_days()
+            if days is None:
+                return None
+            abs_days = abs(days)
+        except Exception:
             return None
         qs = MrpRescheduleDaysClassification.objects.all().order_by("min_days", "id")
         for rule in qs:
-            if rule.matches(days):
+            if rule.matches(abs_days):
                 return rule
         return None
 
-    def save(self, *args, **kwargs):
-        delta, direction = self._compute_delta_and_direction()
-        self.reschedule_delta_days = delta
-        self.direction = direction
-        self.classification = self._classify_reschedule(abs(delta))
-        super().save(*args, **kwargs)
+
+class PurchaseMrpMessage(BaseMrpMessage):
+    pol = models.OneToOneField(
+        PurchaseOrderLine,
+        on_delete=models.PROTECT,
+        related_name="mrp_message",
+    )
+
+    def __str__(self):
+        return f"MRP Message for PO Line {self.pol_id}: {self.mrp_message[:30]}".strip()
+
+    def compute_reschedule_delta_days(self):
+        pol = self.pol
+        if not pol or not self.mrp_reschedule_date:
+            return None
+        final_date = getattr(pol, "final_receive_date", None)
+        if not final_date and hasattr(pol, "compute_final_receive_date"):
+            final_date = pol.compute_final_receive_date()
+        if not final_date:
+            return None
+        return (self.mrp_reschedule_date - final_date).days
+
+    # Fields to auto-compute on save unless overridden by recalc policy
+    AUTO_COMPUTE = {
+        "reschedule_delta_days": "compute_reschedule_delta_days",
+        "direction": "compute_direction",
+        "classification": "compute_classification",
+    }
+
+
+class ProductionMrpMessage(BaseMrpMessage):
+    production_order = models.OneToOneField(
+        ProductionOrder,
+        on_delete=models.PROTECT,
+        related_name="mrp_message",
+    )
+
+    def __str__(self):
+        return f"MRP Message for Prod Order {self.production_order_id}: {self.mrp_message[:30]}".strip()

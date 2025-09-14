@@ -2,8 +2,10 @@ from django.db import models
 from apps.common.models import PurchaseOrder, Item, Currency, UOM
 from apps.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
+from apps.common.models.auto_compute_mixin import AutoComputeMixin
+from apps.common.utils.clock import today
 
-class PurchaseOrderLine(WorkflowModelMixin):
+class PurchaseOrderLine(AutoComputeMixin, WorkflowModelMixin):
     STATUS_CHOICES = (
         ("open", "Open"),
         ("closed", "Closed"),
@@ -68,9 +70,34 @@ class PurchaseOrderLine(WorkflowModelMixin):
         received = self.received_quantity if self.received_quantity is not None else 0.0
         return total - received
 
-    def save(self, *args, **kwargs):
-        # Keep final_receive_date in sync before saving
-        self.final_receive_date = self.compute_final_receive_date()
-        # Keep back_order in sync before saving
-        self.back_order = self.compute_back_order()
-        super().save(*args, **kwargs)
+    def compute_amount_home_currency(self):
+        # Compute using amount_original_currency and currency against home currency with dated FX rates
+        if self.amount_original_currency is None or not self.currency:
+            return None
+        # Lazy import to avoid circulars
+        try:
+            from apps.common.fx import get_home_currency_code, convert
+        except Exception:
+            return None
+        from_code = getattr(self.currency, "code", None)
+        to_code = get_home_currency_code()
+        # Choose date for FX lookup. Use 'today' per current requirement.
+        try:
+            conv_date = today()
+        except Exception:
+            conv_date = None
+        try:
+            val = convert(self.amount_original_currency, from_code, to_code, date=conv_date, strategy="on_or_before")
+        except Exception:
+            val = None
+        try:
+            return float(val) if val is not None else None
+        except Exception:
+            return None
+
+    # Declare auto-computed fields for the mixin
+    AUTO_COMPUTE = {
+        "final_receive_date": "compute_final_receive_date",
+        "back_order": "compute_back_order",
+        "amount_home_currency": "compute_amount_home_currency",
+    }

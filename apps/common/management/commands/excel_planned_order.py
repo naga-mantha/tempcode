@@ -7,14 +7,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Example inputs
         excel_path = "C:/Users/n.mantha/Desktop/datafiles/planned_orders.xlsx"
-        model_label = "common.PlannedOrder"
+        # Import Planned Purchase Orders by default; adjust as needed for production
+        model_label = "common.PlannedPurchaseOrder"
 
         # Example mapping: Excel column names -> model fields
         mapping = {
             "Planned Order": "order",
             "Order Item (child) (child)": "item__code",
             "Order Quantity": "quantity",
-            "Order Type": "type",
+            # For split models, 'Order Type' is no longer needed here
             "Buyer": "buyer__username",
             "Buy-from BP": "supplier__code",
             "Planned Start Date": "planned_start_date",
@@ -23,12 +24,7 @@ class Command(BaseCommand):
         }
 
         # Value transforms per column (Excel value -> model value)
-        value_map = {
-            "Order Type": {
-                "Planned Production Order": "PPRO",
-                "Planned Purchase Order": "PPUR",
-            }
-        }
+        value_map = {}
 
         # Call the import_excel command programmatically
         call_command(

@@ -243,3 +243,6 @@ LOGIN_REQUIRED_IGNORE_PATHS = [
     r'/accounts/*',
     r'/admin/*',
 ]
+
+# If True, skips the back_order recalculation in PurchaseOrderLine admin
+# PURCHASE_ADMIN_SKIP_BACK_ORDER_RECALC = True
