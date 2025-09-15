@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import *
 from apps.common.admin_mixins import BaseAutoComputeAdmin
+from apps.common.models import ItemGroupType, Program, ItemGroup
+from apps.common.models import ItemType
 
 @admin.register(BusinessPartner)
 class BusinessPartnerAdmin(admin.ModelAdmin):
@@ -238,7 +240,31 @@ class ProductionMrpMessageAdmin(admin.ModelAdmin):
 @admin.register(MrpRescheduleDaysClassification)
 class MrpRescheduleDaysClassificationAdmin(admin.ModelAdmin):
     list_display = ("name", "min_days", "max_days")
+
+
+@admin.register(ItemGroupType)
+class ItemGroupTypeAdmin(admin.ModelAdmin):
+    list_display = ("code", "description")
+    search_fields = ("code", "description")
+
+
+@admin.register(Program)
+class ProgramAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "budget")
+    search_fields = ("code", "name")
+
+
+@admin.register(ItemGroup)
+class ItemGroupAdmin(admin.ModelAdmin):
+    list_display = ("code", "description", "type", "program")
+    search_fields = ("code", "description")
     search_fields = ("name",)
+
+
+@admin.register(ItemType)
+class ItemTypeAdmin(admin.ModelAdmin):
+    list_display = ("code", "description")
+    search_fields = ("code", "description")
 
 @admin.register(ExchangeRate)
 class ExchangeRateAdmin(admin.ModelAdmin):
@@ -246,5 +272,9 @@ class ExchangeRateAdmin(admin.ModelAdmin):
     list_filter = ("base", "quote", "rate_date")
     search_fields = ("base__code", "quote__code", "source")
 
+
+@admin.register(SoValidateAggregate)
+class SoValidateAggregateAdmin(admin.ModelAdmin):
+    list_display = ("item",)
 
     

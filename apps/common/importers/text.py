@@ -109,6 +109,7 @@ def _get_unique_constraints(model: models.Model) -> List[Tuple[str, ...]]:
     return out
 
 
+# Streaming implementation to handle large files in batches while preserving the same API.
 def import_rows_from_text(
     *,
     model: Union[str, models.Model],
@@ -131,14 +132,6 @@ def import_rows_from_text(
     relation_override_fields: Optional[Mapping[str, Mapping[str, Any]]] = None,
     recalc_always_save: bool = False,
 ) -> ImportResult:
-    """Import rows into a model from a delimited text file.
-
-    - mapping: column key -> model field path. If has_header, keys are header names; otherwise keys are indices.
-    - unique_fields: fields that identify a row (used for upsert and duplicate detection). If not provided, the first
-      detected unique constraint on the model is used. If none found and stop_on_duplicate is True, a ValueError is raised.
-    - method: "bulk_create" for fast upsert (no save/signals), or "save_per_instance" to call save() per row.
-    """
-
     # Resolve model class if a label is provided
     if isinstance(model, str):
         try:
@@ -152,56 +145,8 @@ def import_rows_from_text(
     ignore_prefixes = list(ignore_prefixes or [])
     value_map = value_map or {}
 
-    # Read file with encoding fallback
-    def _read_lines(path: str, enc: str, errs: str) -> List[str]:
-        with open(path, "r", encoding=enc, errors=errs) as fh:
-            return [ln.rstrip("\n\r") for ln in fh.readlines()]
-
-    if encoding:
-        raw_lines = _read_lines(file_path, encoding, encoding_errors)
-    else:
-        raw_lines = []
-        last_err: Optional[Exception] = None
-        for enc_try in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
-            try:
-                raw_lines = _read_lines(file_path, enc_try, "strict")
-                last_err = None
-                break
-            except UnicodeDecodeError as e:
-                last_err = e
-                continue
-        if last_err is not None and not raw_lines:
-            # As a final fallback, try replacing invalid bytes using utf-8
-            raw_lines = _read_lines(file_path, "utf-8", "replace")
-
-    # Filter lines by prefixes
-    data_lines: List[str] = []
-    header_cols: List[str] = []
-    if has_header and raw_lines:
-        header_cols = [h.strip() for h in raw_lines[0].split(delimiter)]
-        raw_lines = raw_lines[1:]
-
-    for ln in raw_lines:
-        if any(ln.startswith(pfx) for pfx in ignore_prefixes):
-            continue
-        if not ln.strip():
-            continue
-        data_lines.append(ln)
-
-    # Resolve mapping keys into column indices
-    def _col_index(key: Union[str, int]) -> Optional[int]:
-        if has_header and not str(key).isdigit():
-            try:
-                return header_cols.index(str(key))
-            except ValueError:
-                return None
-        try:
-            return int(key)
-        except Exception:
-            return None
-
     # Prepare model field map
-    field_map: Dict[str, models.Field] = {f.name: f for f in Model._meta.get_fields() if hasattr(f, 'attname')}
+    field_map: Dict[str, models.Field] = {f.name: f for f in Model._meta.get_fields() if hasattr(f, "attname")}
 
     # Choose unique fields for upsert and duplicate detection
     if unique_fields and len(unique_fields) > 0:
@@ -217,108 +162,27 @@ def import_rows_from_text(
         else:
             unique_fields_tuple = uniques[0]
 
-    # Prepare rows
-    total = 0
-    created = 0
-    updated = 0
-    skipped = 0
-    errors = 0
-
-    # Preparse all rows into assignments and identity keys, detect duplicates in input
-    parsed: List[Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]] = []
-    seen_keys: set = set()
-
-    for line in data_lines:
-        total += 1
-        parts = [p.strip() for p in line.split(delimiter)]
-        try:
-            assignments: Dict[str, Any] = {}
-            rel_constraints: Dict[str, Dict[str, Any]] = {}
-
-            for key, path in mapping.items():
-                idx = _col_index(key)
-                if idx is None or idx < 0 or idx >= len(parts):
-                    continue
-                raw_value: Any = parts[idx]
-
-                # Apply value transform per column key
+    # Helpers
+    def _col_index_for(headers: List[str]):
+        def _inner(key: Union[str, int]) -> Optional[int]:
+            if has_header and not str(key).isdigit():
                 try:
-                    col_map = value_map.get(key) if isinstance(value_map, dict) else None  # type: ignore[index]
-                    if isinstance(col_map, dict):
-                        if raw_value in col_map:
-                            raw_value = col_map[raw_value]
-                        elif isinstance(raw_value, str):
-                            low = raw_value.strip().lower()
-                            for k, v in col_map.items():
-                                if isinstance(k, str) and k.strip().lower() == low:
-                                    raw_value = v
-                                    break
-                except Exception:
-                    pass
-
-                if _is_null(raw_value):
-                    continue
-
-                if "__" in path:
-                    root_field, *subpath = path.split("__")
-                    fobj = field_map.get(root_field)
-                    if not fobj or not (hasattr(fobj, 'remote_field') and fobj.remote_field):
-                        raise ValueError(f"Mapping points to relation '{root_field}' which is not a ForeignKey/OneToOne")
-                    if root_field not in rel_constraints:
-                        rel_constraints[root_field] = {}
-                    lookup_field = "__".join(subpath)
-                    if lookup_field == "":
-                        lookup_field = "pk"
-                    rel_constraints[root_field][lookup_field] = raw_value
-                else:
-                    fobj = field_map.get(path)
-                    if fobj is not None:
-                        raw_value = _coerce_value_for_field(fobj, raw_value)
-                    assignments[path] = raw_value
-
-            # Compute identity key for duplicate detection, including relation constraints
-            if unique_fields_tuple:
-                identity_values: List[Any] = []
-                for f in unique_fields_tuple:
-                    if f in assignments:
-                        identity_values.append(assignments.get(f))
-                    elif f in rel_constraints:
-                        cons = rel_constraints[f]
-                        # Prefer a single specific lookup value if available
-                        if "pk" in cons:
-                            identity_values.append(cons["pk"])
-                        elif len(cons) == 1:
-                            identity_values.append(next(iter(cons.values())))
-                        else:
-                            # Fallback: stable representation of constraints
-                            identity_values.append(tuple(sorted(cons.items())))
-                    else:
-                        identity_values.append(None)
-                key_tuple = tuple(identity_values)
-                if key_tuple in seen_keys:
-                    raise ValueError(f"Duplicate input row detected for unique key {unique_fields_tuple}={key_tuple!r}")
-                seen_keys.add(key_tuple)
-
-            parsed.append((assignments, rel_constraints))
-        except Exception:
-            errors += 1
-            continue
-
-    if dry_run:
-        return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
-
-    # Two modes: bulk_create (with upsert) or save_per_instance
-    method = (method or "bulk_create").lower()
+                    return headers.index(str(key))
+                except ValueError:
+                    return None
+            try:
+                return int(key)
+            except Exception:
+                return None
+        return _inner
 
     def _sanitize_rel_constraints(rel_model: models.Model, constraints: Dict[str, Any]) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
         for key, val in constraints.items():
             if isinstance(val, str):
                 val = val.strip()
-            # Special handling for Currency.code normalization
             try:
                 if rel_model.__name__ == "Currency":
-                    # Normalize code to uppercase and respect max_length
                     field_name = key.split("__", 1)[0] if key else "code"
                     if field_name == "code" and isinstance(val, str):
                         max_len = getattr(rel_model._meta.get_field("code"), "max_length", 5)
@@ -328,199 +192,294 @@ def import_rows_from_text(
             out[key] = val
         return out
 
-    if method == "bulk_create":
-        # Build instances first, resolving relations
-        instances: List[models.Model] = []
-        for assignments, rel_constraints in parsed:
-            try:
-                # Resolve relations
-                for root_field, constraints in rel_constraints.items():
-                    fobj = field_map.get(root_field)
-                    rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
-                    constraints = _sanitize_rel_constraints(rel_model, constraints)
-                    rel_instance = rel_model.objects.filter(**constraints).first()
-                    if not rel_instance:
-                        # Create missing related record (supports one nested level via __)
-                        create_kwargs: Dict[str, Any] = {}
-                        for key, val in constraints.items():
-                            if "__" not in key or key == "pk":
-                                field_name = key if key != "pk" else rel_model._meta.pk.name
-                                create_kwargs[field_name] = val
-                                continue
-                            parts_path = key.split("__")
-                            base_field_name = parts_path[0]
-                            nested_lookup = "__".join(parts_path[1:])
-                            base_field = rel_model._meta.get_field(base_field_name)
-                            nested_model = base_field.remote_field.model  # type: ignore[attr-defined]
-                            nested_obj = nested_model.objects.filter(**{nested_lookup: val}).first()
-                            if not nested_obj:
-                                nested_obj = nested_model.objects.create(**{nested_lookup: val})
-                            create_kwargs[base_field_name] = nested_obj
-                        # Apply per-relation overrides when creating missing related
-                        if relation_override_fields and root_field in relation_override_fields:
-                            try:
-                                create_kwargs.update(relation_override_fields[root_field])
-                            except Exception:
-                                pass
-                        rel_instance = rel_model.objects.create(**create_kwargs)
-                    assignments[root_field] = rel_instance
-                # Apply any per-row overrides (e.g., force status='open')
-                if override_fields:
-                    assignments.update(override_fields)
-                instances.append(Model(**assignments))
-            except Exception:
-                errors += 1
-                continue
-
-        if not instances:
-            return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
-
-        # Determine update_fields for upsert: all assigned top-level fields
-        update_fields_set = set()
-        for a, _ in parsed:
-            for k in a.keys():
-                update_fields_set.add(k)
-        update_fields = sorted(update_fields_set - set(unique_fields_tuple)) if unique_fields_tuple else sorted(update_fields_set)
-
-        # Perform bulk_create with upsert on conflicts when possible
-        if unique_fields_tuple:
-            if update_fields:
-                res = Model.objects.bulk_create(
-                    instances,
-                    batch_size=chunk_size,
-                    update_conflicts=True,
-                    unique_fields=list(unique_fields_tuple),
-                    update_fields=update_fields,
-                )
+    def _parse_line(parts: List[str], col_index) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+        assignments: Dict[str, Any] = {}
+        rel_constraints: Dict[str, Dict[str, Any]] = {}
+        for key, path in mapping.items():
+            idx = col_index(key)
+            if idx is None or idx >= len(parts):
+                raw_value = None
             else:
-                # Nothing to update on conflict; just ignore duplicates
-                res = Model.objects.bulk_create(
-                    instances,
-                    batch_size=chunk_size,
-                    ignore_conflicts=True,
-                )
-        else:
-            res = Model.objects.bulk_create(instances, batch_size=chunk_size)
-
-        # We cannot precisely distinguish created vs updated from bulk_create return across all Django versions.
-        # Report all as created for simplicity, since values are persisted regardless.
-        created += len(res)
-        return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
-
-    elif method == "save_per_instance":
-        # Save each row individually to trigger model save() and signals
-        with transaction.atomic():
-            for assignments, rel_constraints in parsed:
+                raw_value = parts[idx]
+            # Normalize blank strings to None and trim whitespace
+            if isinstance(raw_value, str):
+                rv = raw_value.strip()
+                if rv == "" or rv.lower() in {"nan", "none", "null"}:
+                    raw_value = None
+                else:
+                    raw_value = rv
+            if key in value_map:
                 try:
-                    # Resolve relations
-                    for root_field, constraints in rel_constraints.items():
-                        fobj = field_map.get(root_field)
-                        rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
-                        constraints = _sanitize_rel_constraints(rel_model, constraints)
-                        rel_instance = rel_model.objects.filter(**constraints).first()
-                        if not rel_instance:
-                            create_kwargs: Dict[str, Any] = {}
-                            for key, val in constraints.items():
-                                if "__" not in key or key == "pk":
-                                    field_name = key if key != "pk" else rel_model._meta.pk.name
-                                    create_kwargs[field_name] = val
-                                    continue
-                                parts_path = key.split("__")
-                                base_field_name = parts_path[0]
-                                nested_lookup = "__".join(parts_path[1:])
-                                base_field = rel_model._meta.get_field(base_field_name)
-                                nested_model = base_field.remote_field.model  # type: ignore[attr-defined]
-                                nested_obj = nested_model.objects.filter(**{nested_lookup: val}).first()
-                                if not nested_obj:
-                                    nested_obj = nested_model.objects.create(**{nested_lookup: val})
-                                create_kwargs[base_field_name] = nested_obj
-                            # Apply per-relation overrides when creating missing related
-                            if relation_override_fields and root_field in relation_override_fields:
-                                try:
-                                    create_kwargs.update(relation_override_fields[root_field])
-                                except Exception:
-                                    pass
-                            rel_instance = rel_model.objects.create(**create_kwargs)
-                        assignments[root_field] = rel_instance
+                    raw_value = value_map[key].get(raw_value, raw_value)
+                except Exception:
+                    pass
+            if "__" in path:
+                root_field, lookup = path.split("__", 1)
+                cons = rel_constraints.setdefault(root_field, {})
+                cons[lookup] = raw_value
+            else:
+                fobj = field_map.get(path)
+                if fobj is not None:
+                    raw_value = _coerce_value_for_field(fobj, raw_value)
+                assignments[path] = raw_value
+        return assignments, rel_constraints
 
-                    # Apply any per-row overrides (e.g., force status='open')
-                    if override_fields:
-                        assignments.update(override_fields)
+    method = (method or "bulk_create").lower()
 
-                    instance = None
+    total = 0
+    created = 0
+    updated = 0
+    skipped = 0
+    errors = 0
+    seen_keys: set = set()
+
+    # Open the file in streaming mode
+    enc = encoding or "utf-8"
+    errs = encoding_errors if encoding else "replace"
+    with open(file_path, "r", encoding=enc, errors=errs) as fh:
+        header_cols: List[str] = []
+        if has_header:
+            first = fh.readline()
+            if first:
+                header_cols = [h.strip() for h in first.rstrip("\n\r").split(delimiter)]
+        col_index = _col_index_for(header_cols)
+
+        batch_lines: List[str] = []
+
+        def process_batch(lines: List[str]):
+            nonlocal total, created, updated, skipped, errors
+            if not lines:
+                return
+            # Parse lines to assignments/constraints
+            parsed_batch: List[Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]] = []
+            for ln in lines:
+                total += 1
+                try:
+                    parts = [p.strip() for p in ln.split(delimiter)]
+                    assignments, rel_constraints = _parse_line(parts, col_index)
+
+                    # Duplicate detection across entire stream
                     if unique_fields_tuple:
-                        if all((f in assignments) for f in unique_fields_tuple):
-                            lookup = {f: assignments[f] for f in unique_fields_tuple}
-                            instance = Model.objects.filter(**lookup).first()
-
-                    if instance:
-                        changed: List[str] = []
-                        for name, value in assignments.items():
-                            if getattr(instance, name) != value:
-                                setattr(instance, name, value)
-                                changed.append(name)
-                        # Determine which computed fields to persist
-                        recalc_fields: List[str] = []
-                        if recalc is not None:
-                            if isinstance(recalc, str):
-                                if recalc == "all":
-                                    try:
-                                        recalc_fields = list(getattr(instance, "AUTO_COMPUTE", {}).keys())
-                                    except Exception:
-                                        recalc_fields = []
-                                elif recalc == "none":
-                                    recalc_fields = []
+                        identity_values: List[Any] = []
+                        for f in unique_fields_tuple:
+                            if f in assignments:
+                                identity_values.append(assignments.get(f))
+                            elif f in rel_constraints:
+                                cons = rel_constraints[f]
+                                if "pk" in cons:
+                                    identity_values.append(cons["pk"])
+                                elif len(cons) == 1:
+                                    identity_values.append(next(iter(cons.values())))
                                 else:
-                                    recalc_fields = [recalc]
+                                    identity_values.append(tuple(sorted(cons.items())))
                             else:
-                                try:
-                                    recalc_fields = list(recalc)
-                                except Exception:
-                                    recalc_fields = []
-
-                        if changed:
-                            save_kwargs: Dict[str, Any] = {}
-                            if recalc is not None:
-                                save_kwargs["recalc"] = recalc
-                            if recalc_exclude:
-                                save_kwargs["recalc_exclude"] = set(recalc_exclude)
-                            # Ensure computed fields are persisted too
-                            update_list = list(dict.fromkeys(list(changed) + recalc_fields)) if recalc_fields else changed
-                            instance.save(update_fields=update_list, **save_kwargs)
-                            updated += 1
-                        else:
-                            if recalc and recalc_always_save:
-                                save_kwargs = {"recalc": recalc}
-                                if recalc_exclude:
-                                    save_kwargs["recalc_exclude"] = set(recalc_exclude)
-                                # Persist only computed fields
-                                update_list = recalc_fields
-                                if not update_list:
-                                    try:
-                                        update_list = list(getattr(instance, "AUTO_COMPUTE", {}).keys())
-                                    except Exception:
-                                        update_list = []
-                                if update_list:
-                                    instance.save(update_fields=update_list, **save_kwargs)
-                                    updated += 1
-                                else:
-                                    skipped += 1
+                                identity_values.append(None)
+                        key_tuple = tuple(identity_values)
+                        if key_tuple in seen_keys:
+                            msg = f"Duplicate input row detected for unique key {unique_fields_tuple}={key_tuple!r}"
+                            if stop_on_duplicate:
+                                raise ValueError(msg)
                             else:
                                 skipped += 1
-                    else:
-                        instance = Model(**assignments)
-                        save_kwargs = {}
-                        if recalc is not None:
-                            save_kwargs["recalc"] = recalc
-                        if recalc_exclude:
-                            save_kwargs["recalc_exclude"] = set(recalc_exclude)
-                        instance.save(**save_kwargs)
-                        created += 1
+                                continue
+                        seen_keys.add(key_tuple)
+
+                    parsed_batch.append((assignments, rel_constraints))
                 except Exception:
                     errors += 1
                     continue
 
-        return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
+            if dry_run or not parsed_batch:
+                return
 
-    else:
-        raise ValueError("method must be 'bulk_create' or 'save_per_instance'")
+            if method == "bulk_create":
+                # Resolve relations and build instances
+                instances: List[models.Model] = []
+                update_fields_set = set()
+                for assignments, rel_constraints in parsed_batch:
+                    try:
+                        for root_field, constraints in rel_constraints.items():
+                            fobj = field_map.get(root_field)
+                            rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
+                            constraints = _sanitize_rel_constraints(rel_model, constraints)
+                            rel_instance = rel_model.objects.filter(**constraints).first()
+                            if not rel_instance:
+                                create_kwargs: Dict[str, Any] = {}
+                                for key, val in constraints.items():
+                                    if "__" not in key or key == "pk":
+                                        field_name = key if key != "pk" else rel_model._meta.pk.name
+                                        create_kwargs[field_name] = val
+                                        continue
+                                    parts_path = key.split("__")
+                                    base_field_name = parts_path[0]
+                                    nested_lookup = "__".join(parts_path[1:])
+                                    base_field = rel_model._meta.get_field(base_field_name)
+                                    nested_model = base_field.remote_field.model  # type: ignore[attr-defined]
+                                    nested_obj = nested_model.objects.filter(**{nested_lookup: val}).first()
+                                    if not nested_obj:
+                                        nested_obj = nested_model.objects.create(**{nested_lookup: val})
+                                    create_kwargs[base_field_name] = nested_obj
+                                if relation_override_fields and root_field in relation_override_fields:
+                                    try:
+                                        create_kwargs.update(relation_override_fields[root_field])
+                                    except Exception:
+                                        pass
+                                rel_instance = rel_model.objects.create(**create_kwargs)
+                            assignments[root_field] = rel_instance
+                        if override_fields:
+                            assignments.update(override_fields)
+                        for k in assignments.keys():
+                            update_fields_set.add(k)
+                        instances.append(Model(**assignments))
+                    except Exception:
+                        errors += 1
+                        continue
+
+                if not instances:
+                    return
+
+                update_fields = (
+                    sorted(update_fields_set - set(unique_fields_tuple)) if unique_fields_tuple else sorted(update_fields_set)
+                )
+                if unique_fields_tuple:
+                    if update_fields:
+                        Model.objects.bulk_create(
+                            instances,
+                            batch_size=chunk_size,
+                            update_conflicts=True,
+                            unique_fields=list(unique_fields_tuple),
+                            update_fields=update_fields,
+                        )
+                    else:
+                        Model.objects.bulk_create(
+                            instances,
+                            batch_size=chunk_size,
+                            ignore_conflicts=True,
+                        )
+                else:
+                    Model.objects.bulk_create(instances, batch_size=chunk_size)
+                created += len(instances)
+
+            elif method == "save_per_instance":
+                with transaction.atomic():
+                    for assignments, rel_constraints in parsed_batch:
+                        try:
+                            for root_field, constraints in rel_constraints.items():
+                                fobj = field_map.get(root_field)
+                                rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
+                                constraints = _sanitize_rel_constraints(rel_model, constraints)
+                                rel_instance = rel_model.objects.filter(**constraints).first()
+                                if not rel_instance:
+                                    create_kwargs: Dict[str, Any] = {}
+                                    for key, val in constraints.items():
+                                        if "__" not in key or key == "pk":
+                                            field_name = key if key != "pk" else rel_model._meta.pk.name
+                                            create_kwargs[field_name] = val
+                                            continue
+                                        parts_path = key.split("__")
+                                        base_field_name = parts_path[0]
+                                        nested_lookup = "__".join(parts_path[1:])
+                                        base_field = rel_model._meta.get_field(base_field_name)
+                                        nested_model = base_field.remote_field.model  # type: ignore[attr-defined]
+                                        nested_obj = nested_model.objects.filter(**{nested_lookup: val}).first()
+                                        if not nested_obj:
+                                            nested_obj = nested_model.objects.create(**{nested_lookup: val})
+                                        create_kwargs[base_field_name] = nested_obj
+                                    if relation_override_fields and root_field in relation_override_fields:
+                                        try:
+                                            create_kwargs.update(relation_override_fields[root_field])
+                                        except Exception:
+                                            pass
+                                    rel_instance = rel_model.objects.create(**create_kwargs)
+                                assignments[root_field] = rel_instance
+
+                            if override_fields:
+                                assignments.update(override_fields)
+
+                            instance = None
+                            if unique_fields_tuple and all((f in assignments) for f in unique_fields_tuple):
+                                lookup = {f: assignments[f] for f in unique_fields_tuple}
+                                instance = Model.objects.filter(**lookup).first()
+
+                            if instance:
+                                changed: List[str] = []
+                                for name, value in assignments.items():
+                                    if getattr(instance, name) != value:
+                                        setattr(instance, name, value)
+                                        changed.append(name)
+
+                                recalc_fields: List[str] = []
+                                if recalc is not None:
+                                    if isinstance(recalc, str):
+                                        if recalc == "all":
+                                            try:
+                                                recalc_fields = list(getattr(instance, "AUTO_COMPUTE", {}).keys())
+                                            except Exception:
+                                                recalc_fields = []
+                                        elif recalc == "none":
+                                            recalc_fields = []
+                                        else:
+                                            recalc_fields = [recalc]
+                                    else:
+                                        try:
+                                            recalc_fields = list(recalc)
+                                        except Exception:
+                                            recalc_fields = []
+
+                                if changed:
+                                    save_kwargs: Dict[str, Any] = {}
+                                    if recalc is not None:
+                                        save_kwargs["recalc"] = recalc
+                                    if recalc_exclude:
+                                        save_kwargs["recalc_exclude"] = set(recalc_exclude)
+                                    update_list = list(dict.fromkeys(list(changed) + recalc_fields)) if recalc_fields else changed
+                                    instance.save(update_fields=update_list, **save_kwargs)
+                                    updated += 1
+                                else:
+                                    if recalc and recalc_always_save:
+                                        save_kwargs = {"recalc": recalc}
+                                        if recalc_exclude:
+                                            save_kwargs["recalc_exclude"] = set(recalc_exclude)
+                                        update_list = recalc_fields
+                                        if not update_list:
+                                            try:
+                                                update_list = list(getattr(instance, "AUTO_COMPUTE", {}).keys())
+                                            except Exception:
+                                                update_list = []
+                                        if update_list:
+                                            instance.save(update_fields=update_list, **save_kwargs)
+                                            updated += 1
+                                        else:
+                                            skipped += 1
+                                    else:
+                                        skipped += 1
+                            else:
+                                instance = Model(**assignments)
+                                save_kwargs = {}
+                                if recalc is not None:
+                                    save_kwargs["recalc"] = recalc
+                                if recalc_exclude:
+                                    save_kwargs["recalc_exclude"] = set(recalc_exclude)
+                                instance.save(**save_kwargs)
+                                created += 1
+                        except Exception:
+                            errors += 1
+                            continue
+            else:
+                raise ValueError("method must be 'bulk_create' or 'save_per_instance'")
+
+        # Stream lines and process in batches
+        for raw in fh:
+            ln = raw.rstrip("\n\r")
+            if not ln or any(ln.startswith(pfx) for pfx in ignore_prefixes):
+                continue
+            batch_lines.append(ln)
+            if len(batch_lines) >= max(1, int(chunk_size or 1000)):
+                process_batch(batch_lines)
+                batch_lines = []
+
+        if batch_lines:
+            process_batch(batch_lines)
+
+    return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
+

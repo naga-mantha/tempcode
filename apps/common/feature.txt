@@ -1,39 +1,10 @@
-I want a ToDo model in the "common" app with the following fields:
-1. Title - CharField, max_length=200
-2. Description - TextField
-3. Status - "Not Started", "In Progress", "Completed"
-4. Created_at - DateTimeField, auto_now_add=True
-5. Updated_at - DateTimeField, auto_now=True
-6. Dependencies - ManyToManyField to self, blank=True
 
-For the template, I would need a page which
-1. Lists all ToDo items placed in a Bootstrap accordion
-2. The accordion should contain:
-    - Title
-    - Dependencies. Use pill badges (https://getbootstrap.com/docs/5.3/components/badge/#pill-badges). The background color of the badge should be in accordance with the status of the ToDo item (See below for coloring)
-3. The description should be in the accordion body
-4. The background color of the accordion should be in accordance with the status of the ToDo item
-   - Not Started - Secondary
-   - In Progress - Primary
-   - Completed - Success
- You can use the Bootstrap classes for this
- 5. The accordion should be draggable to change the priority. You can use SortJS for this.
+OK now in apps/common/management/commands/create_items.py, can u write the script to import the items (similar to create_business_partners).
+▌
+▌The file name is 'Parts-' and here is the structure is:
+Item Group | Description                    | Item                                            | Description                    | Item Type                 | tcibd001.srce   | Signal
 
 
- Q&A
-  - Priority field: To support drag-to-reorder, can I add an IntegerField priority (with model Meta.ordering = ['priority'])?
-        > Yes
-  - Status choices: OK to implement via TextChoices with default “Not Started”?
-        > Dropdown
-  - Description required: Should description be optional (blank=True) or required?
-        > Optional
-  - Dependencies coloring: Should each dependency badge color match the dependency item’s own status or the parent item’s status?
-        > Dependency item’s own status
-  - Sortable library: You wrote “SortJS” — do you mean SortableJS via CDN?
-        > Yes
-  - URL + template: OK to add path('todos/', todo_list, name='todo_list') and template at apps/common/templates/todo_list.html?
-        > Yes
-  - Reorder endpoint: OK to add a POST endpoint path('todos/reorder/', ...) that accepts an ordered list of IDs and updates priorities?
-        > Yes
-  - Admin/CRUD: Do you want Django admin registration and/or basic create/edit views now, or is listing + drag-reorder sufficient?
-        > I would need admin too
+For this upload, there are some conditions:
+1. If the "Item" starts with "PROG02" then ignore the line
+2. If the "Description" is "Do Not Use" then ignore the line

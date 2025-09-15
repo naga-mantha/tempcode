@@ -10,3 +10,4 @@ python-dateutil
 numpy
 plotly
 openpyxl
+requests

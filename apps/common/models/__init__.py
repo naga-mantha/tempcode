@@ -40,3 +40,8 @@ from apps.common.models.planning import (
     ProductionMrpMessage,
     MrpRescheduleDaysClassification,
 )
+from apps.common.models.so_validate import SoValidateAggregate
+from apps.common.models.item_group_types import ItemGroupType
+from apps.common.models.programs import Program
+from apps.common.models.item_groups import ItemGroup
+from apps.common.models.item_types import ItemType

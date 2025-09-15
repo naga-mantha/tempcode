@@ -219,15 +219,18 @@ LOGGING = {
     },
 
     'loggers': {
-        'apps.automaition': {
+        # Project app loggers (captures modules under 'apps.*')
+        'apps': {
             'handlers': ['debug_log'],
             'propagate': True,
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
 
+        # Central error logger used across management commands
         'app_errors': {
             'handlers': ['debug_log', "mail_admins"],
             'propagate': True,
+            'level': 'ERROR',
         },
     },
 }
