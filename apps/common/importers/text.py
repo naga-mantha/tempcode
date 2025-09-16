@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+import logging
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
 from django.apps import apps as django_apps
@@ -131,6 +132,8 @@ def import_rows_from_text(
     override_fields: Optional[Mapping[str, Any]] = None,
     relation_override_fields: Optional[Mapping[str, Mapping[str, Any]]] = None,
     recalc_always_save: bool = False,
+    error_log_limit: int = 50,
+    error_logger: Optional[str] = None,
 ) -> ImportResult:
     # Resolve model class if a label is provided
     if isinstance(model, str):
@@ -232,6 +235,8 @@ def import_rows_from_text(
     skipped = 0
     errors = 0
     seen_keys: set = set()
+    logged_errors = 0
+    log = logging.getLogger(error_logger or __name__)
 
     # Open the file in streaming mode
     enc = encoding or "utf-8"
@@ -248,14 +253,25 @@ def import_rows_from_text(
 
         def process_batch(lines: List[str]):
             nonlocal total, created, updated, skipped, errors
+            nonlocal logged_errors
             if not lines:
                 return
             # Parse lines to assignments/constraints
-            parsed_batch: List[Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]] = []
+            parsed_batch: List[Tuple[Dict[str, Any], Dict[str, Dict[str, Any]], int, str]] = []
             for ln in lines:
                 total += 1
                 try:
                     parts = [p.strip() for p in ln.split(delimiter)]
+                    # Ignore rows with any column starting with '##' (comment/invalid markers)
+                    if any((isinstance(p, str) and p.startswith('##')) for p in parts):
+                        errors += 1
+                        if logged_errors < error_log_limit:
+                            try:
+                                log.warning("Import ignored line %s due to '##' marker | raw='%s'", total, (ln or '')[:200])
+                            except Exception:
+                                pass
+                            logged_errors += 1
+                        continue
                     assignments, rel_constraints = _parse_line(parts, col_index)
 
                     # Duplicate detection across entire stream
@@ -276,17 +292,24 @@ def import_rows_from_text(
                                 identity_values.append(None)
                         key_tuple = tuple(identity_values)
                         if key_tuple in seen_keys:
-                            msg = f"Duplicate input row detected for unique key {unique_fields_tuple}={key_tuple!r}"
                             if stop_on_duplicate:
-                                raise ValueError(msg)
+                                # Count as error but do not spam logs for duplicate input rows
+                                errors += 1
+                                continue
                             else:
                                 skipped += 1
                                 continue
                         seen_keys.add(key_tuple)
 
-                    parsed_batch.append((assignments, rel_constraints))
-                except Exception:
+                    parsed_batch.append((assignments, rel_constraints, total, ln))
+                except Exception as e:
                     errors += 1
+                    if logged_errors < error_log_limit:
+                        try:
+                            log.warning("Import parse error on line %s: %s | raw='%s'", total, e, (ln or '')[:200])
+                        except Exception:
+                            pass
+                        logged_errors += 1
                     continue
 
             if dry_run or not parsed_batch:
@@ -296,12 +319,16 @@ def import_rows_from_text(
                 # Resolve relations and build instances
                 instances: List[models.Model] = []
                 update_fields_set = set()
-                for assignments, rel_constraints in parsed_batch:
+                for assignments, rel_constraints, line_no, raw_line in parsed_batch:
                     try:
                         for root_field, constraints in rel_constraints.items():
                             fobj = field_map.get(root_field)
                             rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
                             constraints = _sanitize_rel_constraints(rel_model, constraints)
+                            # If all relation constraints are None/empty, set FK to None explicitly
+                            if not any(val is not None for val in constraints.values()):
+                                assignments[root_field] = None
+                                continue
                             rel_instance = rel_model.objects.filter(**constraints).first()
                             if not rel_instance:
                                 create_kwargs: Dict[str, Any] = {}
@@ -331,8 +358,14 @@ def import_rows_from_text(
                         for k in assignments.keys():
                             update_fields_set.add(k)
                         instances.append(Model(**assignments))
-                    except Exception:
+                    except Exception as e:
                         errors += 1
+                        if logged_errors < error_log_limit:
+                            try:
+                                log.warning("Import build/upsert error on line %s: %s | data=%s", line_no, e, json.dumps(assignments, default=str)[:200])
+                            except Exception:
+                                pass
+                            logged_errors += 1
                         continue
 
                 if not instances:
@@ -361,13 +394,18 @@ def import_rows_from_text(
                 created += len(instances)
 
             elif method == "save_per_instance":
-                with transaction.atomic():
-                    for assignments, rel_constraints in parsed_batch:
-                        try:
+                # Per-row savepoints to avoid aborting the whole batch on one failure
+                for assignments, rel_constraints, line_no, raw_line in parsed_batch:
+                    try:
+                        with transaction.atomic():
                             for root_field, constraints in rel_constraints.items():
                                 fobj = field_map.get(root_field)
                                 rel_model = fobj.remote_field.model  # type: ignore[attr-defined]
                                 constraints = _sanitize_rel_constraints(rel_model, constraints)
+                                # If all relation constraints are None/empty, set FK to None explicitly
+                                if not any(val is not None for val in constraints.values()):
+                                    assignments[root_field] = None
+                                    continue
                                 rel_instance = rel_model.objects.filter(**constraints).first()
                                 if not rel_instance:
                                     create_kwargs: Dict[str, Any] = {}
@@ -462,9 +500,15 @@ def import_rows_from_text(
                                     save_kwargs["recalc_exclude"] = set(recalc_exclude)
                                 instance.save(**save_kwargs)
                                 created += 1
-                        except Exception:
-                            errors += 1
-                            continue
+                    except Exception as e:
+                        errors += 1
+                        if logged_errors < error_log_limit:
+                            try:
+                                log.warning("Import save error on line %s: %s | data=%s", line_no, e, json.dumps(assignments, default=str)[:200])
+                            except Exception:
+                                pass
+                            logged_errors += 1
+                        continue
             else:
                 raise ValueError("method must be 'bulk_create' or 'save_per_instance'")
 
@@ -482,4 +526,3 @@ def import_rows_from_text(
             process_batch(batch_lines)
 
     return ImportResult(total=total, created=created, updated=updated, skipped=skipped, errors=errors)
-

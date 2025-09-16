@@ -27,15 +27,15 @@ class Command(BaseCommand):
         # PurchaseTimelinessClassification.objects.all().delete()
         # UOM.objects.all().delete()
 
-        # call_command('update_exchange_rates')
-        # call_command('create_business_partners')
-        # call_command('create_items')
-        # call_command('create_purchase_orders')
+        call_command('update_exchange_rates')
+        call_command('create_business_partners')
+        call_command('create_items')
+        call_command('create_purchase_orders')
         call_command('create_purchase_order_lines')
-        # call_command('create_receipts')
-        # call_command('create_receipts_lines')
-        # call_command('create_planned_purchase_orders')
-        # call_command('create_purchase_mrp_msgs')
+        call_command('create_receipts')
+        call_command('create_receipts_lines')
+        call_command('create_planned_purchase_orders')
+        call_command('create_purchase_mrp_msgs')
 
 
 

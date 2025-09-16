@@ -1,33 +1,27 @@
+from django.core.management.base import BaseCommand
 from apps.common.models import *
 from datetime import datetime, time, timedelta, date
-from django.core.management.base import BaseCommand
 from django.core.management import call_command
 
 class Command(BaseCommand):
-    help = 'AAAAAAAAAAAAA'
+    help = 'Daily'
 
     def handle(self, *args, **kwargs):
-        # ReceiptLine.objects.all().delete()
-        # Receipt.objects.all().delete()
-        # PurchaseOrderLine.objects.all().delete()
-        # PurchaseOrder.objects.all().delete()
-        # PlannedPurchaseOrder.objects.all().delete()
-        # PlannedProductionOrder.objects.all().delete()
         PurchaseMrpMessage.objects.all().delete()
-        ProductionMrpMessage.objects.all().delete()
+        PlannedPurchaseOrder.objects.all().delete()
 
-        # # PO Headers
-        # call_command('excel_po_header')
-        #
-        # # Open PO Lines
-        # call_command('excel_open_po_line')
-        #
-        # # Closed PO Lines + Receipts
-        # call_command('excel_closed_po_line')
-        # call_command('excel_receipt')
-        # call_command('excel_receipt_lines')
-        #
-        # # Planned Orders
-        # call_command('excel_planned_order')
-        call_command('excel_text_mrp_msgs')
+        call_command('update_exchange_rates')
+        call_command('create_business_partners')
+        call_command('create_items')
+        call_command('create_purchase_orders')
+        call_command('create_purchase_order_lines')
+        call_command('create_receipts')
+        call_command('create_receipts_lines')
+        call_command('create_planned_purchase_orders')
+        call_command('create_purchase_mrp_msgs')
+
+
+
+
+
 

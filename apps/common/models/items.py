@@ -5,7 +5,7 @@ from django_pandas.managers import DataFrameManager
 
 class Item(WorkflowModelMixin):
     code = models.CharField(max_length=100, verbose_name="Item Code")
-    description = models.CharField(max_length=100, blank=True, default="", verbose_name="Item Description")
+    description = models.CharField(max_length=100, blank=True, null=True, default="", verbose_name="Item Description")
 
     # New relations
     item_group = models.ForeignKey(

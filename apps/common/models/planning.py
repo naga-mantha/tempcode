@@ -83,7 +83,7 @@ class BaseMrpMessage(AutoComputeMixin, models.Model):
         ("PUSH_OUT", "Push Out"),
     )
 
-    mrp_message = models.TextField(blank=True, default="", verbose_name="MRP Message")
+    mrp_message = models.TextField(blank=True, default="", null=True, verbose_name="MRP Message")
     mrp_reschedule_date = models.DateField(blank=True, null=True, db_index=True, verbose_name="MRP Reschedule Date")
 
     reschedule_delta_days = models.IntegerField(blank=True, null=True, db_index=True, verbose_name="Reschedule Delta Days")
@@ -144,7 +144,12 @@ class PurchaseMrpMessage(BaseMrpMessage):
     )
 
     def __str__(self):
-        return f"MRP Message for PO Line {self.pol_id}: {self.mrp_message[:30]}".strip()
+        msg = (self.mrp_message or "")
+        try:
+            msg = msg[:30]
+        except Exception:
+            msg = str(msg)[:30]
+        return f"MRP Message for PO Line {self.pol_id}: {msg}".strip()
 
     def compute_reschedule_delta_days(self):
         pol = self.pol
@@ -173,4 +178,9 @@ class ProductionMrpMessage(BaseMrpMessage):
     )
 
     def __str__(self):
-        return f"MRP Message for Prod Order {self.production_order_id}: {self.mrp_message[:30]}".strip()
+        msg = (self.mrp_message or "")
+        try:
+            msg = msg[:30]
+        except Exception:
+            msg = str(msg)[:30]
+        return f"MRP Message for Prod Order {self.production_order_id}: {msg}".strip()

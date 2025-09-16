@@ -1,18 +1,13 @@
-from apps.purchase.blocks import (
-    ReceiptLinesTableBlock,
-    PurchaseOrderLineTableBlock,
-    PurchaseOrderLinePivot,
-)
-from apps.purchase.charts import PurchaseOtdDialChart
+from apps.purchase.blocks.tables import *
+from apps.purchase.blocks.pivots import *
+from apps.purchase.blocks.dials import *
 
 
 def register(registry):
-    """Register purchase related blocks."""
+    registry.register("open_purchase_order_lines_table", OpenPurchaseOrderLinesTable())
+    registry.register("purchase_order_lines_table", PurchaseOrderLinesTable())
+    registry.register("receipt_lines_table", ReceiptLinesTable())
 
-    registry.register("receipt_lines_table", ReceiptLinesTableBlock())
-    registry.register("purchase_otd_dial", PurchaseOtdDialChart())
-    registry.register("purchase_order_lines_table", PurchaseOrderLineTableBlock())
-    registry.register("purchase_order_line_pivot", PurchaseOrderLinePivot())
+    registry.register("open_purchase_order_lines_pivot", OpenPurchaseOrderLinesPivot())
 
-
-
+    registry.register("supplier_otd_dial", SupplierOtdDial())

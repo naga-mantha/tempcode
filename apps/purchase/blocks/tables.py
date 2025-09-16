@@ -1,0 +1,49 @@
+from apps.blocks.block_types.table.table_block import TableBlock
+from apps.common.models import PurchaseOrderLine, ReceiptLine
+from apps.common.filters.schemas import (
+    supplier_filter,
+    item_multiselect_filter,
+    date_from_filter,
+    date_to_filter,
+)
+
+class OpenPurchaseOrderLinesTable(TableBlock):
+    def __init__(self):
+        super().__init__("open_purchase_order_lines_table")
+
+    def get_model(self):
+        return PurchaseOrderLine
+
+    def get_base_queryset(self, user):
+        return PurchaseOrderLine.objects.filter(status="open")
+
+    def get_filter_schema(self, request):
+        return {
+            "item": item_multiselect_filter(self.block_name, "item__code"),
+        }
+
+class PurchaseOrderLinesTable(TableBlock):
+    def __init__(self):
+        super().__init__("purchase_order_lines_table")
+
+    def get_model(self):
+        return PurchaseOrderLine
+
+    def get_filter_schema(self, request):
+        return {
+            "item": item_multiselect_filter(self.block_name, "item__code"),
+        }
+
+class ReceiptLinesTable(TableBlock):
+    def __init__(self):
+        super().__init__("receipt_lines_table")
+
+    def get_model(self):
+        return ReceiptLine
+
+    def get_filter_schema(self, request):
+        return {
+            "supplier": supplier_filter(self.block_name, "po_line__order__supplier_id"),
+            "receipt_date_from": date_from_filter("receipt_date_from", "Receipt From", "receipt_date"),
+            "receipt_date_to": date_to_filter("receipt_date_to", "Receipt To", "receipt_date"),
+        }
