@@ -10,6 +10,7 @@ from .item_groups import item_group_choices
 from .item_group_types import item_group_type_choices
 from .programs import program_choices
 from .item_types import item_type_choices
+from apps.common.models.planning import BaseMrpMessage
 
 def supplier_filter(
     block_name: str,
@@ -185,6 +186,34 @@ def item_type_filter(
         "handler": handler,
     }
 
+def mrp_reschedule_direction_filter(
+    block_name: str,
+    direction_path: str,
+    maxItems: int = 100000,
+    label: str = "Reschedule Direction",
+) -> Dict[str, Any]:
+    """Reusable multiselect filter for MRP reschedule direction (PULL_IN/PUSH_OUT)."""
+
+    def handler(qs, val):
+        return qs.filter(**{f"{direction_path}__in": val}) if val else qs
+
+    choices = list(BaseMrpMessage.DIRECTION_CHOICES)
+
+    return {
+        "label": label,
+        "type": "multiselect",
+        "multiple": True,
+        "choices": choices,
+        "choices_url": reverse("block_filter_choices", args=[block_name, "mrp_direction"]),
+        "value_path": direction_path,
+        "tom_select_options": {
+            "placeholder": "Select direction...",
+            "plugins": ["remove_button"],
+            "maxItems": maxItems,
+        },
+        "handler": handler,
+    }
+
 def purchase_order_category_filter(
     block_name: str,
     po_category_code_path: str,
@@ -252,6 +281,7 @@ __all__ = [
     "item_group_type_filter",
     "program_filter",
     "item_type_filter",
+    "mrp_reschedule_direction_filter",
     "purchase_order_category_filter",
     "date_from_filter",
     "date_to_filter",

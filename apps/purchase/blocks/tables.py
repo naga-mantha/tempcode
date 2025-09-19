@@ -7,6 +7,7 @@ from apps.common.filters.schemas import (
     item_group_type_filter,
     program_filter,
     item_type_filter,
+    mrp_reschedule_direction_filter,
     purchase_order_category_filter,
     date_from_filter,
     date_to_filter,
@@ -41,6 +42,9 @@ class OpenPurchaseOrderLinesTable(TableBlock):
             "order_date_to": date_to_filter("order_date_to", "Order Date To", "order_date"),
             "final_receive_date_from": date_from_filter("final_receive_date_from", "Final Receive From", "final_receive_date"),
             "final_receive_date_to": date_to_filter("final_receive_date_to", "Final Receive To", "final_receive_date"),
+            "mrp_reschedule_date_from": date_from_filter("mrp_reschedule_date_from", "MRP Reschedule From", "mrp_message__mrp_reschedule_date"),
+            "mrp_reschedule_date_to": date_to_filter("mrp_reschedule_date_to", "MRP Reschedule To", "mrp_message__mrp_reschedule_date"),
+            "mrp_direction": mrp_reschedule_direction_filter(self.block_name, "mrp_message__direction"),
         }
 
 class PurchaseOrderLinesTable(TableBlock):
