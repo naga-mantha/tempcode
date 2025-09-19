@@ -18,16 +18,31 @@ class FilterChoicesView(LoginRequiredMixin, View):
         cfg = raw_schema.get(key, {})
         choices_callable = cfg.get("choices")
         query = request.GET.get("q", "")
+        ids_param = request.GET.get("ids", "")
         results = []
         choices = []
+
+        # Parse preselected values (for label hydration in AJAX selects)
+        raw_tokens: list[str] = []
+        if ids_param:
+            try:
+                raw_tokens = [x.strip() for x in ids_param.split(",") if x.strip()]
+            except Exception:
+                raw_tokens = []
 
         if callable(choices_callable):
             try:
                 sig = inspect.signature(choices_callable)
-                if len(sig.parameters) >= 2:
-                    choices = choices_callable(request.user, query)
-                else:
-                    choices = choices_callable(request.user)
+                params = sig.parameters
+                kwargs = {}
+                args = [request.user]
+                if "query" in params:
+                    kwargs["query"] = query
+                elif len(params) >= 2:
+                    args.append(query)
+                if "ids" in params:
+                    kwargs["ids"] = raw_tokens
+                choices = choices_callable(*args, **kwargs)
             except Exception:
                 choices = []
         elif isinstance(cfg.get("choices"), (list, tuple)):

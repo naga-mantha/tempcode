@@ -11,3 +11,6 @@ numpy
 plotly
 openpyxl
 requests
+crispy_bootstrap5
+django_widget_tweaks
+psycopg2

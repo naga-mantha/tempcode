@@ -1,37 +1,49 @@
-from typing import Dict, Any
+from typing import Dict, Any, Callable, List, Tuple, Optional
 
 from django.urls import reverse
 from django.db.models import Q
 
 from .business_partners import supplier_choices
 from .items import item_choices
+from .po_categories import po_category_choices
 
-
-def supplier_filter(block_name: str, supplier_id_path: str, label: str = "Supplier") -> Dict[str, Any]:
+def supplier_filter(
+    block_name: str,
+    supplier_code_path: str,
+    maxItems: int = 100000,
+    label: str = "Supplier",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
     """Reusable supplier selector filter.
 
-    supplier_id_path: Django lookup path to supplier id (e.g., "po_line__order__supplier_id").
+    supplier_code_path: Django lookup path to supplier code (e.g., "order__supplier__code").
     """
 
     def handler(qs, val):
-        if not val:
-            return qs
-        try:
-            supplier_id = int(val)
-        except Exception:
-            return qs
-        return qs.filter(**{supplier_id_path: supplier_id})
+        return qs.filter(**{f"{supplier_code_path}__in": val}) if val else qs
 
     return {
         "label": label,
-        "type": "select",
-        "choices": supplier_choices,
+        "type": "multiselect",
+        "multiple": True,
+        "choices": choices_func or supplier_choices,
         "choices_url": reverse("block_filter_choices", args=[block_name, "supplier"]),
+        "tom_select_options": {
+            "placeholder": "Search suppliers...",
+            "plugins": ["remove_button"],
+            "maxItems": maxItems,
+        },
         "handler": handler,
     }
 
 
-def item_multiselect_filter(block_name: str, item_code_path: str, label: str = "Item") -> Dict[str, Any]:
+def item_filter(
+    block_name: str,
+    item_code_path: str,
+    maxItems: int = 100000,
+    label: str = "Item",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
     """Reusable item multi-select filter.
 
     item_code_path: Django lookup path to item code (e.g., "item__code").
@@ -44,45 +56,44 @@ def item_multiselect_filter(block_name: str, item_code_path: str, label: str = "
         "label": label,
         "type": "multiselect",
         "multiple": True,
-        "choices": item_choices,
+        "choices": choices_func or item_choices,
         "choices_url": reverse("block_filter_choices", args=[block_name, "item"]),
         "tom_select_options": {
             "placeholder": "Search items...",
             "plugins": ["remove_button"],
-            "maxItems": 3,
+            "maxItems": maxItems,
         },
         "handler": handler,
     }
 
+def purchase_order_category_filter(
+    block_name: str,
+    po_category_code_path: str,
+    maxItems: int = 100000,
+    label: str = "PO Category",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
+    """Reusable item multi-select filter.
 
-def item_multiselect_filter_any(block_name: str, item_code_paths: list[str], label: str = "Item") -> Dict[str, Any]:
-    """Item multi-select filter that matches any of the provided code paths.
-
-    Example: ["pol__item__code", "production_order__item__code"]
+    item_code_path: Django lookup path to item code (e.g., "item__code").
     """
 
     def handler(qs, val):
-        if not val:
-            return qs
-        cond = Q()
-        for path in item_code_paths:
-            cond |= Q(**{f"{path}__in": val})
-        return qs.filter(cond)
+        return qs.filter(**{f"{po_category_code_path}__in": val}) if val else qs
 
     return {
         "label": label,
         "type": "multiselect",
         "multiple": True,
-        "choices": item_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "item"]),
+        "choices": choices_func or po_category_choices,
+        "choices_url": reverse("block_filter_choices", args=[block_name, "category"]),
         "tom_select_options": {
-            "placeholder": "Search items...",
+            "placeholder": "Search categories...",
             "plugins": ["remove_button"],
-            "maxItems": 3,
+            "maxItems": maxItems,
         },
         "handler": handler,
     }
-
 
 def date_from_filter(key: str, label: str, date_field_path: str) -> Dict[str, Any]:
     """Generic from-date filter for a given date/datetime field path."""
@@ -116,8 +127,8 @@ def date_to_filter(key: str, label: str, date_field_path: str) -> Dict[str, Any]
 
 __all__ = [
     "supplier_filter",
-    "item_multiselect_filter",
-    "item_multiselect_filter_any",
+    "item_filter",
+    "purchase_order_category_filter",
     "date_from_filter",
     "date_to_filter",
 ]

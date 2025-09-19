@@ -126,6 +126,29 @@
       if (ts && typeof ts.setTextboxValue === 'function') {
         ts.on('item_add', () => ts.setTextboxValue(''));
       }
+
+      // If there are preselected values and this is an AJAX select,
+      // fetch their labels explicitly so the control shows code+name (not raw IDs).
+      if (ajaxUrl) {
+        const selectedValues = Array.from(el.options).filter(o => o.selected && o.value !== '').map(o => o.value);
+        if (selectedValues.length > 0) {
+          const url = ajaxUrl + '?ids=' + encodeURIComponent(selectedValues.join(','));
+          fetch(url)
+            .then(r => r.ok ? r.json() : [])
+            .then(list => {
+              if (!list || !Array.isArray(list)) return;
+              list.forEach(opt => {
+                try {
+                  ts.addOption(opt);
+                  ts.updateOption(opt.value, opt);
+                } catch (e) { /* ignore */ }
+              });
+              // Re-add selected items to ensure labels refresh
+              selectedValues.forEach(v => { try { ts.addItem(v, true); } catch (e) {} });
+            })
+            .catch(() => {});
+        }
+      }
     } catch (e) {
       // Fail-safe: do not block page if a single field fails to initialize
       // console.warn('TomSelect init failed', e);

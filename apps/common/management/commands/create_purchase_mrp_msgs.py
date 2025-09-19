@@ -27,6 +27,20 @@ class Command(BaseCommand):
             # Order | Pos | Sq | PN | Description | Order.Date | Pl.Del.Dte | Conf.Date | Modify Dt | Whs | Cur | Ord. | Un.Price | Tot.Amnt | Buyer | Notes on P.O.Line | Itm Gr | Exception Msg | Res.Dt | Suppli
 
             file_copy = files_utils.read_text_contents(prefix, ["Order", "-"])
+            # Keep only rows where column 17 (0-based index) is NOT blank
+            # Column 17 in mapping corresponds to the Exception Msg field
+            try:
+                with open(file_copy, "r", encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                with open(file_copy, "w", encoding="utf-8") as fh:
+                    for ln in lines:
+                        parts = [p.strip() for p in ln.split("|")]
+                        # Ensure there are at least 18 columns and the 18th value is non-empty
+                        if len(parts) > 17 and parts[17] != "":
+                            fh.write(ln)
+            except Exception:
+                # If any issue occurs during pre-filtering, proceed without additional filtering
+                pass
             try:
                 result = import_rows_from_text(
                     model="common.PurchaseMrpMessage",

@@ -88,12 +88,38 @@ function vendor_css() {
 	.pipe(gulp.dest('apps/common/dist/'));
 }
 
+function production() {
+    return gulp.src([
+        '../mag360/**/*',
+        '!../mag360/venv{,/**}',
+        '!../mag360/node_modules{,/**}',
+        '!../mag360/debug.log',
+        '!../mag360/gulpfile.js',
+        '!../mag360/*.json',
+        '!../mag360/manage.py',
+        '!../mag360/mag360/.env',
+        '!../mag360/apps/**/migrations{,/**}',
+        '!../mag360/apps/common/src{,/**}',
+        '!../mag360/apps/**/__pycache__{,/**}',
+
+
+//        '!../.git{,/**}',
+//        '!../.idea{,/**}',
+//        '!../.gitignore',
+//        '!../README.md',
+
+	], {"allowEmpty": true})
+	.pipe(gulp.dest('C:/Users/n.mantha/Desktop/mag360-production'));
+}
+
+
 exports.move_css = move_css;
 exports.move_js = move_js;
 exports.move_icons = move_icons;
 exports.move_fonts = move_fonts
 exports.move_alpine_js = move_alpine_js
 exports.move = series(move_css, move_js, move_icons, move_fonts, move_alpine_js);
+exports.production = production;
 
 exports.img = img;
 exports.js = js;

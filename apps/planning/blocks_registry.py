@@ -1,13 +1,7 @@
-from apps.planning.blocks import (
-    PlannedPurchaseOrderTableBlock,
-    PlannedOrderPivot,
-    MRPMessageTableBlock
-)
-
+from apps.planning.blocks.tables import *
+from apps.planning.blocks.pivots import *
 
 def register(registry):
-    """Register purchase related blocks."""
+    registry.register("planned_purchase_orders_table", PlannedPurchaseOrdersTable())
 
-    registry.register("planned_purchase_order_table", PlannedPurchaseOrderTableBlock())
-    registry.register("planned_order_pivot", PlannedOrderPivot())
-    registry.register("mrp_message_table", MRPMessageTableBlock())
+    registry.register("planned_purchase_orders_pivot", PlannedPurchaseOrdersPivot())

@@ -10,6 +10,7 @@ from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.blocks.models.pivot_config import PivotConfig
 from apps.blocks.services.filtering import apply_filter_registry
 from apps.blocks.models.config_templates import PivotConfigTemplate
+from django.contrib.admin.utils import label_for_field
 
 
 class GenericPivotBlock(PivotBlock):
@@ -98,12 +99,38 @@ class GenericPivotBlock(PivotBlock):
         # rows/cols entries can be strings (field paths) or dicts
         # {"source": "<field>", "bucket": "day|month|quarter|year", "label": "...", "alias": "..."}
         # ---------------------------------------------
+        # Build a label map consistent with TableBlock/Manage Columns (Verbose Name)
+        model = self.get_model()
+        try:
+            from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+            try:
+                max_depth = int(getattr(self, "get_column_config_max_depth")())
+            except Exception:
+                max_depth = 10
+            all_meta = get_model_fields_for_column_config(model, user, max_depth=max_depth) or []
+            label_map = {m.get("name"): m.get("label") for m in all_meta if m.get("name")}
+        except Exception:
+            label_map = {}
+
+        def resolve_label(field_path: str) -> str:
+            # Prefer Manage Columns label; fall back to Django label_for_field; then humanize
+            if field_path in label_map:
+                return label_map[field_path]
+            try:
+                return label_for_field(field_path, model, return_attr=False)
+            except Exception:
+                try:
+                    return field_path.replace("__", " ").replace("_", " ").title()
+                except Exception:
+                    return field_path
+
         def normalize_dim(entry):
             if isinstance(entry, str):
                 return {
                     "source": entry,
                     "bucket": None,
-                    "label": None,
+                    # Derive label from verbose name so Pivot headers match Pivot Settings
+                    "label": resolve_label(entry),
                     "alias": entry,
                 }
             if isinstance(entry, dict):
@@ -113,7 +140,8 @@ class GenericPivotBlock(PivotBlock):
                 return {
                     "source": src,
                     "bucket": bucket,
-                    "label": entry.get("label"),
+                    # If no explicit label in schema, resolve from verbose name
+                    "label": entry.get("label") or (resolve_label(src) if src else None),
                     "alias": alias,
                 }
             return None
@@ -163,7 +191,9 @@ class GenericPivotBlock(PivotBlock):
         for idx, m in enumerate(measures):
             src_field = m.get("source")
             agg = (m.get("agg") or "sum").lower()
-            title = m.get("label") or f"{agg.upper()} {src_field}"
+            # Prefer explicit label; else use verbose name to match Pivot Settings
+            base_field_label = resolve_label(src_field) if src_field else src_field
+            title = m.get("label") or f"{agg.upper()} {base_field_label}"
             base_alias = re.sub(r"[^0-9a-zA-Z_]", "_", (m.get("label") or f"{agg}_{src_field}"))
             if re.match(r"^[0-9]", base_alias or ""):
                 base_alias = f"m_{base_alias}"
@@ -277,7 +307,13 @@ class GenericPivotBlock(PivotBlock):
         # Row dimension columns with better titles if provided
         for i, rk in enumerate(row_keys):
             rdef = row_defs[i] if i < len(row_defs) else None
-            title = (rdef.get("label") if rdef else None) or rk.replace("__", " ").title()
+            # Use verbose name-based label; include bucket name if present
+            if rdef:
+                base = rdef.get("label") or resolve_label(rdef.get("source"))
+                bucket = rdef.get("bucket")
+                title = f"{base} ({str(bucket).capitalize()})" if bucket else base
+            else:
+                title = rk.replace("__", " ").title()
             columns.append({"title": title, "field": rk})
         if not col_defs:
             for alias, title in alias_to_title.items():

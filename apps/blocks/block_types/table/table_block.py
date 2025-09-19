@@ -137,16 +137,38 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         """Default column defs based on active column config.
 
         Returns a list of {"field": <path>, "title": <label>} entries,
-        skipping any invalid/missing fields gracefully.
+        where the label mirrors the Manage Columns UI's "Verbose Name"
+        for the selected field (i.e., the leaf field's verbose_name),
+        instead of a fully expanded relation path.
         """
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)
         model = self.get_model()
+        # Build a map of all manageable fields to their labels to match the
+        # Manage Columns page (Verbose Name)
+        try:
+            from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+            try:
+                max_depth = int(getattr(self, "get_column_config_max_depth")())
+            except Exception:
+                max_depth = 10
+            all_meta = get_model_fields_for_column_config(model, user, max_depth=max_depth) or []
+            label_map = {m.get("name"): m.get("label") for m in all_meta if m.get("name")}
+        except Exception:
+            label_map = {}
+
         defs = []
         for field in fields or []:
-            try:
-                label = label_for_field(field, model, return_attr=False)
-            except Exception:
-                continue
+            # Prefer the Manage Columns label; fall back to Django's label_for_field
+            label = label_map.get(field)
+            if not label:
+                try:
+                    label = label_for_field(field, model, return_attr=False)
+                except Exception:
+                    # As a last resort, humanize the field path
+                    try:
+                        label = field.replace("__", " ").replace("_", " ").title()
+                    except Exception:
+                        continue
             defs.append({"field": field, "title": label})
         return defs
 
@@ -518,7 +540,9 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         for defn in column_defs:
             field_name = defn.get("field")
             col = {
-                "title": label_for_field(field_name, self.get_model(), return_attr=False),
+                # Use the same label we computed in get_column_defs so titles
+                # match the Manage Columns "Verbose Name" exactly.
+                "title": defn.get("title"),
                 "field": field_name,
             }
             # Define editor for direct editable model fields; per-row editability enforced in JS using __editable map
