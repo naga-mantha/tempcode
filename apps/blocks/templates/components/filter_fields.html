@@ -99,7 +99,7 @@
       el.dataset.tomInitialized = '1';
 
       const ajaxUrl = el.dataset.ajaxUrl;
-      const settings = { persist: false, maxOptions: 100 };
+      const settings = { persist: false, maxOptions: 200 };
 
       if (el.multiple) {
         settings.plugins = ['remove_button'];
@@ -109,11 +109,14 @@
         settings.valueField = 'value';
         settings.labelField = 'label';
         settings.searchField = 'label';
-        settings.preload = true;
-        settings.shouldLoad = () => true;
+        // Let Tom Select manage remote loads on focus and typing
+        settings.preload = 'focus';
+        settings.shouldLoad = function(query){ return true; };
         settings.load = function(query, callback){
-          const url = ajaxUrl + (query ? ('?q=' + encodeURIComponent(query)) : '');
-          fetch(url).then(r => r.json()).then(callback).catch(() => callback());
+          try {
+            const url = buildUrl(ajaxUrl, query);
+            fetch(url).then(r => r.ok ? r.json() : []).then(callback).catch(() => callback());
+          } catch(e) { callback(); }
         };
       }
 
@@ -125,6 +128,57 @@
       const ts = new TomSelect(el, { ...settings, ...extraOpts });
       if (ts && typeof ts.setTextboxValue === 'function') {
         ts.on('item_add', () => ts.setTextboxValue(''));
+      }
+
+      // Helper to build URL with current filters for this form
+      function buildUrl(base, queryStr='', selectedOnly=false){
+        const form = el.closest('form') || document;
+        const params = new URLSearchParams();
+        // include current filters.* values from all selects in the same form
+        const sels = form.querySelectorAll('select.filter-field-select');
+        sels.forEach(s => {
+          const nameAttr = s.getAttribute('name') || '';
+          let paramName = null;
+          if (nameAttr.startsWith('filters.')) {
+            paramName = nameAttr;
+          } else {
+            const idx = nameAttr.indexOf('__filters.');
+            if (idx !== -1) {
+              paramName = 'filters.' + nameAttr.slice(idx + '__filters.'.length);
+            }
+          }
+          if (!paramName) return;
+          const isMulti = s.hasAttribute('multiple');
+          const values = isMulti ? (Array.from(s.selectedOptions).map(o => o.value).filter(Boolean)) : [s.value].filter(Boolean);
+          values.forEach(v => params.append(paramName, v));
+        });
+        // include query from Tom Select typing, or from provided argument
+        const txt = (queryStr || (ts && ts.getTextboxValue ? (ts.getTextboxValue() || '').trim() : '')).trim();
+        if (!selectedOnly && txt) params.set('q', txt);
+        const hasParams = Array.from(params.keys()).length > 0;
+        return base + (hasParams ? ('?' + params.toString()) : '');
+      }
+
+      // Fetch and replace options; auto-clear invalid selections
+      async function reloadOptions(){
+        if (!ajaxUrl) return false;
+        const url = buildUrl(ajaxUrl);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return false;
+          const list = await res.json();
+          const allowed = new Set((list || []).map(x => String(x.value)));
+          // Clear options then add new ones
+          ts.clearOptions();
+          (list || []).forEach(opt => { try { ts.addOption(opt); } catch(e){} });
+          ts.refreshOptions(false);
+          // Auto-clear selected values that are no longer valid
+          const sel = Array.isArray(ts.items) ? ts.items.slice() : [];
+          let changed = false;
+          sel.forEach(v => { if (!allowed.has(String(v))) { try { ts.removeItem(v, true); changed = true; } catch(e){} } });
+          if (changed) ts.refreshItems();
+          return true;
+        } catch(e) { /* ignore */ return false; }
       }
 
       // If there are preselected values and this is an AJAX select,
@@ -148,11 +202,64 @@
             })
             .catch(() => {});
         }
+
+        // Ensure one fetch on initial focus to populate
+        ts.on('focus', () => {
+          reloadOptions().then(() => { try { if (!ts.dropdown.isOpen) ts.open(); } catch(e){} });
+        });
+        ts.on('dropdown_open', () => { reloadOptions(); });
       }
     } catch (e) {
       // Fail-safe: do not block page if a single field fails to initialize
       // console.warn('TomSelect init failed', e);
     }
+  });
+
+  // When any filter changes, refresh sibling AJAX selects and auto-clear invalids
+  document.addEventListener('change', function(e){
+    const target = e.target;
+    if (!target || !(target.matches && target.matches('select.filter-field-select'))) return;
+    const container = (target.closest('form')) || document;
+    const sels = container.querySelectorAll('select.filter-field-select');
+    sels.forEach(sel => {
+      if (sel === target) return; // refresh siblings only
+      if (!sel.dataset.ajaxUrl) return;
+      const ts = sel.tomselect;
+      if (!ts) return;
+      // Trigger a reload using current filters
+      try {
+        // Inline helper mirroring reloadOptions above
+        const ajaxUrl = sel.dataset.ajaxUrl;
+        const params = new URLSearchParams();
+        container.querySelectorAll('select.filter-field-select').forEach(s => {
+          const nameAttr = s.getAttribute('name') || '';
+          let paramName = null;
+          if (nameAttr.startsWith('filters.')) {
+            paramName = nameAttr;
+          } else {
+            const idx = nameAttr.indexOf('__filters.');
+            if (idx !== -1) {
+              paramName = 'filters.' + nameAttr.slice(idx + '__filters.'.length);
+            }
+          }
+          if (!paramName) return;
+          const isMulti = s.hasAttribute('multiple');
+          const values = isMulti ? (Array.from(s.selectedOptions).map(o => o.value).filter(Boolean)) : [s.value].filter(Boolean);
+          values.forEach(v => params.append(paramName, v));
+        });
+        const url = ajaxUrl + (Array.from(params.keys()).length ? ('?' + params.toString()) : '');
+        fetch(url).then(r => r.ok ? r.json() : []).then(list => {
+          const allowed = new Set((list || []).map(x => String(x.value)));
+          ts.clearOptions();
+          (list || []).forEach(opt => { try { ts.addOption(opt); } catch(e){} });
+          ts.refreshOptions(false);
+          const selItems = Array.isArray(ts.items) ? ts.items.slice() : [];
+          let changed = false;
+          selItems.forEach(v => { if (!allowed.has(String(v))) { try { ts.removeItem(v, true); changed = true; } catch(e){} } });
+          if (changed) ts.refreshItems();
+        }).catch(() => {});
+      } catch(e) { /* ignore */ }
+    });
   });
 
   // Wire up date pickers + quick tokens to the date text input
