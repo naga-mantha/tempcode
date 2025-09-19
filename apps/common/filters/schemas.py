@@ -7,6 +7,9 @@ from .business_partners import supplier_choices
 from .items import item_choices
 from .po_categories import po_category_choices
 from .item_groups import item_group_choices
+from .item_group_types import item_group_type_choices
+from .programs import program_choices
+from .item_types import item_type_choices
 
 def supplier_filter(
     block_name: str,
@@ -101,6 +104,87 @@ def item_group_filter(
         "handler": handler,
     }
 
+def item_group_type_filter(
+    block_name: str,
+    item_group_type_code_path: str,
+    maxItems: int = 100000,
+    label: str = "Item Group Type",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
+    """Reusable item group type multi-select filter."""
+
+    def handler(qs, val):
+        return qs.filter(**{f"{item_group_type_code_path}__in": val}) if val else qs
+
+    return {
+        "label": label,
+        "type": "multiselect",
+        "multiple": True,
+        "choices": choices_func or item_group_type_choices,
+        "choices_url": reverse("block_filter_choices", args=[block_name, "item_group_type"]),
+        "value_path": item_group_type_code_path,
+        "tom_select_options": {
+            "placeholder": "Search item group types...",
+            "plugins": ["remove_button"],
+            "maxItems": maxItems,
+        },
+        "handler": handler,
+    }
+
+def program_filter(
+    block_name: str,
+    program_code_path: str,
+    maxItems: int = 100000,
+    label: str = "Program",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
+    """Reusable program multi-select filter."""
+
+    def handler(qs, val):
+        return qs.filter(**{f"{program_code_path}__in": val}) if val else qs
+
+    return {
+        "label": label,
+        "type": "multiselect",
+        "multiple": True,
+        "choices": choices_func or program_choices,
+        "choices_url": reverse("block_filter_choices", args=[block_name, "program"]),
+        "value_path": program_code_path,
+        "tom_select_options": {
+            "placeholder": "Search programs...",
+            "plugins": ["remove_button"],
+            "maxItems": maxItems,
+        },
+        "handler": handler,
+    }
+
+def item_type_filter(
+    block_name: str,
+    item_type_code_path: str,
+    maxItems: int = 100000,
+    label: str = "Item Type",
+    choices_func: Optional[Callable[[Any, str], List[Tuple[str, str]]]] = None,
+) -> Dict[str, Any]:
+    """Reusable item type multi-select filter."""
+
+    def handler(qs, val):
+        return qs.filter(**{f"{item_type_code_path}__in": val}) if val else qs
+
+    return {
+        "label": label,
+        "type": "multiselect",
+        "multiple": True,
+        "choices": choices_func or item_type_choices,
+        "choices_url": reverse("block_filter_choices", args=[block_name, "item_type"]),
+        "value_path": item_type_code_path,
+        "tom_select_options": {
+            "placeholder": "Search item types...",
+            "plugins": ["remove_button"],
+            "maxItems": maxItems,
+        },
+        "handler": handler,
+    }
+
 def purchase_order_category_filter(
     block_name: str,
     po_category_code_path: str,
@@ -165,6 +249,9 @@ __all__ = [
     "supplier_filter",
     "item_filter",
     "item_group_filter",
+    "item_group_type_filter",
+    "program_filter",
+    "item_type_filter",
     "purchase_order_category_filter",
     "date_from_filter",
     "date_to_filter",
