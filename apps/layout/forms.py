@@ -3,7 +3,7 @@ from django import forms
 from apps.layout.models import Layout, LayoutBlock
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
-from apps.layout.constants import ALLOWED_COLS, RESPONSIVE_COL_FIELDS
+from apps.layout.constants import GRID_MAX_COL_SPAN, GRID_MAX_ROW_SPAN
 
 
 class LayoutForm(forms.ModelForm):
@@ -49,47 +49,44 @@ class AddBlockForm(forms.ModelForm):
 
 
 class LayoutBlockForm(forms.ModelForm):
-    _inherit_choice = [("", "— inherit —")]
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        choices = self._inherit_choice + [(c, str(c)) for c in ALLOWED_COLS]
-        widget = forms.Select(attrs={"class": "form-select form-select-sm w-100"})
-        coerce = lambda v: int(v) if str(v).isdigit() else None  # noqa: E731
-        for name in RESPONSIVE_COL_FIELDS:
-            self.fields[name] = forms.TypedChoiceField(
-                required=False,
-                choices=choices,
-                coerce=coerce,
-                widget=widget,
-            )
-        # Ensure title and note span full column width with Bootstrap styles
+        span_choices = [(i, str(i)) for i in range(1, GRID_MAX_COL_SPAN + 1)]
+        row_choices = [(i, str(i)) for i in range(1, GRID_MAX_ROW_SPAN + 1)]
+        self.fields["col_span"] = forms.TypedChoiceField(
+            required=True,
+            choices=span_choices,
+            coerce=int,
+            widget=forms.Select(attrs={"class": "form-select form-select-sm w-100"}),
+            initial=1,
+            label="Column span",
+        )
+        self.fields["row_span"] = forms.TypedChoiceField(
+            required=True,
+            choices=row_choices,
+            coerce=int,
+            widget=forms.Select(attrs={"class": "form-select form-select-sm w-100"}),
+            initial=1,
+            label="Row span",
+        )
+        # Ensure title and note styling
         if "title" in self.fields:
-            self.fields["title"].widget.attrs.update({
-                "class": "form-control form-control-sm w-100",
-            })
+            self.fields["title"].widget.attrs.update({"class": "form-control form-control-sm w-100"})
         if "note" in self.fields:
-            self.fields["note"].widget.attrs.update({
-                "class": "form-control form-control-sm w-100",
-                "rows": 2,
-            })
+            self.fields["note"].widget.attrs.update({"class": "form-control form-control-sm w-100", "rows": 2})
 
     class Meta:
         model = LayoutBlock
         # Allow editing responsive cols and display metadata; ordering is via drag/drop.
-        fields = list(RESPONSIVE_COL_FIELDS) + [
+        fields = [
+            "col_span",
+            "row_span",
             "title",
             "note",
             "preferred_filter_name",
             "preferred_column_config_name",
         ]
 
-    def clean(self):
-        cleaned = super().clean()
-        for key in RESPONSIVE_COL_FIELDS:
-            v = cleaned.get(key)
-            cleaned[key] = v if isinstance(v, int) else None
-        return cleaned
 
 
 class LayoutFilterConfigForm(forms.Form):

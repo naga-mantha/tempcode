@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
+{% load dict_extras %}
 {% block content %}
-  <div class="main-container">
+  <div class="main-container-fluid">
     <h1 class="page-title">Edit Layout: {{ layout.name }}</h1>
     <p>
       <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
@@ -26,7 +27,7 @@
       </div>
     </div>
 
-    <div class="card mb-5">
+    <div class="card mb-4">
       <div class="card-body">
         <h5 class="card-title">Add Block</h5>
         <form method="post" id="add-block-form">
@@ -39,27 +40,31 @@
           </div>
         </form>
       </div>
-     </div>
+    </div>
 
-    <h2>Blocks</h2>
-
-    <form method="post">
-      {% csrf_token %}
-      {{ formset.management_form }}
-      <div id="layout-rows" class="row g-3">
-        {% include 'layout/_layout_rows.html' %}
-      </div>
-      <!-- No Save button needed: changes auto-save -->
-    </form>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <div class="grid-stack" id="grid-edit" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
+      {% for b in blocks %}
+        <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}" data-id="{{ b.id }}">
+          <div class="grid-stack-item-content card p-2">
+            <div class="d-flex justify-content-end">
+              <button type="button" class="btn btn-sm btn-outline-danger js-del-widget" data-id="{{ b.id }}">Delete</button>
+            </div>
+            {{ b.html|safe }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const container = document.getElementById('layout-rows');
+    const container = document.getElementById('grid-edit');
     const detailsForm = document.getElementById('layout-details-form');
-    const reorderUrl = "{% url 'layout_reorder' username=layout.user.username slug=layout.slug %}";
+    const gridSaveUrl = "{% url 'layout_grid_update' username=layout.user.username slug=layout.slug %}";
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
     const addUrl = "{% url 'layout_block_add' username=layout.user.username slug=layout.slug %}";
@@ -183,39 +188,58 @@
         if (orderInput) orderInput.value = idx + 1;
       });
     }
-    function initSortable() {
-      if (!window.Sortable) return;
-      Sortable.create(container, {
-        handle: '.js-drag-handle',
-        animation: 150,
-        onSort: function(){
-          const rows = container.querySelectorAll('.layout-item');
-          rows.forEach(function(tr, idx){
-            const orderInput = tr.querySelector('input[type="number"][name$="-ORDER"]');
-            if (orderInput) orderInput.value = idx + 1;
-          });
-          const ids = Array.from(rows).map(function(tr){
-            return parseInt(tr.getAttribute('data-id'), 10);
-          }).filter(function(x){ return !isNaN(x); });
-          if (ids.length) {
-            fetch(reorderUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken || ''
-              },
-              body: JSON.stringify({ordered_ids: ids})
-            }).then(function(resp){
-              if (!resp.ok) showToast('Failed to save order', 'error');
-            }).catch(function(){ showToast('Failed to save order', 'error'); });
-          }
+    // Initialize Gridstack editor on existing items
+    (function(){
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js';
+      s.onload = function(){
+        const grid = GridStack.init({ float:false, cellHeight:120, margin: 16 }, container);
+        const CELL = 120; // must match cellHeight
+        const GUTTER = 16; // vertical gutter px
+        try {
+          container.style.display = 'grid';
+          container.style.rowGap = GUTTER + 'px';
+          container.style.columnGap = '8px';
+        } catch(e) {}
+        function applyGutter(){
+          try {
+            grid.engine.nodes.forEach(n => {
+              n.el.style.transform = 'translateY(' + (n.y * GUTTER) + 'px)';
+            });
+            // Compute rows = max(y+h) across nodes (Gridstack in edit may not set gs-current-row)
+            const rows = grid.engine && grid.engine.nodes && grid.engine.nodes.length
+              ? grid.engine.nodes.reduce((m, n) => Math.max(m, (n.y||0) + (n.h||1)), 0)
+              : 0;
+            const h = (rows * CELL) + (Math.max(0, rows - 1) * GUTTER);
+            container.style.height = h + 'px';
+            container.style.position = 'relative';
+          } catch(e) {}
         }
-      });
-      initOrderFields();
-    }
-    initSortable();
+        applyGutter();
+        // Delete via event delegation
+        container.addEventListener('click', function(e){
+          const btn = e.target.closest('.js-del-widget');
+          if (!btn) return;
+          const id = btn.getAttribute('data-id');
+          if (!id || !confirm('Delete this block from layout?')) return;
+          const el = btn.closest('.grid-stack-item');
+          fetch(`${deleteUrlBase}${id}/delete/`, { method:'POST', headers:{ 'X-CSRFToken': csrftoken || '' } })
+            .then(r => { if (r.ok) grid.removeWidget(el); else showToast('Failed to delete block', 'error'); })
+            .catch(()=>showToast('Failed to delete block','error'));
+        });
+        function saveLayout(){
+          const items = [];
+          grid.engine.nodes.forEach(n => { items.push({ id: n.el.getAttribute('data-id'), x:n.x, y:n.y, w:n.w, h:n.h }); });
+          fetch(gridSaveUrl, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrftoken || '' }, body: JSON.stringify({ items }) })
+            .then(r => { if (!r.ok) showToast('Failed to save layout', 'error'); })
+            .catch(() => showToast('Failed to save layout', 'error'));
+        }
+        grid.on('change', function(){ applyGutter(); saveLayout(); });
+      };
+      document.body.appendChild(s);
+    })();
 
-    // Auto-save column width changes per row
+    // Auto-save span changes per row
     function collectRowPayload(tr) {
       const pickInt = function(name){
         const el = tr.querySelector(`[name$="-${name}"]`);
@@ -229,36 +253,15 @@
         return (el.value || '').trim();
       };
       return {
-        col_sm: pickInt('col_sm'),
-        col_md: pickInt('col_md'),
-        col_lg: pickInt('col_lg'),
-        col_xl: pickInt('col_xl'),
-        col_xxl: pickInt('col_xxl'),
+        col_span: pickInt('col_span'),
+        row_span: pickInt('row_span'),
         title: pickStr('title'),
         note: pickStr('note'),
         preferred_filter_name: pickStr('preferred_filter_name'),
         preferred_column_config_name: pickStr('preferred_column_config_name')
       };
     }
-    // Listen to select/input/textarea changes for auto-save
-    container.addEventListener('change', function(e){
-      const control = e.target.closest('select, input[type="text"], textarea');
-      if (!control) return;
-      const tr = control.closest('.layout-item');
-      const id = tr && parseInt(tr.getAttribute('data-id'), 10);
-      if (!id) return;
-      const payload = collectRowPayload(tr);
-      fetch(`${updateUrlBase}${id}/update/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrftoken || ''
-        },
-        body: JSON.stringify(payload)
-      }).then(function(resp){
-        if (!resp.ok) showToast('Failed to save changes', 'error');
-      }).catch(function(){ showToast('Failed to save changes', 'error'); });
-    });
+    // (Optional) additional inline metadata saving can be wired similarly
 
     // AJAX Add Block on select change
     (function(){
@@ -280,10 +283,8 @@
         }).then(function(resp){ return resp.json(); })
           .then(function(data){
             if (!data || !data.ok) { showToast('Failed to add block', 'error'); return; }
-            if (data.tbody_html) {
-              container.innerHTML = data.tbody_html;
-              initSortable();
-            }
+            // Reload page to fetch new block and render it (simple approach)
+            window.location.reload();
           })
           .catch(function(){ showToast('Failed to add block', 'error'); })
           .finally(function(){ sel.disabled = false; sel.value = ''; });
@@ -292,11 +293,13 @@
   });
 </script>
 <style>
-  /* Card/grid layout spacing */
-  .layout-item .js-drag-handle { cursor: grab; }
-  .js-toast-container { z-index: 1080; }
-  /* optional: size down selects */
-  .layout-item select { padding: .25rem .5rem; font-size: .875rem; height: calc(1.5em + .5rem + 2px); width: 100%; }
-  .layout-item .form-label { display: block; margin-bottom: .25rem; font-size: .8rem; color: #6c757d; }
+  /* Force Grid layout + gaps (Gridstack v10 uses CSS Grid) */
+  #grid-edit.grid-stack { --gs-gutter-rows: 16px !important; --gs-gutter-cols: 8px !important; }`r`n  #grid-edit.grid-stack { display: grid; row-gap: 16px; column-gap: 8px; }
+  .grid-stack .grid-stack-item-content { overflow: auto; display:flex; flex-direction: column; min-height: 100%; }
+  .grid-stack .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }
+  /* Fallback: enforce vertical spacing per item even if container isn't grid */
+  .grid-stack .grid-stack-item { margin-bottom: 16px !important; }
 </style>
 {% endblock %}
+
+

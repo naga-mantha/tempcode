@@ -4,7 +4,7 @@ from django.utils.text import slugify
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.models.block import Block
-from .constants import ALLOWED_COLS, RESPONSIVE_COL_FIELDS
+from .constants import GRID_MAX_COL_SPAN, GRID_MAX_ROW_SPAN
 
 
 class Layout(models.Model):
@@ -53,14 +53,14 @@ class LayoutBlock(models.Model):
     block = models.ForeignKey(Block, on_delete=models.CASCADE)
     # Absolute sequence of this block within the layout. Lower numbers appear first.
     position = models.PositiveIntegerField(default=0)
-    # Bootstrap column span (1..12). We will validate via forms to allowed values.
-    col = models.PositiveIntegerField(default=12)
-    # Optional responsive overrides per breakpoint; when null, inherit from smaller breakpoint
-    col_sm = models.PositiveIntegerField(null=True, blank=True)
-    col_md = models.PositiveIntegerField(null=True, blank=True)
-    col_lg = models.PositiveIntegerField(null=True, blank=True)
-    col_xl = models.PositiveIntegerField(null=True, blank=True)
-    col_xxl = models.PositiveIntegerField(null=True, blank=True)
+    # Gridstack position and size (x,y in grid units; w,h in spans)
+    x = models.PositiveIntegerField(default=0)
+    y = models.PositiveIntegerField(default=0)
+    w = models.PositiveIntegerField(default=4)
+    h = models.PositiveIntegerField(default=2)
+    # Legacy CSS Grid spans (unused in Gridstack mode; kept to avoid breaking earlier data)
+    col_span = models.PositiveIntegerField(default=1)
+    row_span = models.PositiveIntegerField(default=1)
     # Optional display metadata
     title = models.CharField(max_length=255, blank=True, default="")
     note = models.TextField(blank=True, default="")
@@ -77,42 +77,16 @@ class LayoutBlock(models.Model):
     class Meta:
         ordering = ["position", "id"]
         constraints = [
-            models.CheckConstraint(
-                check=Q(col__in=ALLOWED_COLS), name="layoutblock_col_allowed_values"
-            ),
-            models.CheckConstraint(
-                check=(Q(col_sm__isnull=True) | Q(col_sm__in=ALLOWED_COLS)),
-                name="layoutblock_col_sm_allowed_values",
-            ),
-            models.CheckConstraint(
-                check=(Q(col_md__isnull=True) | Q(col_md__in=ALLOWED_COLS)),
-                name="layoutblock_col_md_allowed_values",
-            ),
-            models.CheckConstraint(
-                check=(Q(col_lg__isnull=True) | Q(col_lg__in=ALLOWED_COLS)),
-                name="layoutblock_col_lg_allowed_values",
-            ),
-            models.CheckConstraint(
-                check=(Q(col_xl__isnull=True) | Q(col_xl__in=ALLOWED_COLS)),
-                name="layoutblock_col_xl_allowed_values",
-            ),
-            models.CheckConstraint(
-                check=(Q(col_xxl__isnull=True) | Q(col_xxl__in=ALLOWED_COLS)),
-                name="layoutblock_col_xxl_allowed_values",
-            ),
+            models.CheckConstraint(check=Q(w__gte=1) & Q(w__lte=12), name="layoutblock_w_range"),
+            models.CheckConstraint(check=Q(h__gte=1) & Q(h__lte=12), name="layoutblock_h_range"),
+            models.CheckConstraint(check=Q(x__gte=0), name="layoutblock_x_nonneg"),
+            models.CheckConstraint(check=Q(y__gte=0), name="layoutblock_y_nonneg"),
         ]
         indexes = [
             models.Index(fields=["layout", "position"], name="layout_pos_idx")
         ]
 
-    def bootstrap_col_classes(self) -> str:
-        parts = [f"col-{self.col}"]
-        for fname in RESPONSIVE_COL_FIELDS:
-            val = getattr(self, fname, None)
-            if val:
-                bp = fname.split("_", 1)[1]
-                parts.append(f"col-{bp}-{val}")
-        return " ".join(parts)
+    # bootstrap_col_classes removed in grid refactor
 
 
 class LayoutFilterConfig(models.Model):

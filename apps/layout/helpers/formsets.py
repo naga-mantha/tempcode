@@ -9,11 +9,8 @@ def get_layoutblock_formset():
         LayoutBlock,
         form=LayoutBlockForm,
         fields=(
-            "col_sm",
-            "col_md",
-            "col_lg",
-            "col_xl",
-            "col_xxl",
+            "col_span",
+            "row_span",
             "title",
             "note",
             "preferred_filter_name",

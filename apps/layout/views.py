@@ -26,7 +26,6 @@ from apps.layout.mixins import LayoutFilterSchemaMixin, LayoutAccessMixin
 from apps.layout.helpers.json import parse_json_body
 from apps.layout.helpers.formsets import get_layoutblock_formset
 from apps.layout.helpers.filters import build_namespaced_get
-from apps.layout.constants import RESPONSIVE_COL_FIELDS
 from apps.blocks.block_types.table.table_block import TableBlock
 from apps.blocks.block_types.chart.chart_block import ChartBlock
 
@@ -169,14 +168,17 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
         selected_filter_values = self._collect_filters(
             self.request.GET, filter_schema, base=base_values
         )
-        # Render blocks sequentially; Bootstrap will wrap columns
+        # Render blocks; positions come from saved Gridstack x/y/w/h
         blocks_list = []
         for lb in self.layout.blocks.select_related("block").order_by("position", "id"):
             block_impl = block_registry.get(lb.block.code)
             if not block_impl:
                 # If the block is unregistered, show a compact warning card
                 blocks_list.append({
-                    "col_classes": lb.bootstrap_col_classes(),
+                    "x": getattr(lb, "x", 0) or 0,
+                    "y": getattr(lb, "y", 0) or 0,
+                    "w": getattr(lb, "w", 4) or 4,
+                    "h": getattr(lb, "h", 2) or 2,
                     "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
                     "block_name": lb.block.name,
                     "id": lb.id,
@@ -238,7 +240,10 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                     "</div>"
                 )
             blocks_list.append({
-                "col_classes": lb.bootstrap_col_classes(),
+                "x": getattr(lb, "x", 0) or 0,
+                "y": getattr(lb, "y", 0) or 0,
+                "w": getattr(lb, "w", 4) or 4,
+                "h": getattr(lb, "h", 2) or 2,
                 "html": html,
                 "block_name": lb.block.name,
                 "id": lb.id,
@@ -260,7 +265,7 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
         )
         return context
 
-class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
+class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMixin, TemplateView):
     template_name = "layout/layout_edit.html"
 
     def dispatch(self, request, username, slug, *args, **kwargs):
@@ -332,12 +337,60 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, TemplateView):
             setattr(form, "manage_columns_url", manage_cols_url)
 
     def get(self, request, *args, **kwargs):
-        formset = self.FormSet(queryset=self.qs)
-        self._decorate_formset_filter_dropdowns(formset, request.user)
+        # Build block render HTML similar to detail view for preview while editing
+        filter_schema = self._build_filter_schema(request)
+        selected_filter_values = self._collect_filters(request.GET, filter_schema, base={})
+        blocks_list = []
+        for lb in self.qs:
+            block_impl = block_registry.get(lb.block.code)
+            if not block_impl:
+                blocks_list.append({
+                    "id": lb.id,
+                    "x": lb.x or 0,
+                    "y": lb.y or 0,
+                    "w": lb.w or 4,
+                    "h": lb.h or 2,
+                    "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
+                    "title": getattr(lb, "title", ""),
+                    "note": getattr(lb, "note", ""),
+                })
+                continue
+            ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
+            qd = build_namespaced_get(request, ns=ns, values=selected_filter_values or {})
+            qd["embedded"] = "1"
+            class _ReqProxy:
+                def __init__(self, req, get):
+                    self._req = req
+                    self.GET = get
+                def __getattr__(self, item):
+                    return getattr(self._req, item)
+            proxy_request = _ReqProxy(request, qd)
+            try:
+                response = block_impl.render(proxy_request, instance_id=str(lb.id))
+                try:
+                    html = response.content.decode(response.charset or "utf-8")
+                except Exception:
+                    html = response.content.decode("utf-8", errors="ignore")
+            except Exception as exc:
+                html = (
+                    "<div class='alert alert-danger p-2 m-0'>"
+                    f"Error rendering block '{lb.block.name}': {str(exc)}"
+                    "</div>"
+                )
+            blocks_list.append({
+                "id": lb.id,
+                "x": lb.x or 0,
+                "y": lb.y or 0,
+                "w": lb.w or 4,
+                "h": lb.h or 2,
+                "html": html,
+                "title": getattr(lb, "title", ""),
+                "note": getattr(lb, "note", ""),
+            })
         add_form = AddBlockForm()
         return self.render_to_response({
             "layout": self.layout,
-            "formset": formset,
+            "blocks": blocks_list,
             "add_form": add_form,
         })
 
@@ -488,24 +541,22 @@ class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
         self.ensure_edit_access(request, layout)
         lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
         data = parse_json_body(request)
-        # Only allow known fields; normalize to None or int in ALLOWED_COLS
-        from apps.layout.constants import ALLOWED_COLS
-        INVALID = object()
-        def _norm(v):
-            if v in (None, "", "null"):
+        updates = {}
+        # Accept col_span and row_span as integers within 1..4
+        def _norm_span(key):
+            if key not in data:
                 return None
             try:
-                iv = int(v)
+                val = int(data.get(key))
             except (TypeError, ValueError):
-                return INVALID  # invalid sentinel
-            return iv if iv in ALLOWED_COLS else INVALID
-        updates = {}
-        for key in RESPONSIVE_COL_FIELDS:
-            if key in data:
-                norm = _norm(data.get(key))
-                if norm is INVALID:
-                    return JsonResponse({"ok": False, "error": f"Invalid value for {key}."}, status=400)
-                updates[key] = norm
+                return JsonResponse({"ok": False, "error": f"Invalid value for {key}."}, status=400)
+            if val < 1 or val > 4:
+                return JsonResponse({"ok": False, "error": f"{key} out of range."}, status=400)
+            updates[key] = val
+            return None
+        resp = _norm_span("col_span") or _norm_span("row_span")
+        if isinstance(resp, JsonResponse):
+            return resp
         # Allow optional title/note and preferred filter name updates
         if "title" in data:
             updates["title"] = (data.get("title") or "").strip()
@@ -520,6 +571,38 @@ class LayoutBlockUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
         for k, v in updates.items():
             setattr(lb, k, v)
         lb.save(update_fields=list(updates.keys()))
+        return JsonResponse({"ok": True})
+
+
+class LayoutGridUpdateView(LoginRequiredMixin, LayoutAccessMixin, View):
+    def post(self, request, username, slug, *args, **kwargs):
+        layout = self.get_layout(username=username, slug=slug)
+        self.ensure_edit_access(request, layout)
+        payload = parse_json_body(request)
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            return JsonResponse({"ok": False, "error": "Invalid payload."}, status=400)
+        items = payload["items"]
+        # Validate and collect updates
+        updates = []
+        for it in items:
+            try:
+                bid = int(it.get("id"))
+                x = int(it.get("x"))
+                y = int(it.get("y"))
+                w = int(it.get("w"))
+                h = int(it.get("h"))
+            except (TypeError, ValueError):
+                return JsonResponse({"ok": False, "error": "Invalid item values."}, status=400)
+            if w < 1 or w > 12 or h < 1 or h > 12 or x < 0 or y < 0:
+                return JsonResponse({"ok": False, "error": "Values out of range."}, status=400)
+            updates.append((bid, x, y, w, h))
+        # Ensure all ids belong to layout
+        valid_ids = set(layout.blocks.filter(id__in=[bid for bid, *_ in updates]).values_list("id", flat=True))
+        if len(valid_ids) != len(updates):
+            return JsonResponse({"ok": False, "error": "One or more items not found."}, status=404)
+        # Apply updates
+        for bid, x, y, w, h in updates:
+            LayoutBlock.objects.filter(layout=layout, id=bid).update(x=x, y=y, w=w, h=h)
         return JsonResponse({"ok": True})
 
 
@@ -560,6 +643,11 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
             layout=layout,
             block=block_obj,
             position=next_pos,
+            # initial grid placement; editor will move/save
+            x=0,
+            y=0,
+            w=4,
+            h=2,
         )
         # Rebuild formset for updated tbody
         qs = layout.blocks.select_related("block").order_by("position", "id")

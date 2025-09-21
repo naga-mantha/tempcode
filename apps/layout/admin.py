@@ -9,8 +9,8 @@ class LayoutAdmin(admin.ModelAdmin):
 
 @admin.register(LayoutBlock)
 class LayoutBlockAdmin(admin.ModelAdmin):
-    list_display = ("layout", "block","col",)
-    search_fields = ("col",)
+    list_display = ("layout", "block", "col_span", "row_span")
+    search_fields = ("block__name", "block__code", "layout__name")
 
 @admin.register(LayoutFilterConfig)
 class LayoutFilterConfigAdmin(admin.ModelAdmin):

@@ -2,7 +2,7 @@
 {% block content %}
 
 <div class="main-container">
-  {% include "blocks/repeater/repeater_block.html" with embedded=True %}
+  {% include "blocks/repeater/repeater_block.html" %}
   <div class="mt-3">
     <a class="btn btn-link p-0" href="{% url 'render_repeater_block' block_name %}">Repeater Link</a>
     |

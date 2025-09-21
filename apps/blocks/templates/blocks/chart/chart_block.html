@@ -1,5 +1,7 @@
 {% load static %}
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+{% if not embedded %}
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+{% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
@@ -41,14 +43,24 @@
   </details>
 </form>
 
-<div id="chart-{{ block_name }}-{{ instance_id }}"></div>
+<div id="chart-{{ block_name }}-{{ instance_id }}" style="width:100%;height:100%;min-height:260px;"></div>
 
 {% block scripts %}
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     const fig = {{ figure|safe }};
     const chartEl = document.getElementById('chart-{{ block_name }}-{{ instance_id }}');
-    Plotly.newPlot(chartEl, fig.data, fig.layout);
+    try {
+      Plotly.newPlot(chartEl, fig.data, fig.layout, {responsive: true});
+    } catch (e) {
+      try { Plotly.newPlot(chartEl, fig.data, fig.layout); } catch(e2) {}
+    }
+    try {
+      const ro = new ResizeObserver(() => { try { Plotly.Plots.resize(chartEl); } catch(e){} });
+      ro.observe(chartEl);
+    } catch(e) {
+      window.addEventListener('resize', () => { try { Plotly.Plots.resize(chartEl); } catch(_){} });
+    }
 
     const filtSelect = document.getElementById('filter-config-select-{{ block_name }}-{{ instance_id }}');
     function clearNamespacedFilters(urlObj){

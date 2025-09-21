@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% load dict_extras %}
 {% block content %}
   <div class="main-container-fluid">
     <h1>{{ layout.name }}</h1>
@@ -53,36 +54,89 @@
      <h3 class="mt-5">Blocks</h3>
       <hr>
 
-    <div class="row g-5">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <div class="grid-stack" id="grid-view" data-gs-static="true" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
       {% for b in blocks %}
-        <div class="{{ b.col_classes }}">
-          {% if b.title %}<div class="mb-2 fw-bold">{{ b.title }}</div>{% endif %}
-          {% if b.note %}<div class="mb-2 text-muted small">{{ b.note|linebreaksbr }}</div>{% endif %}
-          {{ b.html|safe }}
+        <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}">
+          <div class="grid-stack-item-content card p-2">
+            {% if b.title %}<div class="mb-2 fw-bold">{{ b.title }}</div>{% endif %}
+            {% if b.note %}<div class="mb-2 text-muted small">{{ b.note|linebreaksbr }}</div>{% endif %}
+            {{ b.html|safe }}
+          </div>
         </div>
       {% endfor %}
     </div>
   </div>
+  <style>
+  /* Force Grid layout + gaps (Gridstack v10 uses CSS Grid) */
+  #grid-view.grid-stack { display: grid !important; row-gap: 16px !important; column-gap: 8px !important; }
+  /* Gridstack content should stretch to occupy tile */
+  .grid-stack .grid-stack-item-content { display: flex; flex-direction: column; min-height: 100%; }
+  .grid-stack .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }.grid-stack .grid-stack-item { margin-bottom: 16px !important; }
+  /* Ensure Bootstrap columns inside tiles don't constrain width */
+  .grid-stack .grid-stack-item-content [class^="col-"],
+  .grid-stack .grid-stack-item-content [class*=" col-"] { width: auto !important; max-width: none !important; }#grid-view.grid-stack .grid-stack-item { margin-top: 16px !important; }
+  #grid-view.grid-stack .grid-stack-item[gs-y="0"] { margin-top: 0 !important; }
+  </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function(){
     const sel = document.getElementById('layout-filter-select');
-    if (!sel) return;
-    sel.addEventListener('change', function(){
+    sel?.addEventListener('change', function(){
       const url = new URL(window.location.href);
       const v = this.value || '';
-      // When switching saved filters, clear any live overrides so
-      // the selected saved values populate the collapsible and apply.
       const toDelete = [];
-      url.searchParams.forEach((val, key) => {
-        if (key.startsWith('filters.')) toDelete.push(key);
-      });
+      url.searchParams.forEach((val, key) => { if (key.startsWith('filters.')) toDelete.push(key); });
       toDelete.forEach(k => url.searchParams.delete(k));
       if (v) url.searchParams.set('filter_config_id', v); else url.searchParams.delete('filter_config_id');
       window.location.href = url.toString();
     });
+
+    const container = document.getElementById('grid-view');
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js';
+    s.onload = function(){
+      const CELL = 120; // must match cellHeight
+      const GUTTER = 16; // vertical gutter between rows
+      const grid = GridStack.init({ float:false, staticGrid:true, cellHeight:CELL, margin: 16 }, container);
+      // Apply translate-based gutter
+      try {
+        container.querySelectorAll('.grid-stack-item').forEach(el => {
+          const y = parseInt(el.getAttribute('gs-y') || '0', 10) || 0;
+          el.style.transform = 'translateY(' + (y * GUTTER) + 'px)';
+        });
+        // Set container height based on rows
+        const rows = parseInt(container.getAttribute('gs-current-row') || '0', 10) || 0;
+        const h = (rows * CELL) + (Math.max(0, rows - 1) * GUTTER);
+        container.style.height = h + 'px';
+        container.style.position = 'relative';
+      } catch(e) {}
+    };
+    document.body.appendChild(s);
   });
   </script>
+<script>
+  // Ensure container height accounts for translate gutter on resize
+  document.addEventListener('DOMContentLoaded', function(){
+    const container = document.getElementById('grid-view');
+    if (!container) return;
+    function adjust(){
+      try {
+        const CELL = 120, GUTTER = 16;
+        const rows = parseInt(container.getAttribute('gs-current-row') || '0', 10) || 0;
+        const h = (rows * CELL) + (Math.max(0, rows - 1) * GUTTER);
+        container.style.height = h + 'px';
+      } catch(e) {}
+    }
+    setTimeout(adjust, 0);
+    window.addEventListener('resize', adjust);
+  });
+</script>
 {% endblock %}
+
+
+
+
