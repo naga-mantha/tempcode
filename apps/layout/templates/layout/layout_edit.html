@@ -166,28 +166,27 @@
       if (descEl) descEl.addEventListener('input', scheduleSave);
     })();
 
-    // Hook delete buttons
+    // Hook delete buttons on grid items
     container.addEventListener('click', function(e){
-      const btn = e.target.closest('.js-delete-row');
+      const btn = e.target.closest('.js-del-widget');
       if (!btn) return;
       e.preventDefault();
-      if(!confirm('Delete this block from layout?')) return;
-      const tr = btn.closest('.layout-item');
-      const id = tr && parseInt(tr.getAttribute('data-id'), 10);
-      if (!id) return;
+      const idStr = btn.getAttribute('data-id');
+      const id = parseInt(idStr, 10);
+      if (isNaN(id) || !confirm('Delete this block from layout?')) return;
+      const itemEl = btn.closest('.grid-stack-item');
       fetch(`${deleteUrlBase}${id}/delete/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrftoken || ''
-        }
-      }).then(function(resp){
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrftoken || '', 'Accept': 'application/json' }
+      }).then(async (resp) => {
         if (resp.ok) {
-          tr.remove();
+          try { const grid = container.gridstack; grid?.removeWidget(itemEl); } catch (_) { itemEl?.remove(); }
         } else {
-          showToast('Failed to delete block', 'error');
+          const txt = await resp.text().catch(()=> '');
+          showToast('Failed to delete block' + (txt?`: ${txt}`:''), 'error');
         }
-      }).catch(function(){ showToast('Failed to delete block', 'error'); });
+      }).catch(() => showToast('Failed to delete block', 'error'));
     });
 
     function initOrderFields() {

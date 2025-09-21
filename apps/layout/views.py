@@ -632,20 +632,22 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
         # Ensure the block is registered/available
         if not block_registry.get(block_obj.code):
             return JsonResponse({"ok": False, "error": "Block not available."}, status=400)
-        # Append at the end
-        last = (
-            LayoutBlock.objects.filter(layout=layout)
-            .order_by("-position")
-            .first()
-        )
+        # Append at the visual bottom based on current y+h
+        from django.db.models import F, IntegerField, Value, ExpressionWrapper
+        qs = LayoutBlock.objects.filter(layout=layout).annotate(
+            bottom=ExpressionWrapper((F("y") + F("h")), output_field=IntegerField())
+        ).order_by("-bottom")
+        max_bottom = qs.first().bottom if qs.exists() else 0
+        # Maintain sequence position as well (append at end)
+        last = LayoutBlock.objects.filter(layout=layout).order_by("-position").first()
         next_pos = (last.position + 1) if last else 0
         LayoutBlock.objects.create(
             layout=layout,
             block=block_obj,
             position=next_pos,
-            # initial grid placement; editor will move/save
+            # place new widget on the first column, at bottom row
             x=0,
-            y=0,
+            y=max(0, int(max_bottom) if isinstance(max_bottom, int) else 0),
             w=4,
             h=2,
         )
