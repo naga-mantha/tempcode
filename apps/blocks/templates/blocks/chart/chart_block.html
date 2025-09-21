@@ -51,15 +51,24 @@
     const fig = {{ figure|safe }};
     const chartEl = document.getElementById('chart-{{ block_name }}-{{ instance_id }}');
     try {
-      Plotly.newPlot(chartEl, fig.data, fig.layout, {responsive: true});
-    } catch (e) {
-      try { Plotly.newPlot(chartEl, fig.data, fig.layout); } catch(e2) {}
-    }
+      // Avoid Plotly's responsive auto-resize to prevent errors on hidden/off-DOM elements
+      Plotly.newPlot(chartEl, fig.data, fig.layout);
+    } catch (e) {}
+    const safeResize = () => {
+      try {
+        if (!chartEl || !chartEl.isConnected) return;
+        const style = window.getComputedStyle(chartEl);
+        const hidden = (style.display === 'none') || (chartEl.offsetParent === null);
+        if (hidden) return;
+        if (chartEl.clientWidth <= 0 || chartEl.clientHeight <= 0) return;
+        Plotly.Plots.resize(chartEl);
+      } catch(_) {}
+    };
     try {
-      const ro = new ResizeObserver(() => { try { Plotly.Plots.resize(chartEl); } catch(e){} });
+      const ro = new ResizeObserver(() => safeResize());
       ro.observe(chartEl);
     } catch(e) {
-      window.addEventListener('resize', () => { try { Plotly.Plots.resize(chartEl); } catch(_){} });
+      window.addEventListener('resize', safeResize);
     }
 
     const filtSelect = document.getElementById('filter-config-select-{{ block_name }}-{{ instance_id }}');

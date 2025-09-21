@@ -391,7 +391,7 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
         return self.render_to_response({
             "layout": self.layout,
             "blocks": blocks_list,
-            "add_form": add_form,
+            "add_form": add_form
         })
 
 

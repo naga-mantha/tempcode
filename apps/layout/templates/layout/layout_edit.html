@@ -44,6 +44,14 @@
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <div class="d-flex align-items-center mb-2">
+      <label class="form-label me-2">Editing layout for:</label>
+      <select id="layout-mode-select" class="form-select form-select-sm w-auto">
+        <option value="12" selected>Desktop (12)</option>
+        <option value="6">Tablet (6)</option>
+        <option value="1">Mobile (1)</option>
+      </select>
+    </div>
     <div class="grid-stack" id="grid-edit" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
       {% for b in blocks %}
         <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}" data-id="{{ b.id }}">
@@ -64,6 +72,7 @@
   document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('grid-edit');
     const detailsForm = document.getElementById('layout-details-form');
+    const modeSelect = document.getElementById('layout-mode-select');
     const gridSaveUrl = "{% url 'layout_grid_update' username=layout.user.username slug=layout.slug %}";
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
@@ -193,48 +202,16 @@
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js';
       s.onload = function(){
-        const grid = GridStack.init({ float:false, cellHeight:120, margin: 16 }, container);
-        const CELL = 120; // must match cellHeight
-        const GUTTER = 16; // vertical gutter px
-        try {
-          container.style.display = 'grid';
-          container.style.rowGap = GUTTER + 'px';
-          container.style.columnGap = '8px';
-        } catch(e) {}
-        function applyGutter(){
-          try {
-            grid.engine.nodes.forEach(n => {
-              n.el.style.transform = 'translateY(' + (n.y * GUTTER) + 'px)';
-            });
-            // Compute rows = max(y+h) across nodes (Gridstack in edit may not set gs-current-row)
-            const rows = grid.engine && grid.engine.nodes && grid.engine.nodes.length
-              ? grid.engine.nodes.reduce((m, n) => Math.max(m, (n.y||0) + (n.h||1)), 0)
-              : 0;
-            const h = (rows * CELL) + (Math.max(0, rows - 1) * GUTTER);
-            container.style.height = h + 'px';
-            container.style.position = 'relative';
-          } catch(e) {}
-        }
-        applyGutter();
-        // Delete via event delegation
-        container.addEventListener('click', function(e){
-          const btn = e.target.closest('.js-del-widget');
-          if (!btn) return;
-          const id = btn.getAttribute('data-id');
-          if (!id || !confirm('Delete this block from layout?')) return;
-          const el = btn.closest('.grid-stack-item');
-          fetch(`${deleteUrlBase}${id}/delete/`, { method:'POST', headers:{ 'X-CSRFToken': csrftoken || '' } })
-            .then(r => { if (r.ok) grid.removeWidget(el); else showToast('Failed to delete block', 'error'); })
-            .catch(()=>showToast('Failed to delete block','error'));
-        });
+        // Natural Gridstack: fixed columns, no JS-driven responsiveness
+        const grid = GridStack.init({ float:false, cellHeight:136, margin: 8 }, container);
         function saveLayout(){
           const items = [];
-          grid.engine.nodes.forEach(n => { items.push({ id: n.el.getAttribute('data-id'), x:n.x, y:n.y, w:n.w, h:n.h }); });
+          grid.engine.nodes.forEach(n => { const idStr = n.el.getAttribute('data-id'); const id = parseInt(idStr, 10); if (!isNaN(id)) { items.push({ id: id, x:n.x, y:n.y, w:n.w, h:n.h }); } });
           fetch(gridSaveUrl, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrftoken || '' }, body: JSON.stringify({ items }) })
             .then(r => { if (!r.ok) showToast('Failed to save layout', 'error'); })
             .catch(() => showToast('Failed to save layout', 'error'));
         }
-        grid.on('change', function(){ applyGutter(); saveLayout(); });
+        grid.on('change', function(){ saveLayout(); });
       };
       document.body.appendChild(s);
     })();
@@ -297,9 +274,10 @@
   #grid-edit.grid-stack { --gs-gutter-rows: 16px !important; --gs-gutter-cols: 8px !important; }`r`n  #grid-edit.grid-stack { display: grid; row-gap: 16px; column-gap: 8px; }
   .grid-stack .grid-stack-item-content { overflow: auto; display:flex; flex-direction: column; min-height: 100%; }
   .grid-stack .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }
-  /* Fallback: enforce vertical spacing per item even if container isn't grid */
-  .grid-stack .grid-stack-item { margin-bottom: 16px !important; }
+  /* Ensure grid container can expand to full width */
+  #grid-edit { width: 100%; max-width: 100%; }
 </style>
 {% endblock %}
+
 
 
