@@ -10,6 +10,7 @@ from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
 from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
 from apps.blocks.views.filter_choices import FilterChoicesView
+from apps.blocks.views.filter_layout import FilterLayoutView, AdminFilterLayoutView
 
 urlpatterns = [
     path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
@@ -62,5 +63,16 @@ urlpatterns = [
         "repeater/<str:block_name>/",
         repeater_views.render_repeater_block,
         name="render_repeater_block",
+    ),
+    # Filter layout (per-user)
+    path(
+        "filter-layout/<str:block_name>/",
+        FilterLayoutView.as_view(),
+        name="filter_layout_view",
+    ),
+    path(
+        "filter-layout-template/<str:block_name>/",
+        AdminFilterLayoutView.as_view(),
+        name="admin_filter_layout_view",
     ),
 ]

@@ -9,6 +9,7 @@ from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.registry import block_registry
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 
 
 class PivotFilterConfigForm(forms.Form, FilterResolutionMixin):
@@ -78,6 +79,8 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
             "block_title": getattr(self.block, "name", ""),
             "configs": configs,
             "filter_schema": self.filter_schema,
+            "filter_layout": self._get_filter_layout(),
+            "filter_layout_other_keys": self._get_other_keys(),
             "empty_values": {},
             "block_name": getattr(self.block_instance, "block_name", None) or getattr(self.block, "code", None),
             # Dropdown + client hydration
@@ -90,6 +93,37 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
             "schema_choice_labels_json": json.dumps(labels_by_key),
         })
         return ctx
+
+    def _get_filter_layout(self):
+        try:
+            from apps.blocks.models.block_filter_layout import BlockFilterLayout
+            user_layout = BlockFilterLayout.objects.filter(block=self.block, user=self.user).first()
+            if user_layout and isinstance(user_layout.layout, dict):
+                return dict(user_layout.layout)
+            tpl = BlockFilterLayoutTemplate.objects.filter(block=self.block).first()
+            return dict(tpl.layout or {}) if tpl and isinstance(tpl.layout, dict) else None
+        except Exception:
+            return None
+
+    def _get_other_keys(self):
+        layout = self._get_filter_layout()
+        layout_keys = set()
+        if layout and isinstance(layout.get("sections"), list):
+            try:
+                for sec in layout.get("sections", []) or []:
+                    for row in (sec.get("rows") or []):
+                        for cell in (row or []):
+                            if isinstance(cell, dict):
+                                k = cell.get("key")
+                                r = cell.get("range")
+                                if k:
+                                    layout_keys.add(str(k))
+                                if isinstance(r, (list, tuple)) and len(r) == 2:
+                                    layout_keys.add(str(r[0]))
+                                    layout_keys.add(str(r[1]))
+            except Exception:
+                layout_keys = set()
+        return [k for k in (self.filter_schema or {}).keys() if k not in layout_keys]
 
     def form_valid(self, form):
         action = form.cleaned_data["action"]

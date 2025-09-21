@@ -2,7 +2,8 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.models.config_templates import ColumnConfigTemplate, FilterConfigTemplate
+from apps.blocks.models.config_templates import ColumnConfigTemplate, FilterConfigTemplate, BlockFilterLayoutTemplate
+from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.workflow.permissions import (
     get_readable_fields_state,
     get_editable_fields_state,
@@ -298,16 +299,32 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         fields, columns = self._compute_fields(
             user, selected_fields, active_column_config, sample_obj
         )
-        # Provide user to row serializer for per-instance field checks
+        # Provide user to serializer and layout resolvers for this request
         self._current_user = user
-        try:
-            data = self._serialize_rows(queryset, selected_fields)
-        finally:
-            if hasattr(self, "_current_user"):
-                delattr(self, "_current_user")
+        data = self._serialize_rows(queryset, selected_fields)
         # Ensure we have an instance_id (for standalone renders)
         instance_id = instance_id or uuid.uuid4().hex[:8]
-        return {
+        # Admin filter layout and leftover keys
+        filter_layout = self._get_filter_layout_dict()
+        filter_layout_keys = set()
+        if filter_layout and isinstance(filter_layout.get("sections"), list):
+            try:
+                for sec in filter_layout.get("sections", []) or []:
+                    for row in (sec.get("rows") or []):
+                        for cell in (row or []):
+                            if isinstance(cell, dict):
+                                k = cell.get("key")
+                                r = cell.get("range")
+                                if k:
+                                    filter_layout_keys.add(str(k))
+                                if isinstance(r, (list, tuple)) and len(r) == 2:
+                                    filter_layout_keys.add(str(r[0]))
+                                    filter_layout_keys.add(str(r[1]))
+            except Exception:
+                filter_layout_keys = set()
+        other_keys = [k for k in (filter_schema or {}).keys() if k not in filter_layout_keys]
+
+        ctx = {
             "block_name": self.block_name,
             "instance_id": instance_id,
             "block_title": getattr(self.block, "name", self.block_name),
@@ -324,7 +341,28 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             "data": data,
             "filter_schema": filter_schema,
             "selected_filter_values": selected_filter_values,
+            "filter_layout": self._get_filter_layout_dict(),
+            "filter_layout_other_keys": other_keys,
         }
+        # Clear per-request user marker
+        if hasattr(self, "_current_user"):
+            delattr(self, "_current_user")
+        return ctx
+
+    def _get_filter_layout_dict(self):
+        # Prefer per-user layout; fall back to admin template
+        try:
+            user_layout = None
+            try:
+                user_layout = BlockFilterLayout.objects.filter(block=self.block, user=self._current_user).first()
+            except Exception:
+                user_layout = None
+            if user_layout and isinstance(user_layout.layout, dict):
+                return dict(user_layout.layout)
+            tpl = BlockFilterLayoutTemplate.objects.filter(block=self.block).first()
+            return dict(tpl.layout or {}) if tpl and isinstance(tpl.layout, dict) else None
+        except Exception:
+            return None
 
     def _get_context(self, request, instance_id):
         # If no explicit instance_id is provided (standalone block render),

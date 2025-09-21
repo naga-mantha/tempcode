@@ -1,7 +1,8 @@
 from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.models.config_templates import FilterConfigTemplate
+from apps.blocks.models.config_templates import FilterConfigTemplate, BlockFilterLayoutTemplate
+from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 import json
 import uuid
@@ -167,23 +168,64 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
             if hasattr(self, "_active_pivot_config"):
                 delattr(self, "_active_pivot_config")
 
-        return {
-            "block_name": self.block_name,
-            "instance_id": instance_id,
-            "block_title": getattr(self.block, "name", self.block_name),
-            "block": self.block,
-            "columns": columns,
-            "data": json.dumps(rows),
-            "tabulator_options": self.get_tabulator_options(user),
-            "xlsx_download": json.dumps(self.get_xlsx_download_options(request, instance_id) or {}),
-            "pdf_download": json.dumps(self.get_pdf_download_options(request, instance_id) or {}),
-            "filter_configs": filter_configs,
-            "active_filter_config_id": active_filter_config.id if active_filter_config else None,
-            "pivot_configs": pivot_configs,
-            "active_pivot_config_id": getattr(active_pivot_config, "id", None) if active_pivot_config else None,
-            "filter_schema": filter_schema,
-            "selected_filter_values": selected_filter_values,
-        }
+        # Admin-defined filter layout and leftover keys
+        filter_layout = self._get_filter_layout_dict()
+        filter_layout_keys = set()
+        if filter_layout and isinstance(filter_layout.get("sections"), list):
+            try:
+                for sec in filter_layout.get("sections", []) or []:
+                    for row in (sec.get("rows") or []):
+                        for cell in (row or []):
+                            if isinstance(cell, dict):
+                                k = cell.get("key")
+                                r = cell.get("range")
+                                if k:
+                                    filter_layout_keys.add(str(k))
+                                if isinstance(r, (list, tuple)) and len(r) == 2:
+                                    filter_layout_keys.add(str(r[0]))
+                                    filter_layout_keys.add(str(r[1]))
+            except Exception:
+                filter_layout_keys = set()
+        other_keys = [k for k in (filter_schema or {}).keys() if k not in filter_layout_keys]
+        # Make user available for layout resolution similar to TableBlock
+        self._current_user = user
+        try:
+            ctx = {
+                "block_name": self.block_name,
+                "instance_id": instance_id,
+                "block_title": getattr(self.block, "name", self.block_name),
+                "block": self.block,
+                "filter_layout": filter_layout,
+                "filter_layout_other_keys": other_keys,
+                "columns": columns,
+                "data": json.dumps(rows),
+                "tabulator_options": self.get_tabulator_options(user),
+                "xlsx_download": json.dumps(self.get_xlsx_download_options(request, instance_id) or {}),
+                "pdf_download": json.dumps(self.get_pdf_download_options(request, instance_id) or {}),
+                "filter_configs": filter_configs,
+                "active_filter_config_id": active_filter_config.id if active_filter_config else None,
+                "pivot_configs": pivot_configs,
+                "active_pivot_config_id": getattr(active_pivot_config, "id", None) if active_pivot_config else None,
+                "filter_schema": filter_schema,
+                "selected_filter_values": selected_filter_values,
+            }
+        finally:
+            if hasattr(self, "_current_user"):
+                delattr(self, "_current_user")
+        return ctx
+
+    def _get_filter_layout_dict(self):
+        try:
+            user_layout = None
+            # Prefer per-user
+            if hasattr(self, "_current_user") and self._current_user:
+                user_layout = BlockFilterLayout.objects.filter(block=self.block, user=self._current_user).first()
+            if user_layout and isinstance(user_layout.layout, dict):
+                return dict(user_layout.layout)
+            tpl = BlockFilterLayoutTemplate.objects.filter(block=self.block).first()
+            return dict(tpl.layout or {}) if tpl and isinstance(tpl.layout, dict) else None
+        except Exception:
+            return None
 
     def get_tabulator_default_options(self, user):
         return {

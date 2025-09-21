@@ -10,6 +10,7 @@ from django.views.generic import FormView
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
+from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.permissions.checks import (
     can_read_field as can_read_field_generic,
@@ -167,6 +168,8 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
                 "route_block_name": route_block_name,
                 "configs": self.user_filters,
                 "filter_schema": self.filter_schema,
+                "filter_layout": self._get_filter_layout(),
+                "filter_layout_other_keys": self._get_other_keys(),
                 # initial values empty for new form; JS will populate when selecting an existing config
                 "initial_values": {},
                 # Only expose allowed keys to the client for safety/privacy
@@ -179,6 +182,38 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             }
         )
         return context
+
+    def _get_filter_layout(self):
+        # Prefer user-specific layout; fallback to admin template
+        try:
+            from apps.blocks.models.block_filter_layout import BlockFilterLayout
+            user_layout = BlockFilterLayout.objects.filter(block=self.db_block, user=self.request.user).first()
+            if user_layout and isinstance(user_layout.layout, dict):
+                return dict(user_layout.layout)
+            tpl = BlockFilterLayoutTemplate.objects.filter(block=self.db_block).first()
+            return dict(tpl.layout or {}) if tpl and isinstance(tpl.layout, dict) else None
+        except Exception:
+            return None
+
+    def _get_other_keys(self):
+        layout = self._get_filter_layout()
+        layout_keys = set()
+        if layout and isinstance(layout.get("sections"), list):
+            try:
+                for sec in layout.get("sections", []) or []:
+                    for row in (sec.get("rows") or []):
+                        for cell in (row or []):
+                            if isinstance(cell, dict):
+                                k = cell.get("key")
+                                r = cell.get("range")
+                                if k:
+                                    layout_keys.add(str(k))
+                                if isinstance(r, (list, tuple)) and len(r) == 2:
+                                    layout_keys.add(str(r[0]))
+                                    layout_keys.add(str(r[1]))
+            except Exception:
+                layout_keys = set()
+        return [k for k in (self.filter_schema or {}).keys() if k not in layout_keys]
 
 
 class ChartFilterConfigView(FilterConfigView):

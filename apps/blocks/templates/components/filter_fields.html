@@ -4,6 +4,94 @@
 <!--#}-->
 {% load dict_extras static %}
 
+{# If a filter_layout is provided, render per sections/rows; else fallback to auto rendering #}
+{% if filter_layout and filter_layout.sections %}
+  {% for sec in filter_layout.sections %}
+    {% if sec.title %}<h5 class="mt-3">{{ sec.title }}</h5>{% endif %}
+    {% for row in sec.rows %}
+      <div class="row">
+        {% for cell in row %}
+          {% if cell.range %}
+            {% with from_key=cell.range.0 to_key=cell.range.1 %}
+              {% with from_cfg=filter_schema|get_item:from_key to_cfg=filter_schema|get_item:to_key %}
+                {% if from_cfg and to_cfg %}
+                  <div class="col-{{ cell.cols|default:12 }}">
+                    <div class="mb-4 filter-field">
+                      <label class="form-label">{{ cell.label|default:from_cfg.label|cut:" From" }} Between</label>
+                      <div class="d-flex gap-3 align-items-start flex-wrap">
+                        {% with from_val=initial_values|get_item:from_key %}
+                        <div class="date-filter-wrapper" data-key="{{ from_key }}">
+                          <div class="d-flex gap-2 align-items-start flex-wrap">
+                            <input type="text" class="form-control date-token-input" style="min-width: 220px;" name="{{ name_prefix|default:'filters.' }}{{ from_key }}" value="{{ from_val|default:'' }}" placeholder="YYYY-MM-DD or token"/>
+                            <div>
+                              <button class="btn btn-outline-secondary btn-sm pick-date-btn" type="button">Pick Date</button>
+                              <input type="date" class="date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" tabindex="-1" aria-hidden="true"/>
+                            </div>
+                            <select class="form-select form-select-sm date-quick-select" style="min-width: 200px;">
+                              <option value="">Quick pick…</option>
+                              <option value="__today__">Today</option>
+                              <option value="__start_of_month__">Start of Month</option>
+                              <option value="__end_of_month__">End of Month</option>
+                              <option value="__start_of_quarter__">Start of Quarter</option>
+                              <option value="__end_of_quarter__">End of Quarter</option>
+                              <option value="__start_of_year__">Start of Year</option>
+                              <option value="__end_of_year__">End of Year</option>
+                              <option value="__current_fiscal_year_start__">Current FY Start</option>
+                              <option value="__current_fiscal_year_end__">Current FY End</option>
+                            </select>
+                          </div>
+                        </div>
+                        {% endwith %}
+                        {% with to_val=initial_values|get_item:to_key %}
+                        <div class="date-filter-wrapper" data-key="{{ to_key }}">
+                          <div class="d-flex gap-2 align-items-start flex-wrap">
+                            <input type="text" class="form-control date-token-input" style="min-width: 220px;" name="{{ name_prefix|default:'filters.' }}{{ to_key }}" value="{{ to_val|default:'' }}" placeholder="YYYY-MM-DD or token"/>
+                            <div>
+                              <button class="btn btn-outline-secondary btn-sm pick-date-btn" type="button">Pick Date</button>
+                              <input type="date" class="date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" tabindex="-1" aria-hidden="true"/>
+                            </div>
+                            <select class="form-select form-select-sm date-quick-select" style="min-width: 200px;">
+                              <option value="">Quick pick…</option>
+                              <option value="__today__">Today</option>
+                              <option value="__start_of_month__">Start of Month</option>
+                              <option value="__end_of_month__">End of Month</option>
+                              <option value="__start_of_quarter__">Start of Quarter</option>
+                              <option value="__end_of_quarter__">End of Quarter</option>
+                              <option value="__start_of_year__">Start of Year</option>
+                              <option value="__end_of_year__">End of Year</option>
+                              <option value="__current_fiscal_year_start__">Current FY Start</option>
+                              <option value="__current_fiscal_year_end__">Current FY End</option>
+                            </select>
+                          </div>
+                        </div>
+                        {% endwith %}
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+              {% endwith %}
+            {% endwith %}
+          {% elif cell.key %}
+            <div class="col-{{ cell.cols|default:12 }}">
+              {% include 'components/_single_filter_field.html' with key=cell.key %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+  {# Safety option: append not-in-layout fields under an Other section #}
+  {% if filter_layout.append_unplaced and filter_layout_other_keys and filter_layout_other_keys|length %}
+    <h5 class="mt-3">{{ filter_layout.other_title|default:"Other" }}</h5>
+    <div class="row">
+      {% for k in filter_layout_other_keys %}
+        <div class="col-12">
+          {% include 'components/_single_filter_field.html' with key=k %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% else %}
 {% for key, cfg in filter_schema.items %}
   {% with val=initial_values|get_item:key %}
   {# Skip rendering standalone '_to' date inputs when a paired '_from' exists; they'll be rendered together below #}
@@ -189,6 +277,7 @@
   {% endwith %}
   {% endwith %}
 {% endfor %}
+{% endif %}
 
 <script>
   // Initialize Tom Select only on actual <select> elements and guard parsing.

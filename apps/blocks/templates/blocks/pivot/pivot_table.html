@@ -24,6 +24,7 @@
       {% endfor %}
     </select>
     <a class="btn btn-link p-0 ms-2" href="{% url 'pivot_filter_config' block_name %}">Manage Filters</a>
+    {# moved Manage Filter Layout links into accordion #}
     <button id="download-xlsx-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-3" type="button">Download Excel</button>
     <button id="download-pdf-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-2" type="button">Download PDF</button>
   </div>
@@ -40,7 +41,13 @@
   <details class="border rounded">
     <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">Filter Conditions</summary>
     <div class="p-3">
-      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
+      <div class="mb-2">
+        <a class="btn btn-link p-0" href="{% url 'filter_layout_view' block_name %}">Manage Filter Layout</a>
+        {% if request.user.is_staff %}
+          <a class="btn btn-link p-0 ms-3" href="{% url 'admin_filter_layout_view' block_name %}">Manage Default Filter Layout</a>
+        {% endif %}
+      </div>
+      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values filter_layout=filter_layout name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
       <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
     </div>
   </details>
