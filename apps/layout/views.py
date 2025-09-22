@@ -217,6 +217,10 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             # Signal to block templates that they are embedded within a layout
             # so they can suppress standalone page headers/footers.
             qd["embedded"] = "1"
+            # Provide per-instance display metadata to block templates so they
+            # can render title/notes just below Filter Conditions.
+            qd["embedded_title"] = getattr(lb, "title", "") or ""
+            qd["embedded_note"] = getattr(lb, "note", "") or ""
 
             class _ReqProxy:
                 def __init__(self, req, get):
@@ -358,6 +362,9 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
             qd = build_namespaced_get(request, ns=ns, values=selected_filter_values or {})
             qd["embedded"] = "1"
+            qd["embedded_edit"] = "1"
+            qd["embedded_title"] = getattr(lb, "title", "") or ""
+            qd["embedded_note"] = getattr(lb, "note", "") or ""
             class _ReqProxy:
                 def __init__(self, req, get):
                     self._req = req

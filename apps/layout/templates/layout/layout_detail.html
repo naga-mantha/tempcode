@@ -60,8 +60,6 @@
       {% for b in blocks %}
         <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}">
           <div class="grid-stack-item-content card p-2">
-            {% if b.title %}<div class="mb-2 fw-bold">{{ b.title }}</div>{% endif %}
-            {% if b.note %}<div class="mb-2 text-muted small">{{ b.note|linebreaksbr }}</div>{% endif %}
             {{ b.html|safe }}
           </div>
         </div>

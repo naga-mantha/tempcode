@@ -22,6 +22,7 @@
               <label class="form-label">Description</label>
               <textarea class="form-control" name="description" rows="3">{{ layout.description }}</textarea>
             </div>
+            {# No layout-level title/notes; titles/notes are per-block below #}
           </div>
         </form>
       </div>
@@ -188,6 +189,39 @@
         }
       }).catch(() => showToast('Failed to delete block', 'error'));
     });
+
+    // Debounced per-block Title/Notes updater
+    (function(){
+      const pending = new Map();
+      function schedule(id, data){
+        const key = String(id);
+        if (pending.has(key)) clearTimeout(pending.get(key));
+        const t = setTimeout(() => doUpdate(id, data), 300);
+        pending.set(key, t);
+      }
+      function doUpdate(id, data){
+        const url = `${updateUrlBase}${id}/update/`;
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+          body: JSON.stringify(data || {})
+        }).then(r => {
+          if (!r.ok) showToast('Failed to save block details', 'error');
+        }).catch(() => showToast('Failed to save block details', 'error'));
+      }
+      container.addEventListener('input', function(e){
+        const titleEl = e.target.closest('.js-block-title');
+        const notesEl = e.target.closest('.js-block-notes');
+        if (!titleEl && !notesEl) return;
+        const el = titleEl || notesEl;
+        const id = parseInt(el.getAttribute('data-id'), 10);
+        if (isNaN(id)) return;
+        const data = {};
+        if (titleEl) data.title = (titleEl.value || '').trim();
+        if (notesEl) data.note = (notesEl.value || '').trim();
+        schedule(id, data);
+      });
+    })();
 
     function initOrderFields() {
       const rows = container.querySelectorAll('.layout-item');
