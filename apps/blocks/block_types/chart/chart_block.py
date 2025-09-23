@@ -194,7 +194,7 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             figure_dict.setdefault("layout", {}).update(layout)
         # Ensure we have an instance_id for DOM ids
         instance_id = instance_id or uuid.uuid4().hex[:8]
-        # Fetch admin-defined filter layout if available and compute leftover keys
+        # Fetch admin-defined filter layout if available
         try:
             # Per-user override; fallback to admin
             user_layout = BlockFilterLayout.objects.filter(block=self.block, user=user).first()
@@ -205,30 +205,12 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
                 filter_layout = dict(layout_tpl.layout or {}) if layout_tpl and isinstance(layout_tpl.layout, dict) else None
         except Exception:
             filter_layout = None
-        filter_layout_keys = set()
-        if filter_layout and isinstance(filter_layout.get("sections"), list):
-            try:
-                for sec in filter_layout.get("sections", []) or []:
-                    for row in (sec.get("rows") or []):
-                        for cell in (row or []):
-                            if isinstance(cell, dict):
-                                k = cell.get("key")
-                                r = cell.get("range")
-                                if k:
-                                    filter_layout_keys.add(str(k))
-                                if isinstance(r, (list, tuple)) and len(r) == 2:
-                                    filter_layout_keys.add(str(r[0]))
-                                    filter_layout_keys.add(str(r[1]))
-            except Exception:
-                filter_layout_keys = set()
-        other_keys = [k for k in (filter_schema or {}).keys() if k not in filter_layout_keys]
         return {
             "block_name": self.block_name,
             "block_title": getattr(self.block, "name", self.block_name),
             "block": self.block,
             "instance_id": instance_id,
             "filter_layout": filter_layout,
-            "filter_layout_other_keys": other_keys,
             "filter_configs": filter_configs,
             "active_filter_config_id": active_filter_config.id
             if active_filter_config

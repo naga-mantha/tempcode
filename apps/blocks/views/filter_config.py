@@ -169,7 +169,6 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
                 "configs": self.user_filters,
                 "filter_schema": self.filter_schema,
                 "filter_layout": self._get_filter_layout(),
-                "filter_layout_other_keys": self._get_other_keys(),
                 # initial values empty for new form; JS will populate when selecting an existing config
                 "initial_values": {},
                 # Only expose allowed keys to the client for safety/privacy
@@ -195,25 +194,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         except Exception:
             return None
 
-    def _get_other_keys(self):
-        layout = self._get_filter_layout()
-        layout_keys = set()
-        if layout and isinstance(layout.get("sections"), list):
-            try:
-                for sec in layout.get("sections", []) or []:
-                    for row in (sec.get("rows") or []):
-                        for cell in (row or []):
-                            if isinstance(cell, dict):
-                                k = cell.get("key")
-                                r = cell.get("range")
-                                if k:
-                                    layout_keys.add(str(k))
-                                if isinstance(r, (list, tuple)) and len(r) == 2:
-                                    layout_keys.add(str(r[0]))
-                                    layout_keys.add(str(r[1]))
-            except Exception:
-                layout_keys = set()
-        return [k for k in (self.filter_schema or {}).keys() if k not in layout_keys]
+    # Removed 'other keys' concept; unplaced fields are not auto-appended
 
 
 class ChartFilterConfigView(FilterConfigView):

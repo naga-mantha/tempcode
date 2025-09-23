@@ -168,25 +168,8 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
             if hasattr(self, "_active_pivot_config"):
                 delattr(self, "_active_pivot_config")
 
-        # Admin-defined filter layout and leftover keys
+        # Admin-defined filter layout
         filter_layout = self._get_filter_layout_dict()
-        filter_layout_keys = set()
-        if filter_layout and isinstance(filter_layout.get("sections"), list):
-            try:
-                for sec in filter_layout.get("sections", []) or []:
-                    for row in (sec.get("rows") or []):
-                        for cell in (row or []):
-                            if isinstance(cell, dict):
-                                k = cell.get("key")
-                                r = cell.get("range")
-                                if k:
-                                    filter_layout_keys.add(str(k))
-                                if isinstance(r, (list, tuple)) and len(r) == 2:
-                                    filter_layout_keys.add(str(r[0]))
-                                    filter_layout_keys.add(str(r[1]))
-            except Exception:
-                filter_layout_keys = set()
-        other_keys = [k for k in (filter_schema or {}).keys() if k not in filter_layout_keys]
         # Make user available for layout resolution similar to TableBlock
         self._current_user = user
         try:
@@ -196,7 +179,6 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
                 "block_title": getattr(self.block, "name", self.block_name),
                 "block": self.block,
                 "filter_layout": filter_layout,
-                "filter_layout_other_keys": other_keys,
                 "columns": columns,
                 "data": json.dumps(rows),
                 "tabulator_options": self.get_tabulator_options(user),

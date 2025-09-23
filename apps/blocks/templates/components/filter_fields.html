@@ -81,16 +81,6 @@
     {% endfor %}
   {% endfor %}
   {# Safety option: append not-in-layout fields under an Other section #}
-  {% if filter_layout.append_unplaced and filter_layout_other_keys and filter_layout_other_keys|length %}
-    <h5 class="mt-3">{{ filter_layout.other_title|default:"Other" }}</h5>
-    <div class="row">
-      {% for k in filter_layout_other_keys %}
-        <div class="col-12">
-          {% include 'components/_single_filter_field.html' with key=k %}
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
 {% else %}
 {% for key, cfg in filter_schema.items %}
   {% with val=initial_values|get_item:key %}
