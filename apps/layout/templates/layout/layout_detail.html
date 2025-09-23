@@ -66,16 +66,10 @@
         <details class="border rounded">
           <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">Filter Conditions</summary>
           <div class="p-3">
-            <form method="get">
+            <form method="get" id="layout-filters-form">
               {% if active_filter_config_id %}
                 <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
               {% endif %}
-              {# Preserve per-block selections (filter/column/pivot configs) on submit #}
-              {% for k, v in request.GET.items %}
-                {% if '__filter_config_id' in k or '__column_config_id' in k or '__pivot_config_id' in k %}
-                  <input type="hidden" name="{{ k }}" value="{{ v }}">
-                {% endif %}
-              {% endfor %}
               {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values id_prefix="layout" %}
               <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
             </form>
@@ -216,6 +210,27 @@
           });
       } catch(_) {}
     };
+
+    // Intercept layout filters form submit to preserve per-block selections
+    try {
+      const lf = document.getElementById('layout-filters-form');
+      lf?.addEventListener('submit', function(ev){
+        ev.preventDefault();
+        const url = new URL(window.location.href);
+        // Remove only top-level layout filters (filters.*) and then add current form inputs
+        const toDelete = [];
+        url.searchParams.forEach((val, key) => { if (key.startsWith('filters.')) toDelete.push(key); });
+        toDelete.forEach(k => url.searchParams.delete(k));
+        const fd = new FormData(lf);
+        for (const [k, v] of fd.entries()){
+          if (!k) continue;
+          // Forward filter_config_id and filters.* from the form
+          url.searchParams.set(k, String(v ?? ''));
+        }
+        // Navigate without losing per-block selections already in URL
+        window.location.href = url.toString();
+      });
+    } catch(_) {}
   });
   </script>
 {% endblock %}
