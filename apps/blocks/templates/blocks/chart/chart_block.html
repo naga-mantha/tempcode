@@ -1,4 +1,5 @@
 {% load static %}
+<div class="js-layout-block-root" id="layout-block-{{ instance_id }}" data-instance-id="{{ instance_id }}" data-block-name="{{ block_name }}">
 {% if not embedded %}
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 {% endif %}
@@ -68,7 +69,9 @@
 
 {% block scripts %}
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
+  (function init(){
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init, { once: true }); return; }
+    {% if request.GET.embedded %}const IS_EMBEDDED = true;{% else %}const IS_EMBEDDED = false;{% endif %}
     const fig = {{ figure|safe }};
     const chartEl = document.getElementById('chart-{{ block_name }}-{{ instance_id }}');
     try {
@@ -107,9 +110,33 @@
       clearNamespacedFilters(url);
       const key = '{{ block_name }}__{{ instance_id }}__filter_config_id';
       if (this.value) url.searchParams.set(key, this.value); else url.searchParams.delete(key);
-      window.location.href = url.toString();
+      if (IS_EMBEDDED && typeof window.updateLayoutBlock === 'function') {
+        history.replaceState(null, '', url.toString());
+        window.updateLayoutBlock("{{ instance_id }}");
+      } else {
+        window.location.href = url.toString();
+      }
     });
-  });
+
+    // Intercept live filter form submit for partial refresh when embedded
+    const form = document.getElementById('dynamic-filters-form-{{ block_name }}-{{ instance_id }}');
+    form?.addEventListener('submit', function(e){
+      if (!IS_EMBEDDED || typeof window.updateLayoutBlock !== 'function') return;
+      e.preventDefault();
+      const url = new URL(window.location.href);
+      clearNamespacedFilters(url);
+      const fd = new FormData(form);
+      for (const [k, v] of fd.entries()){
+        if (!k) continue;
+        if (v === null || v === undefined) continue;
+        if (String(v).length === 0) continue;
+        url.searchParams.set(k, String(v));
+      }
+      history.replaceState(null, '', url.toString());
+      window.updateLayoutBlock("{{ instance_id }}");
+    });
+  })();
 </script>
 {% endblock %}
 
+</div>

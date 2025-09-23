@@ -114,10 +114,16 @@
   #grid-view { width: 100%; max-width: 100%; }
   /* Gridstack content should stretch to occupy tile */
   .grid-stack .grid-stack-item-content { display: flex; flex-direction: column; min-height: 100%; }
+  /* When block output is wrapped, keep wrapper stretching */
+  .grid-stack .grid-stack-item-content > .js-layout-block-root { display: flex; flex-direction: column; min-height: 100%; position: relative; }
   .grid-stack .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }
+  .grid-stack .grid-stack-item-content .js-layout-block-root > div[id^="chart-"] { flex: 1 1 auto; }
+  .grid-stack .grid-stack-item-content .js-layout-block-root > div[id^="table-"] { flex: 1 1 auto; }
   /* Ensure Bootstrap columns inside tiles don't constrain width */
   .grid-stack .grid-stack-item-content [class^="col-"],
   .grid-stack .grid-stack-item-content [class*=" col-"] { width: auto !important; max-width: none !important; }
+  /* Loading overlay for AJAX block refresh */
+  .block-loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 10; }
   /* Sidebar list styles: darker text; lighter active background */
   .offcanvas .list-group-item { color: #212529; }
   .offcanvas .list-group-item.active {
@@ -166,6 +172,50 @@
       const grid = GridStack.init({ float: false, staticGrid: true, cellHeight: 136, margin: 8 }, container);
     };
     document.body.appendChild(s);
+
+    // Expose a helper to refresh a single block without full reload
+    window.updateLayoutBlock = function(instanceId){
+      try {
+        const targetId = 'layout-block-' + String(instanceId);
+        const current = document.getElementById(targetId);
+        if (!current) return;
+        // Show a loading overlay while fetching updated HTML
+        let overlay = current.querySelector(':scope > .block-loading-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.className = 'block-loading-overlay';
+          overlay.innerHTML = '<div class="spinner-border text-secondary" role="status" aria-label="Loading"></div>';
+          current.appendChild(overlay);
+        }
+        const renderUrl = new URL(window.location.pathname.replace(/\/$/, '') + '/block/' + String(instanceId) + '/render/', window.location.origin);
+        // Pass through current query params so server can resolve selections
+        renderUrl.search = window.location.search;
+        fetch(renderUrl.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(res => res.json())
+          .then(data => {
+            if (!data || typeof data.html !== 'string') return;
+            // Replace the block root and re-execute any scripts in the fragment
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = data.html;
+            const next = wrapper.querySelector('#' + CSS.escape(targetId)) || wrapper.firstElementChild;
+            if (!next) return;
+            current.replaceWith(next);
+            // Execute scripts within the inserted block
+            const scripts = next.querySelectorAll('script');
+            scripts.forEach(old => {
+              const s = document.createElement('script');
+              // Copy attributes (e.g., type, src)
+              for (const attr of old.attributes) { s.setAttribute(attr.name, attr.value); }
+              s.text = old.text || old.textContent || '';
+              old.replaceWith(s);
+            });
+          })
+          .catch(() => {
+            // Remove overlay on error
+            try { overlay?.remove(); } catch(_) {}
+          });
+      } catch(_) {}
+    };
   });
   </script>
 {% endblock %}

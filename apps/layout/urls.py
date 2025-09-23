@@ -13,5 +13,6 @@ urlpatterns = [
     path("<str:username>/<slug:slug>/grid/update/", views.LayoutGridUpdateView.as_view(), name="layout_grid_update"),
     path("<str:username>/<slug:slug>/block/<int:id>/update/", views.LayoutBlockUpdateView.as_view(), name="layout_block_update"),
     path("<str:username>/<slug:slug>/block/<int:id>/delete/", views.LayoutBlockDeleteView.as_view(), name="layout_block_delete"),
+    path("<str:username>/<slug:slug>/block/<int:id>/render/", views.LayoutBlockRenderView.as_view(), name="layout_block_render"),
     path("<str:username>/<slug:slug>/block/add/", views.LayoutBlockAddView.as_view(), name="layout_block_add"),
 ]

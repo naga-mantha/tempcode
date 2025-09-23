@@ -680,3 +680,89 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
             request=request,
         )
         return JsonResponse({"ok": True, "tbody_html": tbody_html})
+
+
+class LayoutBlockRenderView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMixin, View):
+    """AJAX: Render a single block instance within a layout using current query params.
+
+    Returns JSON { html: "..." } with the full block HTML (including scripts),
+    so the client can replace the existing block without reloading the page.
+    """
+
+    def get(self, request, username, slug, id, *args, **kwargs):
+        layout = self.get_layout(username=username, slug=slug)
+        # Expose layout on self for LayoutFilterSchemaMixin helpers
+        self.layout = layout
+        self.ensure_detail_access(request, layout)
+        lb = get_object_or_404(LayoutBlock, layout=layout, id=id)
+        block_impl = block_registry.get(lb.block.code)
+        if not block_impl:
+            return JsonResponse(
+                {
+                    "html": (
+                        "<div id='layout-block-%s' class='js-layout-block-root'>"
+                        "<div class='alert alert-warning p-2 m-0'>Block '%s' not available.</div>"
+                        "</div>" % (id, lb.block.code)
+                    )
+                }
+            )
+        # Rebuild layout sidebar filter schema and selected values based on current URL
+        filter_configs = LayoutFilterConfig.objects.filter(layout=layout, user=request.user).order_by("-is_default", "name")
+        active_cfg = None
+        cfg_id = request.GET.get("filter_config_id")
+        if cfg_id:
+            try:
+                active_cfg = filter_configs.get(pk=cfg_id)
+            except LayoutFilterConfig.DoesNotExist:
+                active_cfg = None
+        if not active_cfg:
+            active_cfg = filter_configs.filter(is_default=True).first()
+        filter_schema = self._build_filter_schema(request)
+        base_values = active_cfg.values if active_cfg else {}
+        selected_filter_values = self._collect_filters(request.GET, filter_schema, base=base_values)
+        # Build namespaced GET params for this block
+        ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
+        qd = build_namespaced_get(request, ns=ns, values=selected_filter_values or {})
+        # Inject preferred per-instance defaults if not explicitly provided in URL
+        pref_name = (lb.preferred_filter_name or "").strip()
+        if pref_name:
+            from apps.blocks.models.block_filter_config import BlockFilterConfig as BFC
+            cfg = BFC.objects.filter(block=lb.block, user=request.user, name=pref_name).only("id").first()
+            key = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filter_config_id"
+            if cfg and key not in request.GET:
+                qd[key] = str(cfg.id)
+        pref_col = (lb.preferred_column_config_name or "").strip()
+        if pref_col:
+            from apps.blocks.models.block_column_config import BlockColumnConfig as BCC
+            col = BCC.objects.filter(block=lb.block, user=request.user, name=pref_col).only("id").first()
+            key_col = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__column_config_id"
+            if col and key_col not in request.GET:
+                qd[key_col] = str(col.id)
+        # Embedded marker and display metadata
+        qd["embedded"] = "1"
+        qd["embedded_title"] = getattr(lb, "title", "") or ""
+        qd["embedded_note"] = getattr(lb, "note", "") or ""
+
+        class _ReqProxy:
+            def __init__(self, req, get):
+                self._req = req
+                self.GET = get
+
+            def __getattr__(self, item):
+                return getattr(self._req, item)
+
+        proxy_request = _ReqProxy(request, qd)
+        try:
+            response = block_impl.render(proxy_request, instance_id=str(lb.id))
+            try:
+                html = response.content.decode(response.charset or "utf-8")
+            except Exception:
+                html = response.content.decode("utf-8", errors="ignore")
+        except Exception as exc:
+            html = (
+                f"<div id='layout-block-{id}' class='js-layout-block-root'>"
+                "<div class='alert alert-danger p-2 m-0'>"
+                f"Error rendering block '{lb.block.name}': {str(exc)}"
+                "</div></div>"
+            )
+        return JsonResponse({"html": html})
