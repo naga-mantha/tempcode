@@ -70,6 +70,12 @@
               {% if active_filter_config_id %}
                 <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
               {% endif %}
+              {# Preserve per-block selections (filter/column/pivot configs) on submit #}
+              {% for k, v in request.GET.items %}
+                {% if '__filter_config_id' in k or '__column_config_id' in k or '__pivot_config_id' in k %}
+                  <input type="hidden" name="{{ k }}" value="{{ v }}">
+                {% endif %}
+              {% endfor %}
               {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values id_prefix="layout" %}
               <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
             </form>
