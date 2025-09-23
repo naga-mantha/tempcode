@@ -81,6 +81,8 @@
     {% endfor %}
   {% endfor %}
   {# Safety option: append not-in-layout fields under an Other section #}
+{% elif require_layout %}
+  {# No layout provided and layout is required: render nothing #}
 {% else %}
 {% for key, cfg in filter_schema.items %}
   {% with val=initial_values|get_item:key %}

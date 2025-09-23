@@ -62,7 +62,7 @@
         {% endif %}
       </div>
       {# Renders actual inputs based on your schema #}
-      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values filter_layout=filter_layout name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id %}
+      {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values filter_layout=filter_layout name_prefix=block_name|add:"__"|add:instance_id|add:"__filters." id_prefix=block_name|add:"-"|add:instance_id require_layout=True %}
       <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
     </div>
   </details>
