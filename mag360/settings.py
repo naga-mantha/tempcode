@@ -87,6 +87,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.common.context_processors.sidebar_layouts',
+                'apps.common.context_processors.branding',
             ],
         },
     },
@@ -253,3 +255,8 @@ LOGIN_REQUIRED_IGNORE_PATHS = [
 
 # If True, skips the back_order recalculation in PurchaseOrderLine admin
 # PURCHASE_ADMIN_SKIP_BACK_ORDER_RECALC = True
+
+# Branding
+COMPANY_FULL_NAME = env('COMPANY_FULL_NAME', default='Your Company')
+
+

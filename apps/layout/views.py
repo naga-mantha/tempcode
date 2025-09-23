@@ -72,16 +72,35 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
             Q(visibility=Layout.VISIBILITY_PUBLIC)
             | Q(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE)
         )
-        context["public_layouts"] = qs.filter(visibility=Layout.VISIBILITY_PUBLIC)
+        context["public_layouts"] = qs.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("category", "name")
         context["private_layouts"] = qs.filter(
             visibility=Layout.VISIBILITY_PRIVATE, user=self.request.user
-        )
+        ).order_by("category", "name")
         # Provide create form inline on this page
         context["form"] = LayoutForm(user=self.request.user)
         return context
 
+    # Creation moved to LayoutCreateView
+
+
+class LayoutCreateView(LoginRequiredMixin, TemplateView):
+    template_name = "layout/layout_create.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = LayoutForm(user=self.request.user)
+        # Provide lists for sidebar
+        qs = Layout.objects.filter(
+            Q(visibility=Layout.VISIBILITY_PUBLIC)
+            | Q(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE)
+        )
+        context["public_layouts"] = qs.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("category", "name")
+        context["private_layouts"] = qs.filter(
+            visibility=Layout.VISIBILITY_PRIVATE, user=self.request.user
+        ).order_by("category", "name")
+        return context
+
     def post(self, request, *args, **kwargs):
-        # Handle create layout inline (direct save)
         form = LayoutForm(request.POST, user=request.user)
         if form.is_valid():
             layout = form.save(commit=False)
@@ -114,6 +133,7 @@ class LayoutRenameView(LoginRequiredMixin, LayoutAccessMixin, View):
             return (v or default).strip()
         new_name = _get(payload, "name")
         new_desc = _get(payload, "description")
+        new_cat = _get(payload, "category")
         # Detect if client expects JSON
         accept = getattr(request, "headers", {}).get("Accept") if hasattr(request, "headers") else request.META.get("HTTP_ACCEPT", "")
         is_ajax = (
@@ -128,7 +148,8 @@ class LayoutRenameView(LoginRequiredMixin, LayoutAccessMixin, View):
             return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
         layout.name = new_name
         layout.description = new_desc
-        layout.save(update_fields=["name", "slug", "description"])  # slug auto-derives on save
+        layout.category = new_cat
+        layout.save(update_fields=["name", "slug", "description", "category"])  # slug auto-derives on save
         # If JSON/AJAX, return structured response instead of redirect
         if is_ajax:
             return JsonResponse({
@@ -257,8 +278,8 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             })
         can_manage = self.can_manage(self.request.user, self.layout)
         # Sidebar lists: private (current user) and all public, ascending by name
-        private_qs = Layout.objects.filter(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE).order_by("name")
-        public_qs = Layout.objects.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("name")
+        private_qs = Layout.objects.filter(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE).order_by("category", "name")
+        public_qs = Layout.objects.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("category", "name")
         context.update(
             {
                 "layout": self.layout,

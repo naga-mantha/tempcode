@@ -4,6 +4,7 @@ from apps.layout import views
 
 urlpatterns = [
     path("layout_list", views.LayoutListView.as_view(), name="layout_list"),
+    path("layout_create", views.LayoutCreateView.as_view(), name="layout_create"),
     path("<str:username>/<slug:slug>/", views.LayoutDetailView.as_view(), name="layout_detail"),
     path("<str:username>/<slug:slug>/rename/", views.LayoutRenameView.as_view(), name="layout_rename"),
     path("<str:username>/<slug:slug>/delete/", views.LayoutDeleteView.as_view(), name="layout_delete"),

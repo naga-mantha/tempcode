@@ -18,6 +18,10 @@
               <label class="form-label">Name</label>
               <input type="text" class="form-control" name="name" value="{{ layout.name }}" required>
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Category</label>
+              <input type="text" class="form-control" name="category" value="{{ layout.category }}">
+            </div>
             <div class="col-12">
               <label class="form-label">Description</label>
               <textarea class="form-control" name="description" rows="3">{{ layout.description }}</textarea>
@@ -116,6 +120,7 @@
     (function(){
       if (!detailsForm) return;
       const nameEl = detailsForm.querySelector('input[name="name"]');
+      const catEl = detailsForm.querySelector('input[name="category"]');
       const descEl = detailsForm.querySelector('textarea[name="description"]');
       let timer = null;
       function scheduleSave(){
@@ -125,6 +130,7 @@
       function doSave(){
         const payload = {
           name: (nameEl && nameEl.value || '').trim(),
+          category: (catEl && catEl.value || '').trim(),
           description: (descEl && descEl.value || '').trim()
         };
         fetch(detailsForm.action, {
@@ -155,6 +161,7 @@
           .catch(function(){ showToast('Failed to save layout details', 'error'); });
       }
       if (nameEl) nameEl.addEventListener('input', scheduleSave);
+      if (catEl) catEl.addEventListener('input', scheduleSave);
       if (descEl) descEl.addEventListener('input', scheduleSave);
     })();
 

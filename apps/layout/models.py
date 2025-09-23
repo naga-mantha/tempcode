@@ -25,6 +25,7 @@ class Layout(models.Model):
         max_length=10, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
     )
     description = models.TextField(blank=True, default="")
+    category = models.CharField(max_length=255, blank=True, default="")
 
     def save(self, *args, **kwargs):  # noqa: D401 - override to auto-slugify
         """Persist the layout ensuring slug is derived from name."""

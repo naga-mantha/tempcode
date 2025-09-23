@@ -11,7 +11,7 @@ from apps.layout.constants import GRID_MAX_COL_SPAN, GRID_MAX_ROW_SPAN
 class LayoutForm(forms.ModelForm):
     class Meta:
         model = Layout
-        fields = ["name", "visibility", "description"]
+        fields = ["name", "visibility", "category", "description"]
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -20,6 +20,8 @@ class LayoutForm(forms.ModelForm):
             self.fields["name"].widget.attrs.update({"class": "form-control"})
         if "visibility" in self.fields:
             self.fields["visibility"].widget.attrs.update({"class": "form-select"})
+        if "category" in self.fields:
+            self.fields["category"].widget.attrs.update({"class": "form-control"})
         if "description" in self.fields:
             self.fields["description"].widget.attrs.update({"class": "form-control", "rows": 3})
         # Only staff/admin can change visibility; others see it disabled
@@ -41,16 +43,22 @@ class LayoutForm(forms.ModelForm):
         has_visibility = "visibility" in self.fields
         if has_visibility:
             top_row = Row(
-                Column(Field("name"), css_class="col-md-6"),
-                Column(Field("visibility"), css_class="col-md-6"),
+                Column(Field("name"), css_class="col-md-4"),
+                Column(Field("visibility"), css_class="col-md-4"),
+                Column(Field("category"), css_class="col-md-4"),
             )
         else:
             top_row = Row(
                 Column(Field("name"), css_class="col-12"),
             )
+            # Show category on its own row when visibility is hidden
+            cat_row = Row(Column(Field("category"), css_class="col-12"))
         desc_label_row = Row(HTML('<label class="form-label">Description</label>'))
         desc_field_row = Row(Column(Field("description"), css_class="col-12"))
-        self.helper.layout = Layout(top_row, desc_label_row, desc_field_row)
+        if has_visibility:
+            self.helper.layout = Layout(top_row, desc_label_row, desc_field_row)
+        else:
+            self.helper.layout = Layout(top_row, cat_row, desc_label_row, desc_field_row)
 
 
 class AddBlockForm(forms.ModelForm):
