@@ -45,14 +45,6 @@
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <div class="d-flex align-items-center mb-2">
-      <label class="form-label me-2">Editing layout for:</label>
-      <select id="layout-mode-select" class="form-select form-select-sm w-auto">
-        <option value="12" selected>Desktop (12)</option>
-        <option value="6">Tablet (6)</option>
-        <option value="1">Mobile (1)</option>
-      </select>
-    </div>
     <div class="grid-stack" id="grid-edit" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
       {% for b in blocks %}
         <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}" data-id="{{ b.id }}">
@@ -73,7 +65,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('grid-edit');
     const detailsForm = document.getElementById('layout-details-form');
-    const modeSelect = document.getElementById('layout-mode-select');
     const gridSaveUrl = "{% url 'layout_grid_update' username=layout.user.username slug=layout.slug %}";
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
@@ -307,6 +298,10 @@
   #grid-edit.grid-stack { --gs-gutter-rows: 16px !important; --gs-gutter-cols: 8px !important; }`r`n  #grid-edit.grid-stack { display: grid; row-gap: 16px; column-gap: 8px; }
   .grid-stack .grid-stack-item-content { overflow: auto; display:flex; flex-direction: column; min-height: 100%; }
   .grid-stack .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }
+  /* Ensure wrapped block root grows to fill tile and inner containers flex */
+  .grid-stack .grid-stack-item-content > .js-layout-block-root { display:flex; flex-direction: column; min-height: 100%; position: relative; }
+  .grid-stack .grid-stack-item-content .js-layout-block-root > div[id^="chart-"] { flex: 1 1 auto; }
+  .grid-stack .grid-stack-item-content .js-layout-block-root > div[id^="table-"] { flex: 1 1 auto; }
   /* Ensure grid container can expand to full width */
   #grid-edit { width: 100%; max-width: 100%; }
 </style>

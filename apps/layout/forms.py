@@ -1,4 +1,6 @@
 from django import forms
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Layout, Row, Column, Field, HTML
 
 from apps.layout.models import Layout, LayoutBlock
 from apps.blocks.registry import block_registry
@@ -13,9 +15,42 @@ class LayoutForm(forms.ModelForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only staff/admin can choose visibility; others default to Private
+        # Bootstrap classes for widgets
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control"})
+        if "visibility" in self.fields:
+            self.fields["visibility"].widget.attrs.update({"class": "form-select"})
+        if "description" in self.fields:
+            self.fields["description"].widget.attrs.update({"class": "form-control", "rows": 3})
+        # Only staff/admin can change visibility; others see it disabled
         if user is not None and not getattr(user, "is_staff", False):
-            self.fields.pop("visibility", None)
+            vis = self.fields.get("visibility")
+            if vis is not None:
+                # Show current/default value but prevent editing
+                vis.disabled = True
+                vis.widget.attrs.update({"disabled": "disabled"})
+                # Optional: hint that privacy is enforced
+                vis.help_text = (vis.help_text or "") + ""
+        # Crispy helper for Bootstrap layout
+        self.helper = FormHelper()
+        self.helper.form_tag = False  # outer form tag is in template
+        # Hide description label; we'll render it as a separate row header
+        if "description" in self.fields:
+            self.fields["description"].label = ""
+        # Build rows dynamically based on visibility presence
+        has_visibility = "visibility" in self.fields
+        if has_visibility:
+            top_row = Row(
+                Column(Field("name"), css_class="col-md-6"),
+                Column(Field("visibility"), css_class="col-md-6"),
+            )
+        else:
+            top_row = Row(
+                Column(Field("name"), css_class="col-12"),
+            )
+        desc_label_row = Row(HTML('<label class="form-label">Description</label>'))
+        desc_field_row = Row(Column(Field("description"), css_class="col-12"))
+        self.helper.layout = Layout(top_row, desc_label_row, desc_field_row)
 
 
 class AddBlockForm(forms.ModelForm):
@@ -34,6 +69,7 @@ class AddBlockForm(forms.ModelForm):
         field = self.fields["block"]
         qs = Block.objects.filter(code__in=valid_codes)
         field.queryset = qs
+        field.widget.attrs.update({"class": "form-select"})
         # Build sorted choices by (app_name, block name) for display
         blocks = list(qs)
         def _app(obj: Block) -> str:
