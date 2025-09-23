@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.http import Http404, JsonResponse
 import json
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.text import slugify
 from django.urls import reverse_lazy, reverse
 from django.views.generic import TemplateView, FormView, DeleteView
 from django import forms
@@ -80,7 +81,7 @@ class LayoutListView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        # Handle create layout inline
+        # Handle create layout inline (direct save)
         form = LayoutForm(request.POST, user=request.user)
         if form.is_valid():
             layout = form.save(commit=False)
@@ -255,6 +256,9 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                 "note": getattr(lb, "note", ""),
             })
         can_manage = self.can_manage(self.request.user, self.layout)
+        # Sidebar lists: private (current user) and all public, ascending by name
+        private_qs = Layout.objects.filter(user=self.request.user, visibility=Layout.VISIBILITY_PRIVATE).order_by("name")
+        public_qs = Layout.objects.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("name")
         context.update(
             {
                 "layout": self.layout,
@@ -265,6 +269,8 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                 "active_filter_config_id": self.active_filter_config.id if self.active_filter_config else None,
                 "can_edit": can_manage,
                 "can_delete": can_manage,
+                "private_layouts": private_qs,
+                "public_layouts": public_qs,
             }
         )
         return context

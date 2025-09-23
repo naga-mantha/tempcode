@@ -3,56 +3,41 @@
 {% load dict_extras %}
 {% block content %}
   <div class="main-container-fluid">
-    <h1>{{ layout.name }}</h1>
-    <p>
-    {% if can_edit %}
-      <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit layout</a>
-      |
-    {% endif %}
-      <a href="{% url 'layout_list' %}">All layouts</a>
-      {% if can_delete %}
-        |
-        <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
-      {% endif %}
-    </p>
+    <h1 class="mb-3">{{ layout.name }}</h1>
 
-    <div class="d-flex justify-content-end align-items-center mb-3">
-      <label class="me-2">Layout Filter:</label>
-      <select id="layout-filter-select" class="form-select d-inline-block w-auto">
-        <option value="">-- None --</option>
-        {% for f in filter_configs %}
-          <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
-            {{ f.name }}{% if f.is_default %} (default){% endif %}
-          </option>
-        {% endfor %}
-      </select>
-      <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
-      <a class="btn btn-link p-0 ms-2" href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Reset</a>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#layoutSidebar" aria-controls="layoutSidebar">
+          Sidebar
+        </button>
+        {% if can_edit %}
+          <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}" class="btn btn-success btn-sm">Edit</a>
+        {% endif %}
+        {% if can_delete %}
+          <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}" class="btn btn-danger btn-sm">Delete</a>
+        {% endif %}
+      </div>
+      <div class="d-flex align-items-center">
+        <label class="me-2">Layout Filter:</label>
+        <select id="layout-filter-select" class="form-select d-inline-block w-auto">
+          <option value="">-- None --</option>
+          {% for f in filter_configs %}
+            <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>
+              {{ f.name }}{% if f.is_default %} (default){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
+        <a class="btn btn-link p-0 ms-2" href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Reset</a>
+      </div>
     </div>
-
-    {# Live (non-persistent) layout-level filter overrides #}
-    <form method="get" class="mb-3">
-      {% if active_filter_config_id %}
-        <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
-      {% endif %}
-
-      <details class="border rounded">
-        <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">
-          Filter Conditions
-        </summary>
-        <div class="p-3">
-          {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values id_prefix="layout" %}
-          <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
-        </div>
-      </details>
-    </form>
 
     {% if layout.description %}
       <div class="alert alert-info">{{ layout.description|linebreaksbr }}</div>
     {% endif %}
 
-     <h3 class="mt-5">Blocks</h3>
-      <hr>
+    <h2 class="mt-4">Blocks</h2>
+    <hr>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -66,6 +51,58 @@
       {% endfor %}
     </div>
   </div>
+
+  {# Offcanvas Sidebar #}
+  <div class="offcanvas offcanvas-start" tabindex="-1" id="layoutSidebar" aria-labelledby="layoutSidebarLabel" style="width:320px;">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="layoutSidebarLabel">Layout Tools</h5>
+      <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-3 overflow-auto">
+      <div class="my-3">
+        <a href="{% url 'layout_list' %}" class="btn btn-primary btn-sm">Create Layout</a>
+      </div>
+      <div class="my-5">
+        <details class="border rounded">
+          <summary class="p-2 bg-light" style="cursor:pointer;font-weight:bold">Filter Conditions</summary>
+          <div class="p-3">
+            <form method="get">
+              {% if active_filter_config_id %}
+                <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id }}">
+              {% endif %}
+              {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=selected_filter_values id_prefix="layout" %}
+              <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+            </form>
+          </div>
+        </details>
+      </div>
+
+      <div class="my-5">
+        <h6 class="mb-2">Private Layouts</h6>
+        <div class="list-group">
+          {% for l in private_layouts %}
+            <a class="list-group-item list-group-item-action text-dark {% if l.id == layout.id %}active{% endif %}"
+               href="{% url 'layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
+          {% empty %}
+            <div class="text-muted small">No private layouts</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="my-5">
+        <h6 class="mb-2">Public Layouts</h6>
+        <div class="list-group">
+          {% for l in public_layouts %}
+            <a class="list-group-item list-group-item-action text-dark {% if l.id == layout.id %}active{% endif %}"
+               href="{% url 'layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
+          {% empty %}
+            <div class="text-muted small">No public layouts</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <style>
   /* Ensure grid can expand to full width */
   #grid-view { width: 100%; max-width: 100%; }
@@ -75,12 +112,35 @@
   /* Ensure Bootstrap columns inside tiles don't constrain width */
   .grid-stack .grid-stack-item-content [class^="col-"],
   .grid-stack .grid-stack-item-content [class*=" col-"] { width: auto !important; max-width: none !important; }
+  /* Sidebar list styles: darker text; lighter active background */
+  .offcanvas .list-group-item { color: #212529; }
+  .offcanvas .list-group-item.active {
+    background-color: #f1f3f5;
+    color: #212529;
+    border-color: #e9ecef;
+  }
   </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function(){
+    // Persist offcanvas open/close state in localStorage
+    try {
+      const el = document.getElementById('layoutSidebar');
+      if (window.bootstrap && el) {
+        const KEY = 'layoutSidebarOpen';
+        el.addEventListener('shown.bs.offcanvas', () => { try { localStorage.setItem(KEY, '1'); } catch(_) {} });
+        el.addEventListener('hidden.bs.offcanvas', () => { try { localStorage.setItem(KEY, '0'); } catch(_) {} });
+        const wasOpen = (localStorage.getItem(KEY) === '1');
+        if (wasOpen) {
+          const oc = bootstrap.Offcanvas.getOrCreateInstance(el);
+          oc.show();
+        }
+      }
+    } catch(_) {}
+
+    // Layout filter dropdown behavior (kept from previous UI)
     const sel = document.getElementById('layout-filter-select');
     sel?.addEventListener('change', function(){
       const url = new URL(window.location.href);
@@ -92,11 +152,11 @@
       window.location.href = url.toString();
     });
 
+    // Initialize Gridstack view-only grid
     const container = document.getElementById('grid-view');
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js';
     s.onload = function(){
-      // Natural Gridstack: fixed columns, no JS-driven responsiveness
       const grid = GridStack.init({ float: false, staticGrid: true, cellHeight: 136, margin: 8 }, container);
     };
     document.body.appendChild(s);

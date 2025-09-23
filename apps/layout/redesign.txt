@@ -1,0 +1,34 @@
+Title (Layout Title. Use h1)
+Edit Layout (Link)                                                        Layout Filter (Dropdown)| Manage Filters (Link) | Reset (Link)
+Layout Description (Full width. Currently its the one in an bootstrap alert)
+
+
+Left side Bar: (Give option to close the sidebar. When open it should overlap the contents of the page)
+    Filter Conditions (Accordion)
+    Private Layouts (For that user)
+        List
+    Public Layouts
+        List
+
+
+
+Blocks (This is text. Use h2)
+<hr>
+The blocks as per the user layout-edit page
+
+
+Q&A
+
+  - Filter Conditions: Move the existing filter form from main content into the sidebar accordion (and remove it from the main area), correct?   > Yes
+  - Sidebar behavior: Is Bootstrap Offcanvas acceptable for the overlapping, closable sidebar? If yes:
+      - Default state closed on mobile, open or closed on desktop?   > Closed on all devices
+      - Persist open/closed state in localStorage?                   > Yes
+      - Preferred width (e.g., 320–360px)?                           > 320px
+  - Sidebar contents:
+      - Private Layouts = only current user’s private layouts? > Yes
+      - Public Layouts = all public? Any limit or scroll if long? > All public. Scroll if long.
+      - Order by name ascending? Highlight the current layout in both lists? > Ascending. Highlight current layout in both lists.
+      - Each item links to that layout’s detail; show “by ” for public? > Dont show "by" for public.
+  - Header actions: Keep “Edit Layout” on left and keep “Layout Filter” dropdown + “Manage Filters” + “Reset” on the right (as in your sketch)? > Yes
+  - Description: Replace the current Bootstrap alert with plain full‑width text (still supporting line breaks)? > Keep alert. Its working currently
+  - Blocks section: Keep existing grid rendering, with “Blocks” as an h2 + an  above it. No change to block content placement, right?  > Right
