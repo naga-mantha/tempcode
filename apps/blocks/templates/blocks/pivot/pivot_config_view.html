@@ -8,8 +8,13 @@
     <label for="config-select">Saved Settings:</label>
     <select id="config-select" class="form-select d-inline-block w-auto">
       <option value="">-- New --</option>
-      {% for c in configs %}
-        <option value="{{ c.id }}" {% if active_config and c.id == active_config.id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+      {% regroup configs by visibility as cfg_groups %}
+      {% for grp in cfg_groups %}
+        <optgroup label="{{ grp.grouper|title }}">
+          {% for c in grp.list %}
+            <option value="{{ c.id }}" data-visibility="{{ c.visibility }}" data-owner-id="{{ c.user_id }}" {% if active_config and c.id == active_config.id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+          {% endfor %}
+        </optgroup>
       {% endfor %}
     </select>
     <a href="{% url 'pivot_config_view' block_name %}" class="btn btn-link btn-sm">Clear</a>
@@ -39,6 +44,15 @@
         <label class="form-label">Name</label>
         <input type="text" name="name" class="form-control" value="{{ form.initial.name|default:'' }}" required>
       </div>
+      {% if request.user.is_staff %}
+      <div class="col-md-2">
+        <label class="form-label">Visibility</label>
+        <select name="visibility" class="form-select">
+          <option value="private" {% if form.initial.visibility == 'private' %}selected{% endif %}>Private</option>
+          <option value="public" {% if form.initial.visibility == 'public' %}selected{% endif %}>Public</option>
+        </select>
+      </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label">Column</label>
         <select name="col" id="col-select" class="form-select">
@@ -195,5 +209,28 @@
       if (val) sel.value = val;
     });
   });
+  // Disable editing when viewing a public (non-owned) config
+  (function applyEditability(){
+    const isStaff = {{ request.user.is_staff|yesno:"true,false" }};
+    const currentUserId = {{ request.user.id }};
+    const sel = document.getElementById('config-select');
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    const isNew = !sel.value;
+    const vis = (opt?.getAttribute('data-visibility') || '').toLowerCase();
+    const ownerId = parseInt(opt?.getAttribute('data-owner-id') || '0');
+    const editable = isStaff || isNew || (vis === 'private' && ownerId === currentUserId);
+    const form = document.getElementById('pivot-config-form');
+    if (!form) return;
+    const controls = form.querySelectorAll('input, select, button');
+    controls.forEach(el => {
+      if (el.name === 'action' || el.name === 'config_id' || el.name === 'csrfmiddlewaretoken') return;
+      if (el.tagName.toLowerCase() === 'button') {
+        if (el.type === 'submit') el.disabled = !editable;
+        return;
+      }
+      el.disabled = !editable;
+    });
+  })();
 </script>
 {% endblock %}

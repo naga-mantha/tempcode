@@ -9,8 +9,9 @@ class WorkflowAdmin(admin.ModelAdmin):
 
 @admin.register(BlockColumnConfig)
 class BlockColumnConfigAdmin(admin.ModelAdmin):
-    list_display = ("block", "user", "name", "is_default" )
+    list_display = ("block", "user", "name", "is_default", "visibility" )
     search_fields = ("name", "is_default",)
+    list_filter = ("visibility",)
 
 @admin.register(BlockFilterConfig)
 class BlockFilterConfigAdmin(admin.ModelAdmin):
@@ -24,8 +25,9 @@ class FieldDisplayRuleAdmin(admin.ModelAdmin):
 
 @admin.register(PivotConfig)
 class PivotConfigAdmin(admin.ModelAdmin):
-    list_display = ("block", "user", "name", "is_default")
+    list_display = ("block", "user", "name", "is_default", "visibility")
     search_fields = ("name",)
+    list_filter = ("visibility",)
 
 @admin.register(RepeaterConfig)
 class RepeaterConfigAdmin(admin.ModelAdmin):
@@ -35,26 +37,12 @@ class RepeaterConfigAdmin(admin.ModelAdmin):
 # Template models (admin-defined defaults)
 from apps.blocks.models.config_templates import (
     FilterConfigTemplate,
-    ColumnConfigTemplate,
-    PivotConfigTemplate,
     RepeaterConfigTemplate,
     BlockFilterLayoutTemplate,
 )
 
-@admin.register(ColumnConfigTemplate)
-class ColumnConfigTemplateAdmin(admin.ModelAdmin):
-    list_display = ("block", "name", "is_default", "site_key")
-    list_filter = ("is_default",)
-    search_fields = ("name", "site_key")
-
 @admin.register(FilterConfigTemplate)
 class FilterConfigTemplateAdmin(admin.ModelAdmin):
-    list_display = ("block", "name", "is_default", "site_key")
-    list_filter = ("is_default",)
-    search_fields = ("name", "site_key")
-
-@admin.register(PivotConfigTemplate)
-class PivotConfigTemplateAdmin(admin.ModelAdmin):
     list_display = ("block", "name", "is_default", "site_key")
     list_filter = ("is_default",)
     search_fields = ("name", "site_key")
@@ -74,3 +62,5 @@ class BlockFilterLayoutTemplateAdmin(admin.ModelAdmin):
 class BlockFilterLayoutAdmin(admin.ModelAdmin):
     list_display = ("block", "user")
     search_fields = ("block__code", "block__name", "user__username")
+
+# (admins above already include visibility)

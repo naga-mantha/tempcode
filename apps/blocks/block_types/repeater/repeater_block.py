@@ -307,7 +307,17 @@ class RepeaterBlock(BaseBlock):
             if cfg:
                 child_filter_cfg_id = str(cfg.id)
         if child_block and child_column_name:
-            col = BlockColumnConfig.objects.filter(block=child_block, user=user, name=child_column_name).only("id").first()
+            from django.db.models import Q, Case, When, IntegerField
+            qcol = BlockColumnConfig.objects.filter(block=child_block, name=child_column_name).filter(
+                Q(user=user) | Q(visibility=BlockColumnConfig.VISIBILITY_PUBLIC)
+            ).annotate(
+                _vis_order=Case(
+                    When(visibility=BlockColumnConfig.VISIBILITY_PRIVATE, then=0),
+                    default=1,
+                    output_field=IntegerField(),
+                )
+            ).order_by("_vis_order")
+            col = qcol.only("id").first()
             if col:
                 child_column_cfg_id = str(col.id)
 

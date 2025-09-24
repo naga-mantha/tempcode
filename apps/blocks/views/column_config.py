@@ -20,6 +20,9 @@ class ColumnConfigForm(forms.Form):
     config_id = forms.IntegerField(required=False)
     name = forms.CharField(required=False)
     fields = forms.MultipleChoiceField(required=False)
+    visibility = forms.ChoiceField(required=False, choices=[
+        ("private", "Private"), ("public", "Public")
+    ])
 
     def __init__(self, *args, **kwargs):
         choices = kwargs.pop("fields_choices", [])
@@ -64,11 +67,29 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             self.fields_metadata = [f for f in all_fields if f.get("name") in allowed]
         else:
             self.fields_metadata = all_fields
+        # Fallback: if no fields are visible due to strict permissions, show full list
+        # (table rendering still masks unreadable fields at runtime)
+        if not self.fields_metadata:
+            try:
+                self.fields_metadata = get_model_fields_for_column_config(self.model, None, max_depth=max_depth)
+            except Exception:
+                self.fields_metadata = []
         return super().dispatch(request, block_name, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        configs = BlockColumnConfig.objects.filter(block=self.block, user=self.user)
+        from django.db.models import Q, Case, When, IntegerField
+        # Visible to user (including admins): own private + all public
+        qs = BlockColumnConfig.objects.filter(block=self.block).filter(
+            Q(user=self.user) | Q(visibility=BlockColumnConfig.VISIBILITY_PUBLIC)
+        )
+        configs = qs.annotate(
+            _vis_order=Case(
+                When(visibility=BlockColumnConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         context.update({
             "block": self.block,
             "block_title": getattr(self.block, "name", ""),
@@ -93,19 +114,41 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
         action = form.cleaned_data["action"]
         config_id = form.cleaned_data.get("config_id")
         name = form.cleaned_data.get("name")
+        visibility = (form.cleaned_data.get("visibility") or "private").lower()
+        if not self.request.user.is_staff:
+            visibility = "private"  # Non-admins can only create private
 
         if action == "create":
             field_list = form.cleaned_data.get("fields") or []
-            existing = BlockColumnConfig.objects.filter(block=self.block, user=self.user, name=name).first()
-            if existing:
-                existing.fields = field_list
-                existing.save()
+            # If editing an existing config (via config_id), update with permission checks
+            if config_id:
+                cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
+                if not cfg:
+                    return redirect("column_config_view", block_name=self.block.code)
+                if not self.request.user.is_staff and (cfg.visibility != BlockColumnConfig.VISIBILITY_PRIVATE or cfg.user_id != self.user.id):
+                    # Non-admins cannot edit public or others' privates
+                    return redirect("column_config_view", block_name=self.block.code)
+                # Admins may edit any; update fields and (optionally) visibility
+                cfg.fields = field_list
+                if self.request.user.is_staff and visibility in dict(BlockColumnConfig.VISIBILITY_CHOICES):
+                    cfg.visibility = visibility
+                cfg.save()
             else:
-                BlockColumnConfig.objects.create(block=self.block, user=self.user, name=name, fields=field_list)
+                # Create new (admin may choose visibility; non-admin forced private)
+                BlockColumnConfig.objects.create(
+                    block=self.block, user=self.user, name=name, fields=field_list, visibility=visibility
+                )
         elif action == "delete" and config_id:
-            BlockColumnConfig.objects.get(id=config_id, user=self.user, block=self.block).delete()
+            qs = BlockColumnConfig.objects.filter(id=config_id, block=self.block)
+            if not self.request.user.is_staff:
+                qs = qs.filter(user=self.user, visibility=BlockColumnConfig.VISIBILITY_PRIVATE)
+            qs.first() and qs.first().delete()
         elif action == "set_default" and config_id:
-            config = BlockColumnConfig.objects.get(id=config_id, user=self.user, block=self.block)
-            config.is_default = True
-            config.save()
+            # Only allow default-toggle on configs the user owns and are private
+            cfg = BlockColumnConfig.objects.filter(
+                id=config_id, block=self.block, user=self.user, visibility=BlockColumnConfig.VISIBILITY_PRIVATE
+            ).first()
+            if cfg:
+                cfg.is_default = True
+                cfg.save()
         return redirect("column_config_view", block_name=self.block.code)

@@ -2,7 +2,7 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.models.config_templates import ColumnConfigTemplate, FilterConfigTemplate, BlockFilterLayoutTemplate
+from apps.blocks.models.config_templates import FilterConfigTemplate, BlockFilterLayoutTemplate
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.workflow.permissions import (
     get_readable_fields_state,
@@ -276,7 +276,20 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         return merged
 
     def get_column_config_queryset(self, user):
-        return BlockColumnConfig.objects.filter(user=user, block=self.block)
+        from django.db.models import Q, Case, When, IntegerField
+        qs = BlockColumnConfig.objects.filter(
+            block=self.block
+        ).filter(
+            Q(user=user) | Q(visibility=BlockColumnConfig.VISIBILITY_PUBLIC)
+        )
+        # Private first, then public; stable by name
+        return qs.annotate(
+            _vis_order=Case(
+                When(visibility=BlockColumnConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
 
     def get_filter_config_queryset(self, user):
         return BlockFilterConfig.objects.filter(user=user, block=self.block)
@@ -409,24 +422,6 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             or request.GET.get("filter_config_id")
         )
         column_configs = self.get_column_config_queryset(user)
-        # Lazy seed from admin-defined template when user has no column configs
-        if not column_configs.exists():
-            try:
-                tpl = (
-                    ColumnConfigTemplate.objects.filter(block=self.block, is_default=True).first()
-                    or ColumnConfigTemplate.objects.filter(block=self.block).first()
-                )
-                if tpl:
-                    BlockColumnConfig.objects.create(
-                        block=self.block,
-                        user=user,
-                        name=tpl.name or "Default",
-                        fields=list(tpl.fields or []),
-                        is_default=True,
-                    )
-                    column_configs = self.get_column_config_queryset(user)
-            except Exception:
-                pass
         filter_configs = self.get_filter_config_queryset(user)
         # Lazy seed filter config from admin-defined template if user has none
         # or only has an auto-generated 'None' placeholder with empty values.
@@ -476,7 +471,14 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             except BlockColumnConfig.DoesNotExist:
                 pass
         if not active_column_config:
-            active_column_config = column_configs.filter(is_default=True).first()
+            # Prefer user's private default; else a public default; else first private; else first public
+            try:
+                active_column_config = column_configs.filter(user=user, is_default=True).first() or \
+                    column_configs.filter(visibility=BlockColumnConfig.VISIBILITY_PUBLIC, is_default=True).first() or \
+                    column_configs.filter(user=user).first() or \
+                    column_configs.filter(visibility=BlockColumnConfig.VISIBILITY_PUBLIC).first()
+            except Exception:
+                active_column_config = None
         active_filter_config = None
         if filter_config_id:
             try:

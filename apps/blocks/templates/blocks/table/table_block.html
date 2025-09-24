@@ -11,10 +11,13 @@
   <div>
     <label class="me-2">View:</label>
     <select id="column-config-select-{{ block_name }}-{{ instance_id }}" class="form-select d-inline-block w-auto me-2">
-      {% for cfg in column_configs %}
-        <option value="{{ cfg.id }}" {% if cfg.id == active_column_config_id %}selected{% endif %}>
-          {{ cfg.name }}
-        </option>
+      {% regroup column_configs by visibility as cfg_groups %}
+      {% for grp in cfg_groups %}
+        <optgroup label="{{ grp.grouper|title }}">
+          {% for cfg in grp.list %}
+            <option value="{{ cfg.id }}" {% if cfg.id == active_column_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+          {% endfor %}
+        </optgroup>
       {% endfor %}
     </select>
     <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>

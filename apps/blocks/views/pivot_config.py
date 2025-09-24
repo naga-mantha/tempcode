@@ -25,6 +25,9 @@ class PivotConfigForm(forms.Form):
     measure_agg = forms.ChoiceField(required=False, choices=[
         ("sum", "Sum"), ("count", "Count"), ("avg", "Average"), ("min", "Min"), ("max", "Max")
     ])
+    visibility = forms.ChoiceField(required=False, choices=[
+        ("private", "Private"), ("public", "Public")
+    ])
 
     def __init__(self, *args, **kwargs):
         dim_choices = kwargs.pop("dimension_choices", [])
@@ -49,9 +52,15 @@ class PivotConfigView(LoginRequiredMixin, FormView):
         cfg_id = request.GET.get("config_id") or request.POST.get("config_id")
         self.active_config = None
         if cfg_id:
+            from django.db.models import Q
             try:
-                self.active_config = PivotConfig.objects.get(id=cfg_id, user=self.user, block=self.block)
-            except PivotConfig.DoesNotExist:
+                self.active_config = (
+                    PivotConfig.objects
+                    .filter(id=cfg_id, block=self.block)
+                    .filter(Q(user=self.user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC))
+                    .first()
+                )
+            except Exception:
                 self.active_config = None
         # Build choices from this block's single source model
         model = None
@@ -62,6 +71,12 @@ class PivotConfigView(LoginRequiredMixin, FormView):
         dim_choices, measure_choices = [], []
         from apps.blocks.helpers.column_config import get_model_fields_for_column_config
         meta = get_model_fields_for_column_config(model, self.user) if model else []
+        # Fallback: if nothing is visible under strict permissions, build using unrestricted meta
+        if not meta and model is not None:
+            try:
+                meta = get_model_fields_for_column_config(model, None)
+            except Exception:
+                meta = []
         labels = {f["name"]: f"{f['label']} ({f['model']})" for f in meta}
         dim_choices = [(f["name"], labels[f["name"]]) for f in meta]
         from django.db import models as djm
@@ -103,7 +118,17 @@ class PivotConfigView(LoginRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        configs = PivotConfig.objects.filter(block=self.block, user=self.user)
+        from django.db.models import Q, Case, When, IntegerField
+        q = PivotConfig.objects.filter(block=self.block).filter(
+            Q(user=self.user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC)
+        )
+        configs = q.annotate(
+            _vis_order=Case(
+                When(visibility=PivotConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         ctx.update({
             "block": self.block,
             "block_title": getattr(self.block, "name", ""),
@@ -170,10 +195,13 @@ class PivotConfigView(LoginRequiredMixin, FormView):
             "measure_field": m.get("source") or "",
             "measure_label": m.get("label") or "",
             "measure_agg": (m.get("agg") or "sum").lower(),
+            "visibility": getattr(cfg, "visibility", "private"),
         })
         return initial
 
     def form_valid(self, form):
+        # Determine redirect code early for permission redirects
+        code = getattr(self.block_instance, "block_name", None) or self.block.code
         action = form.cleaned_data["action"]
         config_id = form.cleaned_data.get("config_id")
         name = form.cleaned_data.get("name")
@@ -183,6 +211,9 @@ class PivotConfigView(LoginRequiredMixin, FormView):
             m_field = form.cleaned_data.get("measure_field") or ""
             m_agg = (form.cleaned_data.get("measure_agg") or "sum").lower()
             m_label = form.cleaned_data.get("measure_label") or None
+            visibility = (form.cleaned_data.get("visibility") or "private").lower()
+            if not self.request.user.is_staff:
+                visibility = "private"
             measures = []
             if m_field:
                 entry = {"source": m_field, "agg": m_agg}
@@ -219,22 +250,36 @@ class PivotConfigView(LoginRequiredMixin, FormView):
             # If a config_id is provided, update that specific row
             target_id = form.cleaned_data.get("config_id") or self.request.POST.get("config_id")
             if target_id:
-                cfg = get_object_or_404(PivotConfig, id=target_id, user=self.user, block=self.block)
+                cfg = get_object_or_404(PivotConfig, id=target_id, block=self.block)
+                # Non-admins can only edit their own private configs
+                if (not self.request.user.is_staff) and (cfg.user_id != self.user.id or cfg.visibility != PivotConfig.VISIBILITY_PRIVATE):
+                    return redirect("pivot_config_view", block_name=code)
                 cfg.name = name or cfg.name
                 cfg.schema = schema
+                if self.request.user.is_staff and visibility in dict(PivotConfig.VISIBILITY_CHOICES):
+                    cfg.visibility = visibility
                 cfg.save()
             else:
                 existing = PivotConfig.objects.filter(block=self.block, user=self.user, name=name).first()
                 if existing:
                     existing.schema = schema
+                    existing.visibility = visibility if self.request.user.is_staff else existing.visibility
                     existing.save()
                 else:
-                    PivotConfig.objects.create(block=self.block, user=self.user, name=name, schema=schema)
+                    PivotConfig.objects.create(block=self.block, user=self.user, name=name, schema=schema, visibility=visibility)
         elif action == "delete" and config_id:
-            PivotConfig.objects.get(id=config_id, user=self.user, block=self.block).delete()
+            qs = PivotConfig.objects.filter(id=config_id, block=self.block)
+            if not self.request.user.is_staff:
+                qs = qs.filter(user=self.user, visibility=PivotConfig.VISIBILITY_PRIVATE)
+            obj = qs.first()
+            if obj:
+                obj.delete()
         elif action == "set_default" and config_id:
-            cfg = PivotConfig.objects.get(id=config_id, user=self.user, block=self.block)
-            cfg.is_default = True
-            cfg.save()
-        code = getattr(self.block_instance, "block_name", None) or self.block.code
+            qs = PivotConfig.objects.filter(id=config_id, block=self.block)
+            if not self.request.user.is_staff:
+                qs = qs.filter(user=self.user, visibility=PivotConfig.VISIBILITY_PRIVATE)
+            cfg = qs.first()
+            if cfg:
+                cfg.is_default = True
+                cfg.save()
         return redirect("pivot_config_view", block_name=code)

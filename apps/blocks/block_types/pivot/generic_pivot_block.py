@@ -9,7 +9,6 @@ from django.db.models.functions import (
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.blocks.models.pivot_config import PivotConfig
 from apps.blocks.services.filtering import apply_filter_registry
-from apps.blocks.models.config_templates import PivotConfigTemplate
 from django.contrib.admin.utils import label_for_field
 
 
@@ -34,25 +33,16 @@ class GenericPivotBlock(PivotBlock):
             request.GET.get(f"{ns}pivot_config_id")
             or request.GET.get("pivot_config_id")
         )
-        qs = PivotConfig.objects.filter(block=self.block, user=user)
-        # Lazy seed from admin-defined template when user has no pivot configs
-        if not qs.exists():
-            try:
-                tpl = (
-                    PivotConfigTemplate.objects.filter(block=self.block, is_default=True).first()
-                    or PivotConfigTemplate.objects.filter(block=self.block).first()
-                )
-                if tpl:
-                    PivotConfig.objects.create(
-                        block=self.block,
-                        user=user,
-                        name=tpl.name or "Default",
-                        schema=dict(tpl.schema or {}),
-                        is_default=True,
-                    )
-                    qs = PivotConfig.objects.filter(block=self.block, user=user)
-            except Exception:
-                pass
+        from django.db.models import Q, Case, When, IntegerField
+        qs = PivotConfig.objects.filter(block=self.block).filter(
+            Q(user=user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC)
+        ).annotate(
+            _vis_order=Case(
+                When(visibility=PivotConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         active = None
         if config_id:
             try:
@@ -60,13 +50,24 @@ class GenericPivotBlock(PivotBlock):
             except PivotConfig.DoesNotExist:
                 pass
         if not active:
-            active = qs.filter(is_default=True).first()
+            try:
+                active = (
+                    qs.filter(user=user, is_default=True).first()
+                    or qs.filter(visibility=PivotConfig.VISIBILITY_PUBLIC, is_default=True).first()
+                    or qs.filter(user=user).first()
+                    or qs.filter(visibility=PivotConfig.VISIBILITY_PUBLIC).first()
+                )
+            except Exception:
+                active = None
         return qs, active
 
     def build_columns_and_rows(self, user, filter_values):
         # Resolve active pivot config (prefer selection injected by base)
         active = getattr(self, "_active_pivot_config", None)
-        configs = PivotConfig.objects.filter(block=self.block, user=user)
+        from django.db.models import Q
+        configs = PivotConfig.objects.filter(block=self.block).filter(
+            Q(user=user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC)
+        )
         if not active:
             active = configs.filter(is_default=True).first()
         if not active:

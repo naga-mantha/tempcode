@@ -5,7 +5,14 @@ from django.db import models
 from apps.blocks.helpers.field_rules import get_field_display_rules
 
 def get_user_column_config(user, block):
-    config = BlockColumnConfig.objects.filter(block=block, user=user, is_default=True).first()
+    # Prefer user's private default; else a public default; else first private; else first public
+    qs = BlockColumnConfig.objects.filter(block=block)
+    config = (
+        qs.filter(user=user, is_default=True).first()
+        or qs.filter(visibility=BlockColumnConfig.VISIBILITY_PUBLIC, is_default=True).first()
+        or qs.filter(user=user).first()
+        or qs.filter(visibility=BlockColumnConfig.VISIBILITY_PUBLIC).first()
+    )
     return config.fields if config else []
 
 def get_model_fields_for_column_config(model, user, *, max_depth=10):

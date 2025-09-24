@@ -11,8 +11,13 @@
     <label class="me-2">Saved Pivots:</label>
     <select id="pivot-select-{{ block_name }}-{{ instance_id }}" class="form-select form-select-sm w-auto me-2">
       <option value="">-- Select --</option>
-      {% for c in pivot_configs %}
-        <option value="{{ c.id }}" {% if c.id == active_pivot_config_id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+      {% regroup pivot_configs by visibility as pv_groups %}
+      {% for grp in pv_groups %}
+        <optgroup label="{{ grp.grouper|title }}">
+          {% for c in grp.list %}
+            <option value="{{ c.id }}" {% if c.id == active_pivot_config_id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+          {% endfor %}
+        </optgroup>
       {% endfor %}
     </select>
     <a class="btn btn-link p-0" href="{% url 'pivot_config_view' block_name %}">Manage Settings</a>

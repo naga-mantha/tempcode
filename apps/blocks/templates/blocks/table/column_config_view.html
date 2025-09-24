@@ -7,8 +7,13 @@
   <label for="config-select">Select View:</label>
   <select id="config-select" class="form-select d-inline-block w-auto">
     <option value="">-- New Configuration --</option>
-    {% for config in configs %}
-      <option value="{{ config.id }}" data-fields="{{ config.fields|join:',' }}">{{ config.name }}</option>
+    {% regroup configs by visibility as cfg_groups %}
+    {% for grp in cfg_groups %}
+      <optgroup label="{{ grp.grouper|title }}">
+        {% for config in grp.list %}
+          <option value="{{ config.id }}" data-fields="{{ config.fields|join:',' }}" data-visibility="{{ config.visibility }}" data-owner-id="{{ config.user_id }}">{{ config.name }}</option>
+        {% endfor %}
+      </optgroup>
     {% endfor %}
   </select>
 </div>
@@ -17,10 +22,18 @@
 <form id="config-form" method="post">
   {% csrf_token %}
   <input type="hidden" name="action" value="create">
+  <input type="hidden" name="config_id" id="config-id-input" value="">
 
   <div class="mb-3">
     <label for="view-name">View Name:</label>
     <input type="text" name="name" id="view-name" required class="form-control d-inline-block w-auto">
+    {% if request.user.is_staff %}
+    <label class="ms-3">Visibility:</label>
+    <select name="visibility" class="form-select d-inline-block w-auto">
+      <option value="private">Private</option>
+      <option value="public">Public</option>
+    </select>
+    {% endif %}
     <button type="submit" class="btn btn-primary">Save View</button>
   </div>
 
@@ -52,23 +65,27 @@
   <tbody>
     {% for config in configs %}
     <tr>
-      <td>{{ config.name }}</td>
+      <td>{{ config.name }}{% if config.visibility == 'public' %} <span class="badge bg-secondary">Public</span>{% endif %}</td>
       <td>{{ config.fields|join:"<br>"|safe }}</td>
       <td>{% if config.is_default %}✔{% endif %}</td>
       <td>
-        <form method="post" style="display:inline-block">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="set_default">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
-        </form>
-        {% if configs|length > 1 %}
-        <form method="post" style="display:inline-block">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
-        </form>
+        {% if config.visibility == 'private' and config.user_id == request.user.id %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
+          </form>
+          {% if configs|length > 1 %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">No actions</span>
         {% endif %}
       </td>
     </tr>
@@ -87,18 +104,44 @@
   const configSelect = document.getElementById("config-select");
   const checkboxes = document.querySelectorAll("#field-list input[type=checkbox]");
   const viewNameInput = document.getElementById("view-name");
+  const saveBtn = document.querySelector('#config-form button[type="submit"]');
+  const isStaff = {{ request.user.is_staff|yesno:"true,false" }};
+  const currentUserId = {{ request.user.id }};
 
   configSelect?.addEventListener("change", function () {
     const selectedOption = this.options[this.selectedIndex];
     const viewName = selectedOption.textContent;
     const selectedFields = selectedOption.dataset.fields?.split(",") || [];
+    const idInput = document.getElementById('config-id-input');
+    const visSelect = document.querySelector('select[name="visibility"]');
+    const visibility = (selectedOption.getAttribute('data-visibility') || '').toLowerCase();
+    const ownerId = parseInt(selectedOption.getAttribute('data-owner-id') || '0');
 
     viewNameInput.value = viewName === "-- New Configuration --" ? "" : viewName;
+    idInput.value = this.value || '';
+    if (visSelect) {
+      const vis = selectedOption.getAttribute('data-visibility') || 'private';
+      visSelect.value = vis;
+    }
 
+    // First, reflect selection on checkboxes regardless of editability
     checkboxes.forEach(chk => {
-      if (chk.disabled) return;  // skip mandatory
-      chk.checked = selectedFields.includes(chk.value.trim());
+      const isMandatory = !!chk.closest('li')?.querySelector('.badge');
+      const shouldBeChecked = selectedFields.includes(chk.value.trim()) || isMandatory;
+      chk.checked = shouldBeChecked;
     });
+
+    // Determine editability: admins always editable; new config editable;
+    // non-admin editable only when own private
+    const editable = isStaff || !this.value || (visibility === 'private' && ownerId === currentUserId);
+    saveBtn.disabled = !editable;
+    // Toggle checkbox enabled state (keep mandatory ones disabled)
+    checkboxes.forEach(chk => {
+      if (chk.closest('li')?.querySelector('.badge')) return; // mandatory ones remain as-is
+      chk.disabled = !editable;
+    });
+    // Toggle drag/drop
+    try { sortable.option('disabled', !editable); } catch (e) {}
 
     // Sort field list based on the selectedFields order
     const list = document.getElementById("field-list");
@@ -107,5 +150,7 @@
       if (el) list.prepend(el);
     });
   });
+  // Initialize editability state on load
+  try { configSelect && configSelect.dispatchEvent(new Event('change')); } catch (e) {}
 </script>
 {% endblock %}
