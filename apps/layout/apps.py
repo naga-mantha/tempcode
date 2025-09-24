@@ -6,5 +6,5 @@ class LayoutConfig(AppConfig):
     name = "apps.layout"
 
     def ready(self):
-        # Connect signals
-        from . import signals  # noqa: F401
+        # Signals for auto-creating 'None' layout filters removed.
+        pass

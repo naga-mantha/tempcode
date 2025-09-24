@@ -169,9 +169,17 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = self.get_layout(username=username, slug=slug)
         self.ensure_detail_access(request, self.layout)
-        self.filter_configs = LayoutFilterConfig.objects.filter(
-            layout=self.layout, user=request.user
-        ).order_by("-is_default", "name")
+        from django.db.models import Q, Case, When, IntegerField
+        q = LayoutFilterConfig.objects.filter(layout=self.layout).filter(
+            Q(user=request.user) | Q(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC)
+        )
+        self.filter_configs = q.annotate(
+            _vis_order=Case(
+                When(visibility=LayoutFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         self.active_filter_config = None
         cfg_id = request.GET.get("filter_config_id")
         if cfg_id:
@@ -180,7 +188,15 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
             except LayoutFilterConfig.DoesNotExist:
                 pass
         if not self.active_filter_config:
-            self.active_filter_config = self.filter_configs.filter(is_default=True).first()
+            try:
+                self.active_filter_config = (
+                    self.filter_configs.filter(user=request.user, is_default=True).first()
+                    or self.filter_configs.filter(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC, is_default=True).first()
+                    or self.filter_configs.filter(user=request.user).first()
+                    or self.filter_configs.filter(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC).first()
+                )
+            except Exception:
+                self.active_filter_config = None
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -437,9 +453,17 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
     def dispatch(self, request, username, slug, *args, **kwargs):
         self.layout = LayoutAccessMixin.get_layout(username=username, slug=slug)
         LayoutAccessMixin.ensure_access(request, self.layout, action="view")
-        self.user_filters = LayoutFilterConfig.objects.filter(
-            layout=self.layout, user=request.user
-        ).order_by("-is_default", "name")
+        from django.db.models import Q, Case, When, IntegerField
+        qs = LayoutFilterConfig.objects.filter(layout=self.layout).filter(
+            Q(user=request.user) | Q(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC)
+        )
+        self.user_filters = qs.annotate(
+            _vis_order=Case(
+                When(visibility=LayoutFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         self.filter_schema = self._build_filter_schema(request)
         return super().dispatch(request, *args, **kwargs)
 
@@ -464,19 +488,27 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
             try:
                 if existing:
                     existing.values = values
+                    # Admins may change visibility
+                    vis = (self.request.POST.get("visibility") or "private").lower()
+                    if self.request.user.is_staff and vis in dict(LayoutFilterConfig.VISIBILITY_CHOICES):
+                        existing.visibility = vis
                     existing.save()
                 else:
+                    vis = (self.request.POST.get("visibility") or "private").lower()
+                    if not self.request.user.is_staff:
+                        vis = "private"
                     LayoutFilterConfig.objects.create(
                         layout=self.layout,
                         user=self.request.user,
                         name=name,
                         values=values,
+                        visibility=vis,
                     )
             except IntegrityError:
                 messages.error(self.request, "Filter name already taken. Please choose a different name.")
         elif action == "delete" and config_id:
             cfg = get_object_or_404(
-                LayoutFilterConfig, id=config_id, layout=self.layout, user=self.request.user
+                LayoutFilterConfig, id=config_id, layout=self.layout, user=self.request.user, visibility=LayoutFilterConfig.VISIBILITY_PRIVATE
             )
             try:
                 cfg.delete()
@@ -484,11 +516,14 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
             except Exception as exc:
                 messages.error(self.request, str(exc))
         elif action == "set_default" and config_id:
-            cfg = get_object_or_404(
-                LayoutFilterConfig, id=config_id, layout=self.layout, user=self.request.user
-            )
-            cfg.is_default = True
-            cfg.save()
+            cfg = get_object_or_404(LayoutFilterConfig, id=config_id, layout=self.layout)
+            if self.request.user.is_staff and cfg.visibility == LayoutFilterConfig.VISIBILITY_PUBLIC:
+                LayoutFilterConfig.objects.filter(layout=self.layout, visibility=LayoutFilterConfig.VISIBILITY_PUBLIC).exclude(id=cfg.id).update(is_default=False)
+                cfg.is_default = True
+                cfg.save()
+            elif cfg.user_id == self.request.user.id and cfg.visibility == LayoutFilterConfig.VISIBILITY_PRIVATE:
+                cfg.is_default = True
+                cfg.save()
         return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
 
     def get_context_data(self, **kwargs):
@@ -728,7 +763,17 @@ class LayoutBlockRenderView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterS
                 }
             )
         # Rebuild layout sidebar filter schema and selected values based on current URL
-        filter_configs = LayoutFilterConfig.objects.filter(layout=layout, user=request.user).order_by("-is_default", "name")
+        from django.db.models import Q, Case, When, IntegerField
+        q = LayoutFilterConfig.objects.filter(layout=layout).filter(
+            Q(user=request.user) | Q(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC)
+        )
+        filter_configs = q.annotate(
+            _vis_order=Case(
+                When(visibility=LayoutFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         active_cfg = None
         cfg_id = request.GET.get("filter_config_id")
         if cfg_id:
@@ -737,7 +782,15 @@ class LayoutBlockRenderView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterS
             except LayoutFilterConfig.DoesNotExist:
                 active_cfg = None
         if not active_cfg:
-            active_cfg = filter_configs.filter(is_default=True).first()
+            try:
+                active_cfg = (
+                    filter_configs.filter(user=request.user, is_default=True).first()
+                    or filter_configs.filter(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC, is_default=True).first()
+                    or filter_configs.filter(user=request.user).first()
+                    or filter_configs.filter(visibility=LayoutFilterConfig.VISIBILITY_PUBLIC).first()
+                )
+            except Exception:
+                active_cfg = None
         filter_schema = self._build_filter_schema(request)
         base_values = active_cfg.values if active_cfg else {}
         selected_filter_values = self._collect_filters(request.GET, filter_schema, base=base_values)

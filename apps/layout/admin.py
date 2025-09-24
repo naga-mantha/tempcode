@@ -14,5 +14,6 @@ class LayoutBlockAdmin(admin.ModelAdmin):
 
 @admin.register(LayoutFilterConfig)
 class LayoutFilterConfigAdmin(admin.ModelAdmin):
-    list_display = ("layout", "user", "name", "is_default")
+    list_display = ("layout", "user", "name", "is_default", "visibility")
     search_fields = ("name",)
+    list_filter = ("visibility",)

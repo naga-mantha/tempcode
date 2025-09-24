@@ -97,6 +97,15 @@ class LayoutFilterConfig(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     values = models.JSONField(default=dict)
+    VISIBILITY_PRIVATE = "private"
+    VISIBILITY_PUBLIC = "public"
+    VISIBILITY_CHOICES = (
+        (VISIBILITY_PRIVATE, "Private"),
+        (VISIBILITY_PUBLIC, "Public"),
+    )
+    visibility = models.CharField(
+        max_length=7, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
+    )
     is_default = models.BooleanField(default=False)
 
     class Meta:
