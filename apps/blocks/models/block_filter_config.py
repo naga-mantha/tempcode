@@ -7,6 +7,15 @@ class BlockFilterConfig(BaseUserConfig):
     """Stores filter configuration for a block and user."""
 
     values = models.JSONField(default=dict)
+    VISIBILITY_PRIVATE = "private"
+    VISIBILITY_PUBLIC = "public"
+    VISIBILITY_CHOICES = (
+        (VISIBILITY_PRIVATE, "Private"),
+        (VISIBILITY_PUBLIC, "Public"),
+    )
+    visibility = models.CharField(
+        max_length=7, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
+    )
 
     class Meta:
         constraints = [

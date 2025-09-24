@@ -15,8 +15,9 @@ class BlockColumnConfigAdmin(admin.ModelAdmin):
 
 @admin.register(BlockFilterConfig)
 class BlockFilterConfigAdmin(admin.ModelAdmin):
-    list_display = ("block", "user", "name", "is_default" )
+    list_display = ("block", "user", "name", "is_default", "visibility" )
     search_fields = ("name", "is_default",)
+    list_filter = ("visibility",)
 
 @admin.register(FieldDisplayRule)
 class FieldDisplayRuleAdmin(admin.ModelAdmin):
@@ -36,16 +37,9 @@ class RepeaterConfigAdmin(admin.ModelAdmin):
 
 # Template models (admin-defined defaults)
 from apps.blocks.models.config_templates import (
-    FilterConfigTemplate,
     RepeaterConfigTemplate,
     BlockFilterLayoutTemplate,
 )
-
-@admin.register(FilterConfigTemplate)
-class FilterConfigTemplateAdmin(admin.ModelAdmin):
-    list_display = ("block", "name", "is_default", "site_key")
-    list_filter = ("is_default",)
-    search_fields = ("name", "site_key")
 
 @admin.register(RepeaterConfigTemplate)
 class RepeaterConfigTemplateAdmin(admin.ModelAdmin):

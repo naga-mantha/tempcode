@@ -144,11 +144,16 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
                 qs = qs.filter(user=self.user, visibility=BlockColumnConfig.VISIBILITY_PRIVATE)
             qs.first() and qs.first().delete()
         elif action == "set_default" and config_id:
-            # Only allow default-toggle on configs the user owns and are private
-            cfg = BlockColumnConfig.objects.filter(
-                id=config_id, block=self.block, user=self.user, visibility=BlockColumnConfig.VISIBILITY_PRIVATE
-            ).first()
-            if cfg:
+            cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
+            if not cfg:
+                return redirect("column_config_view", block_name=self.block.code)
+            # Admin can set default on any PUBLIC config (global fallback), or on their own private
+            if self.request.user.is_staff and cfg.visibility == BlockColumnConfig.VISIBILITY_PUBLIC:
+                # Demote other public defaults for this block
+                BlockColumnConfig.objects.filter(block=self.block, visibility=BlockColumnConfig.VISIBILITY_PUBLIC).exclude(id=cfg.id).update(is_default=False)
+                cfg.is_default = True
+                cfg.save()
+            elif cfg.user_id == self.user.id and cfg.visibility == BlockColumnConfig.VISIBILITY_PRIVATE:
                 cfg.is_default = True
                 cfg.save()
         return redirect("column_config_view", block_name=self.block.code)

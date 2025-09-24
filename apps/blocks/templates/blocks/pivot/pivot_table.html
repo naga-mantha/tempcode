@@ -27,8 +27,13 @@
     <label class="me-2">Saved Filters:</label>
     <select id="filter-select-{{ block_name }}-{{ instance_id }}" class="form-select form-select-sm w-auto me-2">
       <option value="">-- Select --</option>
-      {% for f in filter_configs %}
-        <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>{{ f.name }}{% if f.is_default %} (default){% endif %}</option>
+      {% regroup filter_configs by visibility as filt_groups %}
+      {% for grp in filt_groups %}
+        <optgroup label="{{ grp.grouper|title }}">
+          {% for f in grp.list %}
+            <option value="{{ f.id }}" {% if f.id == active_filter_config_id %}selected{% endif %}>{{ f.name }}{% if f.is_default %} (default){% endif %}</option>
+          {% endfor %}
+        </optgroup>
       {% endfor %}
     </select>
     <a class="btn btn-link p-0 ms-2" href="{% url 'pivot_filter_config' block_name %}">Manage Filters</a>

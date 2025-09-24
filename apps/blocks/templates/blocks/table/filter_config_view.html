@@ -8,8 +8,13 @@
   <label for="filter-select">Select Filter:</label>
   <select id="filter-select" class="form-select d-inline-block w-auto">
     <option value="">-- New Filter --</option>
-    {% for f in configs %}
-      <option value="{{ f.id }}" data-name="{{ f.name|escape }}">{{ f.name }}{% if f.is_default %} (default){% endif %}</option>
+    {% regroup configs by visibility as cfg_groups %}
+    {% for grp in cfg_groups %}
+      <optgroup label="{{ grp.grouper|title }}">
+        {% for f in grp.list %}
+          <option value="{{ f.id }}" data-name="{{ f.name|escape }}" data-visibility="{{ f.visibility }}" data-owner-id="{{ f.user_id }}">{{ f.name }}{% if f.is_default %} (default){% endif %}</option>
+        {% endfor %}
+      </optgroup>
     {% endfor %}
   </select>
   <button id="reset-filter-form" type="button" class="btn btn-link">Clear</button>
@@ -23,6 +28,13 @@
   <div class="mb-3">
     <label for="filter-name">Filter Name:</label>
     <input type="text" name="name" id="filter-name" required class="form-control d-inline-block w-auto">
+    {% if request.user.is_staff %}
+    <label class="ms-3">Visibility:</label>
+    <select name="visibility" class="form-select d-inline-block w-auto">
+      <option value="private">Private</option>
+      <option value="public">Public</option>
+    </select>
+    {% endif %}
     <button type="submit" class="btn btn-primary">Save Filter</button>
   </div>
 
@@ -58,19 +70,30 @@
       </td>
       <td>{% if config.is_default %}✔{% endif %}</td>
       <td>
-        <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="set_default">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
-        </form>
-        {% if configs|length > 1 %}
-        <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="config_id" value="{{ config.id }}">
-          <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
-        </form>
+        {% if request.user.is_staff and config.visibility == 'public' %}
+          <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
+          </form>
+        {% elif config.visibility == 'private' and config.user_id == request.user.id %}
+          <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
+          </form>
+          {% if configs|length > 1 %}
+          <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">No actions</span>
         {% endif %}
       </td>
     </tr>
@@ -182,11 +205,29 @@
     clearFilterForm();
     nameInput.value = name === '-- New Filter --' ? '' : name;
     populateFilterForm(values);
+    // Apply editability: admins always editable; new row editable; non-admin editable only if own private
+    const vis = (opt?.getAttribute('data-visibility') || '').toLowerCase();
+    const ownerId = parseInt(opt?.getAttribute('data-owner-id') || '0');
+    const isStaff = {{ request.user.is_staff|yesno:"true,false" }};
+    const currentUserId = {{ request.user.id }};
+    const editable = isStaff || !select.value || (vis === 'private' && ownerId === currentUserId);
+    const form = document.getElementById('filter-form');
+    const controls = form.querySelectorAll('input, select, button');
+    controls.forEach(el => {
+      if (el.name === 'action' || el.name === 'csrfmiddlewaretoken') return;
+      if (el.tagName.toLowerCase() === 'button') {
+        if (el.type === 'submit') el.disabled = !editable;
+        return;
+      }
+      // Prevent disabling the top-level filter selector outside the form
+      if (el.id === 'filter-select') return;
+      el.disabled = !editable;
+    });
   }
 
   select?.addEventListener('change', handleSelectChange);
   // Initialize form if a selection is pre-chosen by browser
-  if (select && select.value) { handleSelectChange(); }
+  if (select) { handleSelectChange(); }
 
   document.getElementById('reset-filter-form')?.addEventListener('click', () => {
     select.value = '';

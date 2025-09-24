@@ -17,6 +17,9 @@ class PivotFilterConfigForm(forms.Form, FilterResolutionMixin):
     action = forms.ChoiceField(choices=ACTIONS)
     config_id = forms.IntegerField(required=False)
     name = forms.CharField(required=False)
+    visibility = forms.ChoiceField(required=False, choices=[
+        ("private", "Private"), ("public", "Public")
+    ])
 
 
 class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin):
@@ -38,7 +41,17 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        configs = BlockFilterConfig.objects.filter(block=self.block, user=self.user).order_by("-is_default", "name")
+        from django.db.models import Q, Case, When, IntegerField
+        q = BlockFilterConfig.objects.filter(block=self.block).filter(
+            Q(user=self.user) | Q(visibility=BlockFilterConfig.VISIBILITY_PUBLIC)
+        )
+        configs = q.annotate(
+            _vis_order=Case(
+                When(visibility=BlockFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         # Build values display and labels like table view
         def _fmt_with_schema(key, value):
             cfg = self.filter_schema.get(key, {}) or {}
@@ -122,14 +135,27 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
             existing = BlockFilterConfig.objects.filter(block=self.block, user=self.user, name=name).first()
             if existing:
                 existing.values = values
+                if self.request.user.is_staff:
+                    vis = (form.cleaned_data.get("visibility") or "private").lower()
+                    if vis in dict(BlockFilterConfig.VISIBILITY_CHOICES):
+                        existing.visibility = vis
                 existing.save()
             else:
-                BlockFilterConfig.objects.create(block=self.block, user=self.user, name=name, values=values)
+                vis = (form.cleaned_data.get("visibility") or "private").lower()
+                if not self.request.user.is_staff:
+                    vis = "private"
+                BlockFilterConfig.objects.create(block=self.block, user=self.user, name=name, values=values, visibility=vis)
         elif action == "delete" and config_id:
-            BlockFilterConfig.objects.get(id=config_id, user=self.user, block=self.block).delete()
+            # Only allow deleting own private filters
+            BlockFilterConfig.objects.get(id=config_id, user=self.user, block=self.block, visibility=BlockFilterConfig.VISIBILITY_PRIVATE).delete()
         elif action == "set_default" and config_id:
-            cfg = BlockFilterConfig.objects.get(id=config_id, user=self.user, block=self.block)
-            cfg.is_default = True
-            cfg.save()
+            cfg = BlockFilterConfig.objects.get(id=config_id, block=self.block)
+            if self.request.user.is_staff and cfg.visibility == BlockFilterConfig.VISIBILITY_PUBLIC:
+                BlockFilterConfig.objects.filter(block=self.block, visibility=BlockFilterConfig.VISIBILITY_PUBLIC).exclude(id=cfg.id).update(is_default=False)
+                cfg.is_default = True
+                cfg.save()
+            elif cfg.user_id == self.user.id and cfg.visibility == BlockFilterConfig.VISIBILITY_PRIVATE:
+                cfg.is_default = True
+                cfg.save()
         code = getattr(self.block_instance, "block_name", None) or self.block.code
         return redirect("pivot_filter_config", block_name=code)

@@ -2,7 +2,7 @@ from apps.blocks.base import BaseBlock
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
-from apps.blocks.models.config_templates import FilterConfigTemplate, BlockFilterLayoutTemplate
+from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.workflow.permissions import (
     get_readable_fields_state,
@@ -292,7 +292,17 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         ).order_by("_vis_order", "name")
 
     def get_filter_config_queryset(self, user):
-        return BlockFilterConfig.objects.filter(user=user, block=self.block)
+        from django.db.models import Q, Case, When, IntegerField
+        qs = BlockFilterConfig.objects.filter(block=self.block).filter(
+            Q(user=user) | Q(visibility=BlockFilterConfig.VISIBILITY_PUBLIC)
+        )
+        return qs.annotate(
+            _vis_order=Case(
+                When(visibility=BlockFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
 
     def _build_context(self, request, instance_id):
         user = request.user
@@ -423,47 +433,6 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         )
         column_configs = self.get_column_config_queryset(user)
         filter_configs = self.get_filter_config_queryset(user)
-        # Lazy seed filter config from admin-defined template if user has none
-        # or only has an auto-generated 'None' placeholder with empty values.
-        try:
-            tpl = (
-                FilterConfigTemplate.objects.filter(block=self.block, is_default=True).first()
-                or FilterConfigTemplate.objects.filter(block=self.block).first()
-            )
-        except Exception:
-            tpl = None
-        if not filter_configs.exists() and tpl:
-            try:
-                BlockFilterConfig.objects.create(
-                    block=self.block,
-                    user=user,
-                    name=tpl.name or "Default",
-                    values=dict(tpl.values or {}),
-                    is_default=True,
-                )
-                filter_configs = self.get_filter_config_queryset(user)
-            except Exception:
-                pass
-        elif tpl:
-            # Detect placeholder-only case
-            placeholders = list(filter_configs.filter(name="None", values={}))
-            if placeholders and filter_configs.count() == 1:
-                try:
-                    BlockFilterConfig.objects.create(
-                        block=self.block,
-                        user=user,
-                        name=tpl.name or "Default",
-                        values=dict(tpl.values or {}),
-                        is_default=True,
-                    )
-                    # demote placeholder from default if needed
-                    for ph in placeholders:
-                        if ph.is_default:
-                            ph.is_default = False
-                            ph.save(update_fields=["is_default"])
-                    filter_configs = self.get_filter_config_queryset(user)
-                except Exception:
-                    pass
         active_column_config = None
         if column_config_id:
             try:
@@ -486,7 +455,15 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
             except BlockFilterConfig.DoesNotExist:
                 pass
         if not active_filter_config:
-            active_filter_config = filter_configs.filter(is_default=True).first()
+            try:
+                active_filter_config = (
+                    filter_configs.filter(user=user, is_default=True).first()
+                    or filter_configs.filter(visibility=BlockFilterConfig.VISIBILITY_PUBLIC, is_default=True).first()
+                    or filter_configs.filter(user=user).first()
+                    or filter_configs.filter(visibility=BlockFilterConfig.VISIBILITY_PUBLIC).first()
+                )
+            except Exception:
+                active_filter_config = None
         selected_fields = active_column_config.fields if active_column_config else []
         return (
             column_configs,

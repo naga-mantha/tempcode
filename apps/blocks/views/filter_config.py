@@ -29,6 +29,9 @@ class FilterConfigForm(forms.Form):
     action = forms.ChoiceField(choices=ACTIONS)
     config_id = forms.IntegerField(required=False)
     name = forms.CharField(required=False)
+    visibility = forms.ChoiceField(required=False, choices=[
+        ("private", "Private"), ("public", "Public")
+    ])
 
     def __init__(self, *args, filter_schema=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,9 +49,17 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         if not self.block_impl:
             raise Http404("Invalid block")
         self.db_block = get_object_or_404(Block, code=block_name)
-        self.user_filters = BlockFilterConfig.objects.filter(
-            block=self.db_block, user=request.user
-        ).order_by("-is_default", "name")
+        from django.db.models import Q, Case, When, IntegerField
+        qs = BlockFilterConfig.objects.filter(block=self.db_block).filter(
+            Q(user=request.user) | Q(visibility=BlockFilterConfig.VISIBILITY_PUBLIC)
+        )
+        self.user_filters = qs.annotate(
+            _vis_order=Case(
+                When(visibility=BlockFilterConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
         self.raw_schema = self.block_impl.get_filter_schema(request)
         # Resolve dynamic choices and normalize types
         schema = self._resolve_filter_schema(self.raw_schema, request.user)
@@ -76,6 +87,9 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
         action = form.cleaned_data.get("action")
         config_id = form.cleaned_data.get("config_id")
         name = (form.cleaned_data.get("name") or "").strip()
+        visibility = (form.cleaned_data.get("visibility") or "private").lower()
+        if not self.request.user.is_staff:
+            visibility = "private"
 
         if action == "create":
             if not name:
@@ -91,6 +105,8 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             try:
                 if existing:
                     existing.values = values
+                    if self.request.user.is_staff and visibility in dict(BlockFilterConfig.VISIBILITY_CHOICES):
+                        existing.visibility = visibility
                     existing.save()
                 else:
                     BlockFilterConfig.objects.create(
@@ -98,12 +114,14 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
                         user=self.request.user,
                         name=name,
                         values=values,
+                        visibility=visibility,
                     )
             except IntegrityError:
                 messages.error(self.request, "Filter name already taken. Please choose a different name.")
         elif action == "delete" and config_id:
+            # Only allow deleting own private filters
             cfg = get_object_or_404(
-                BlockFilterConfig, id=config_id, block=self.db_block, user=self.request.user
+                BlockFilterConfig, id=config_id, block=self.db_block, user=self.request.user, visibility=BlockFilterConfig.VISIBILITY_PRIVATE
             )
             try:
                 cfg.delete()
@@ -111,11 +129,15 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             except Exception as exc:
                 messages.error(self.request, str(exc))
         elif action == "set_default" and config_id:
-            cfg = get_object_or_404(
-                BlockFilterConfig, id=config_id, block=self.db_block, user=self.request.user
-            )
-            cfg.is_default = True
-            cfg.save()
+            cfg = get_object_or_404(BlockFilterConfig, id=config_id, block=self.db_block)
+            if self.request.user.is_staff and cfg.visibility == BlockFilterConfig.VISIBILITY_PUBLIC:
+                # Demote other public defaults for this block (global fallback)
+                BlockFilterConfig.objects.filter(block=self.db_block, visibility=BlockFilterConfig.VISIBILITY_PUBLIC).exclude(id=cfg.id).update(is_default=False)
+                cfg.is_default = True
+                cfg.save()
+            elif cfg.user_id == self.request.user.id and cfg.visibility == BlockFilterConfig.VISIBILITY_PRIVATE:
+                cfg.is_default = True
+                cfg.save()
         return redirect(self.filter_config_url_name, block_name=self.block_name)
 
     def get_context_data(self, **kwargs):
