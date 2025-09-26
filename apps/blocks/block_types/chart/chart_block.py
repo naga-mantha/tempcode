@@ -40,6 +40,7 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         self.default_layout = default_layout or {}
         self._block = None
         self._context_cache = {}
+        self._layout_overrides = {}
 
     def render(self, request, instance_id=None):
         """Clear cached context and render the block."""
@@ -67,8 +68,45 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
         """Return a Plotly Figure based on ``filters`` for ``user``."""
 
     def get_layout(self, user):
-        """Return layout overrides for the chart."""
-        return dict(self.default_layout)
+        """Return Plotly layout for the chart (defaults + per-request overrides).
+
+        Overrides can be supplied via query params (both standalone and embedded):
+          - layout.width=<int>
+          - layout.height=<int>
+        These are merged shallowly onto ``default_layout`` for the current request.
+        """
+        layout = dict(self.default_layout)
+        try:
+            overrides = dict(self._layout_overrides or {})
+        except Exception:
+            overrides = {}
+        if overrides:
+            layout.update(overrides)
+        return layout
+    
+    # ----- request helpers -----------------------------------------------------
+    def _parse_layout_overrides(self, request):
+        """Extract safe Plotly layout overrides from query params.
+
+        Currently supports numeric width/height only, via keys:
+          - layout.width
+          - layout.height
+        """
+        q = getattr(request, "GET", None)
+        if not q:
+            return {}
+        out = {}
+        for key in ("layout.width", "layout.height"):
+            try:
+                raw = q.get(key)
+                if raw is None or raw == "":
+                    continue
+                val = int(str(raw).strip())
+                if val > 0:
+                    out[key.split(".")[-1]] = val
+            except Exception:
+                continue
+        return out
 
     def has_view_permission(self, user):
         """Placeholder for future permission checks."""
@@ -159,6 +197,11 @@ class ChartBlock(BaseBlock, FilterResolutionMixin, ABC):
             raise PermissionDenied
 
         filter_configs, active_filter_config = self._select_filter_config(request, instance_id)
+        # Capture per-request layout overrides before computing figure/layout
+        try:
+            self._layout_overrides = self._parse_layout_overrides(request)
+        except Exception:
+            self._layout_overrides = {}
         filter_schema, selected_filter_values = self._resolve_filters(
             request, active_filter_config, instance_id
         )
