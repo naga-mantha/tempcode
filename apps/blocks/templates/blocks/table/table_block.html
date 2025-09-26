@@ -1,4 +1,4 @@
-{% load static %}
+{% load static dict_extras %}
 <div class="js-layout-block-root" id="layout-block-{{ instance_id }}" data-instance-id="{{ instance_id }}" data-block-name="{{ block_name }}">
 {# SheetJS + jsPDF only when not embedded inside a layout to avoid duplicate script injections #}
 {% if not embedded %}
@@ -46,6 +46,19 @@
   </div>
 
 </div>
+
+{# Show active filter fields as badges just above Filter Conditions #}
+{% if selected_filter_values %}
+  <div class="mb-2">
+    {% for k, v in selected_filter_values.items %}
+      {% if v %}
+        {% with cfg=filter_schema|get_item:k %}
+          <span class="badge rounded-pill bg-secondary me-1">{{ cfg.label|default:k }}</span>
+        {% endwith %}
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
 
 {# Live (non-persistent) filter fields; pre-populated from selected saved filter #}
 <form method="get" id="dynamic-filters-form-{{ block_name }}-{{ instance_id }}" class="mb-3">

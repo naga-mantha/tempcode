@@ -798,6 +798,156 @@ Behavior
 - Resolution order: user layout → admin template → schema order
 - UI: a “Manage Filter Layout” dialog to drag-drop fields into sections/columns; save per user or admin template (staff only)
 
+## 29. Configurable Chart Blocks (V2)
+
+Purpose
+- Reduce the need to hard-code one chart class per scenario (e.g., Late Per Buyer vs. Late Per Supplier). Provide generic chart blocks (Pie, Bar, Line) that accept a saved settings payload (public/private) similar to Pivot settings.
+
+Spec
+- kind: "chart"
+- supported_features: ("filters", "settings")
+- BlockSpec services: FilterResolver, QueryBuilder, Serializer. QueryBuilder exposes a typed field catalog for the selected model with safe, permission-filtered paths.
+
+Settings Schema (per chart type)
+- Pie (PieChart):
+  - model_label: "app_label.ModelName"
+  - base_scope: optional predefined queryset key (e.g., "purchase.open_po_lines")
+  - label_field: dotted path for categories (e.g., "order__buyer__username", "order__supplier__code")
+  - value: { mode: "count"|"sum"|"avg"|"min"|"max", field?: dotted path }
+  - filters: optional saved filter config reference or inline ad-hoc values
+  - sorting: by "label"|"value" asc/desc; limit: int
+  - display: legend position, hole, textposition/textinfo, color scale
+- Bar/Line (BarChart/LineChart):
+  - x: { field: dotted path, time_bucket?: "day|week|month|quarter|year", format?: str }
+  - y: { mode: agg, field?: dotted path }
+  - series: optional split into small multiples or grouped bars (secondary category)
+  - same base_scope/filters/display knobs as Pie
+
+Persistence Models
+- ChartConfig(block, user, name, chart_type, settings, visibility, is_default)
+  - Mirrors PivotConfig; visibility supports public/private. Staff can create public configurations; non-staff private only.
+
+UI/UX
+- Manage Settings page (like Pivot): choose chart type, pick fields via a guided UI with field browser, aggregation picker, and preview.
+- Saved configurations dropdown on chart blocks: select a public/private configuration; ad-hoc overrides via namespaced query params allowed.
+
+Endpoints (HTMX + JSON)
+- GET/POST /blocks/<code>/settings (manage)
+- GET /blocks/<code>/partial?chart_config_id=… (render with selected settings)
+- Optional JSON /api/blocks/<code>/data to power client previews if needed.
+
+Field Catalog & Safety
+- The field picker lists only readable fields after PolicyService filtering and follows relation-depth caps and allow/deny lists.
+- For time bucketing, QueryBuilder produces DB-side truncations (TruncMonth, TruncWeek, etc.).
+
+Performance
+- DB aggregations with GROUP BY; paginate/limit where needed.
+- Cache small dimension lists; respect existing filter token resolution.
+
+Migration Path
+- Introduce PieChart/BarChart/LineChart (configurable) and deprecate hardcoded chart classes in v2.
+- Migration: convert each existing chart to a saved ChartConfig (same code), keep a temporary adapter or "sync_chart_configs" command to seed configs; remove hand-coded classes once equivalent configs exist and are validated.
+
+Testing
+- Unit: settings → queryset translation, aggregation correctness, time bucket boundaries, permission masking.
+- Integration: end-to-end for a Pie/Bar with both public and private settings, filter token preservation, and layout embedding.
+
+## 30. Shared Block Chrome (Header/Filters/Badges)
+
+Purpose
+- Remove duplication across Table, Pivot, and Chart templates for the common “chrome” (Link, saved-config dropdowns, filter badges, filter panel, export buttons), improving consistency and reducing maintenance.
+
+Current State (duplication)
+- Each block template renders its own header, saved-config dropdowns, filter badges, and filter panel wiring. Minor differences and drift exist (e.g., badge placement and namespaced GET handling).
+
+V1 (Incremental Refactor, Backward-Compatible)
+- Extract reusable partials and include them from block templates:
+  - blocks/partials/chrome_header.html: Link + saved config dropdowns, shown based on capability flags.
+  - blocks/partials/filter_badges.html: renders badges for active filters using schema labels.
+  - Reuse components/filter_fields.html for the filter panel (already shared).
+- Normalize context keys so partials can render conditionally without per-block logic:
+  - Common: block_name, block_title, instance_id, filter_schema, selected_filter_values.
+  - Saved configs: filter_configs, active_filter_config_id; optional column_configs/active_column_config_id; pivot_configs/active_pivot_config_id.
+  - Capability flags: has_link, has_filter_configs, has_column_configs, has_pivot_configs, can_export_xlsx, can_export_pdf.
+  - URLs: link_url, manage_filter_url, manage_columns_url, manage_pivot_url.
+- Consolidate tiny JS helpers (e.g., namespaced filter-clearing, dropdown change handling) into a shared snippet included by the header partial; block-specific libraries (Tabulator/Plotly) remain in block templates.
+
+V2 (Base Layout + Helper)
+- Introduce a base chrome template with slots that all blocks extend:
+  - blocks/chrome/base.html with slots: header_controls, badges, filter_panel, content, footer_actions.
+  - Block templates only provide the content slot (and optional extra controls), inheriting standardized header/badges/panels.
+- Add a small BlockChrome helper (server-side) to:
+  - Set capability flags/URLs consistently.
+  - Expose a minimal event contract (e.g., block:configChanged, block:filtersApplied) so content can refresh predictably.
+  - Centralize namespaced param handling across blocks.
+
+Contract (proposed minimal set)
+- booleans: has_link, has_filter_configs, has_column_configs, has_pivot_configs, can_export_xlsx, can_export_pdf.
+- dropdowns: filter_configs, active_filter_config_id, column_configs, active_column_config_id, pivot_configs, active_pivot_config_id.
+- urls: link_url, manage_filter_url, manage_columns_url, manage_pivot_url.
+- state: selected_filter_values, filter_schema, instance_id, block_name, block_title.
+
+Risks & Mitigations
+- Over-parameterization: keep contract small and optional (if a flag/collection is missing, do not render).
+- JS divergence: limit shared JS to generic behaviours; leave heavy library init per block.
+
+Migration Plan
+- V1: create partials, adopt in one table and one chart first; then pivot. Verify badge placement and dropdown behaviour; roll out to all blocks.
+- V2: move to base template + BlockChrome helper; remove legacy header code from templates once parity is verified.
+
+## 31. Additional Abstractions (Future Work)
+
+The following abstractions build on the v1/v2 plan to further reduce duplication, increase consistency, and improve developer experience. Suggested sequencing is annotated as (V1) or (V2).
+
+Data & Query
+- Dimension/Measure Catalog (V2): Central registry of safe, labeled dimensions and measures per model (with relation-depth caps and allow/deny lists). Reused by Pivot and configurable Charts; provides default formats and display labels.
+- Query Snippets/Scopes (V1): Reusable queryset fragments (e.g., open_po_lines, past_due_po_lines) referenced by blocks/settings for consistency and testability.
+- Time Bucketing Service (V1): Single helper to generate TruncDay/Week/Month/Quarter/Year and human labels; used by charts and reports.
+- Metrics Layer (V2): Named KPIs (aggregation + filters) referenced by blocks/settings, enabling reuse and auditability of metric definitions.
+
+Config & Schema
+- Config Inheritance/Templating (V2): Allow personal configs to “extend” a public/admin template with diffs; reduces duplication.
+- Config Versioning + Audit (V2): Track who changed what and rollback; store versions with metadata.
+- Config Tags + Search (V1): Tag configs (filters/views/pivots/charts) and provide search in manage pages for discoverability.
+- Token System v2 (V1→V2): Expand built-in date tokens (last_7_days, this_quarter, fy_to_date, etc.) and allow admin-defined tokens bound to business calendar.
+
+Filters & Choices
+- ChoiceProvider Interface (V1): Standardize select/multiselect providers with permission-aware base query, interdependent narrowing, caching TTL, and label/value mapping.
+- Filter Validation via JSON Schema (V2): Validate inputs consistently; reject unknown keys/types across endpoints.
+
+UI/UX
+- Value Renderers Registry (V1): Centralize formatting of currency, percent, durations, dates, etc., used by tables and charts for consistent display.
+- Drilldown Framework (V2): Declarative drill targets (row → detail, bar → table slice) with a uniform event contract and URL mapping.
+- Empty/Error/Loading Partials (V1): Standardize states with consistent styling and messaging.
+
+Exports
+- Export Service (V1): Unified CSV/XLSX/PDF generation (headers, styles, filenames); blocks supply an export schema and data provider.
+- Queued Exports (V2): Job abstraction (Celery/RQ) + notifications; blocks call export_service.start_job(...); UI polls/links when ready.
+
+Permissions & Governance
+- Team/Group Sharing (V2): Visibility scopes beyond public/private; allow team-scoped configs/layouts/blocks.
+- Builder Guardrails (V1): Ensure create/edit UIs hide unreadable fields, filter choices by PolicyService; extend to settings builders.
+
+Performance & Observability
+- Block Telemetry (V1): Decorator/logging to record render time, query count, cache hits per block; lightweight “slow blocks” admin report.
+- Cache Profiles (V2): Configure per-block/config cache keys and TTL with invalidation hooks for expensive aggregations.
+
+Layout & Composition
+- Grid Utilities (V1): Helper to compute next free (x,y) and auto-stack new widgets; avoids overlaps and makes placement predictable.
+- Client Event Bus (V2): Minimal pub/sub (htmx triggers or small module) so blocks can emit/listen (e.g., form:saved → table refresh) without tight coupling.
+
+Integration & API
+- Embedding Contract (V2): Signed/tokenized embedding URLs with a whitelist of safe GET params and CSP guidance; enables external embedding of blocks.
+- Config Import/Export (V1): JSON import/export for Filter/Column/Pivot/Chart configs to migrate/share presets across environments.
+
+Internationalization & Theming
+- Design Tokens (V1): Central CSS variables for spacing, color roles, radii; chrome/components use tokens for consistent theming.
+- i18n/L10n Formatting (V2): Central date/number locale formatting piped into Tabulator/Plotly and value renderers.
+
+DevX & Testing
+- Block Test Harness (V1): Utility to render a block with inputs and assert HTML snippets/timings; encourages fast, reliable tests.
+- Registry CLI (V1): manage.py blocks list/validate/sync to inspect registry/drift quickly during development and CI.
+
 Testing
 - Ensure hidden fields don’t render; order honored; fallback works
 
@@ -1096,3 +1246,141 @@ Acceptance (Phase 13)
 - Scheduled layout exports run reliably with audit logs; import/export presets usable.
 - PolicyService row/field security and PII masking integrated behind a flag and audited.
 - Perf telemetry active with meaningful thresholds and caching documented.
+
+
+------------ NAGA------------
+> Here’s a V2‑only plan built from the full R&D, sequenced bottom → up with clear scope and exit criteria.                                                                                                
+                                                                                                                                                                                                          
+  Principles                                                                                                                                                                                              
+                                                                                                                                                                                                          
+  - Start with data/permission primitives, then query/filter foundations, then reusable chrome/UI, then blocks, then layouts and advanced features.                                                       
+  - Each phase ships: code + docs + seed examples + minimal tests + telemetry.                                                                                                                            
+  - Keep V1 intact; V2 mounts under dedicated namespaces until cutover.                                                                                                                                   
+                                                                                                                                                                                                          
+  Phase 0 — Groundwork                                                                                                                                                                                    
+                                                                                                                                                                                                          
+  - Create v2 namespaces (e.g., apps_v2.blocks, apps_v2.layout), feature flags, routing mounts (/blocks/, /layouts/) separate from V1.                                                                    
+  - Exit: Hello‑world block renders via V2 mount with shared chrome skeleton.                                                                                                                             
+                                                                                                                                                                                                          
+  Phase 1 — Policy & Security                                                                                                                                                                             
+                                                                                                                                                                                                          
+  - Implement PolicyService v2 end‑to‑end (queryset filters, field read/write) with caches where safe.                                                                                                    
+  - Harden inputs: CSRF, JSON schema validation plumbing, reject unknown filter keys.                                                                                                                     
+  - Exit: Tests proving field masking and queryset trimming across sample models.                                                                                                                         
+                                                                                                                                                                                                          
+  Phase 2 — Registry & Models                                                                                                                                                                             
+                                                                                                                                                                                                          
+  - BlockSpec v2 + registry validation (template exists, features ↔ services).                                                                                                                            
+  - Startup/CI sync (DB‑wins on display fields); admin with enabled/category/override_display.                                                                                                            
+  - Add/confirm model fields: Block.enabled/category/override_display, LayoutBlock.settings.                                                                                                              
+  - Exit: manage.py sync_blocks_v2 idempotent; admin badges reflect registry/orphans.                                                                                                                     
+                                                                                                                                                                                                          
+  Phase 3 — Filters & Choices                                                                                                                                                                             
+                                                                                                                                                                                                          
+  - ChoiceProvider interface with interdependent narrowing and short‑TTL caching.                                                                                                                         
+  - Token System v2 (today/period/fiscal tokens; admin tokens later).
+  - JSON Schema for filter definitions; shared badges; namespaced GET helpers.
+  - Exit: Two blocks demonstrate tokenized filters + AJAX choices + validation errors.
+
+  Phase 4 — Query Foundations
+
+  - Query Snippets/Scopes (e.g., purchase.open_po_lines, purchase.past_due_po_lines).
+  - Time Bucketing service (TruncX + labels).
+  - Dimension/Measure Catalog (safe fields, labels, formats, relation‑depth caps).
+  - Exit: Catalog browser lists readable fields only; buckets and scopes unit‑tested.
+
+  Phase 5 — Shared Chrome
+
+  - Base chrome template + partials (link, dropdowns, badges, filter panel, exports).
+  - Shared JS module for dropdown changes + namespaced params + events.
+  - Exit: One chart + one table adopt chrome with identical behavior.
+
+  Phase 6 — Config Models
+
+  - ChartConfig(block,user,name,chart_type,settings,visibility,is_default) with tags/versioning hooks.
+  - Align PivotConfig v2 shape and validators; keep BlockFilterLayoutTemplate/Layout for filters.
+  - Exit: CRUD UIs for Chart/Pivot configs; public/private/default semantics proven.
+
+  Phase 7 — Charts V2 (Configurable)
+
+  - Blocks: PieChart, BarChart, LineChart driven by settings (model/base_scope/label/value/agg/series/buckets).
+  - Manage UI with live preview; PolicyService masks fields.
+  - Export integration; Plotly defaults (theme/text) centralized.
+  - Exit: Purchase “Late Per Buyer/Supplier” and Production one bar chart running via ChartConfig.
+
+  Phase 8 — Tables V2
+
+  - Services per R&D (FilterResolver, ColumnConfigResolver, QueryBuilder, Serializer, ExportOptions).                                                                                                      
+  - Value Renderers registry (currency/percent/duration/date) used across tables/charts.                                                                                                                   
+  - Inline edit honoring PolicyService; export service wired.                                                                                                                                              
+  - Exit: One key table migrated with parity, exports consistent with charts.                                                                                                                              
+                                                                                                                                                                                                           
+  Phase 9 — Pivot V2                                                                                                                                                                                       
+                                                                                                                                                                                                           
+  - Settings builder (rows/cols/measures) powered by Catalog + buckets.                                                                                                                                    
+  - PivotConfig manage UI with preview; filter integration + badges.                                                                                                                                       
+  - Exit: One real pivot migrated; performance acceptable with sampling/limits.                                                                                                                            
+                                                                                                                                                                                                           
+  Phase 10 — Layouts V2                                                                                                                                                                                    
+                                                                                                                                                                                                           
+  - Layout renderer using shared chrome, lazy HTMX loading, standardized error/empty states.                                                                                                               
+  - Offcanvas filters; content blocks (Spacer/Text/Button/Card) + Repeater v2 (panels by dimension → child block).                                                                                         
+  - Exit: One mixed‑block layout (table+charts+content) with lazy load and telemetry.                                                                                                                      
+                                                                                                                                                                                                           
+  Phase 11 — Detail Pages & Context                                                                                                                                                                        
+                                                                                                                                                                                                           
+  - Model/object detail layouts with context bindings (LayoutBlock.settings.bindings), secure refetch per request.                                                                                         
+  - Exit: Purchase Order detail page composed of blocks (lines, receipts, KPIs).                                                                                                                           
+                                                                                                                                                                                                           
+  Phase 12 — Forms V2                                                                                                                                                                                      
+                                                                                                                                                                                                           
+  - FormBlock + builder mapping JSON→Crispy with defaults, FK scoping via PolicyService.                                                                                                                   
+  - Events (form:saved) integrate with tables/charts through client event bus (htmx triggers).                                                                                                             
+  - Exit: Demo form creates/edits object; nearby table refreshes via event.                                                                                                                                
+                                                                                                                                                                                                           
+  Phase 13 — Comments                                                                                                                                                                                      
+                                                                                                                                                                                                           
+  - CommentsBlock using django-comments-xtd, scoped by context; visibility via PolicyService.                                                                                                              
+  - Exit: Comment tree renders on detail layout; basic moderation wired.                                                                                                                                   
+                                                                                                                                                                                                           
+  Phase 14 — Exports                                                                                                                                                                                       
+                                                                                                                                                                                                           
+  - Unified Export Service (CSV/XLSX/PDF) with header styles, filenames, doc hooks.                                                                                                                        
+  - Optional queued exports (Celery/RQ) behind flag; notify with link.                                                                                                                                     
+  - Exit: Charts/Tables/Pivots all export via shared service; one queued example.                                                                                                                          
+                                                                                                                                                                                                           
+  Phase 15 — Observability & Performance                                                                                                                                                                   
+                                                                                                                                                                                                           
+  - Block telemetry (render time, query count) + “slow blocks” report.                                                                                                                                     
+  - Cache profiles for expensive aggregations; indices for hot fields; cap page sizes.                                                                                                                     
+  - Exit: Admin dashboard shows slowest blocks; one cached chart 3× faster.                                                                                                                                
+                                                                                                                                                                                                           
+  Phase 16 — Governance & Sharing                                                                                                                                                                          
+                                                                                                                                                                                                           
+  - Team/group visibility in configs; tags + search across manage pages.                                                                                                                                   
+  - Versioning/audit for Chart/Pivot configs (created_by, versions).                                                                                                                                       
+  - Exit: Admin publishes team chart; users discover via tag search; edits audited.                                                                                                                        
+                                                                                                                                                                                                           
+  Phase 17 — Embedding & API                                                                                                                                                                               
+                                                                                                                                                                                                           
+  - JSON endpoints (/api/blocks/<code>/schema|data|export) with signed/whitelisted embedding URLs.                                                                                                         
+  - CSP guidance for third‑party embedding.                                                                                                                                                                
+  - Exit: External demo embeds a chart/table safely.                                                                                                                                                       
+                                                                                                                                                                                                           
+  Phase 18 — Advanced Blocks                                                                                                                                                                               
+                                                                                                                                                                                                           
+  - Kanban (state columns), Gantt (time bars with zoom), Repeater v2 polish.                                                                                                                               
+  - Exit: One production‑ready example of each on V2 layout.                                                                                                                                               
+                                                                                                                                                                                                           
+  Phase 19 — Migration & Cutover                                                                                                                                                                           
+                                                                                                                                                                                                           
+  - Seeder commands: convert hardcoded charts/pivots to ChartConfig/PivotConfig.                                                                                                                           
+  - Map V1 routes to V2 equivalents; staged cutover; remove legacy after sign‑off.                                                                                                                         
+  - Exit: Feature flags flipped for selected pages; legacy code pruned.                                                                                                                                    
+                                                                                                                                                                                                           
+  Per‑Phase Deliverables                                                                                                                                                                                   
+                                                                                                                                                                                                           
+  - Code + docs (how to use/extend) + 2–3 targeted tests + demo page under v2/….                                                                                                                           
+  - Telemetry checks and basic perf notes.                                                                                                                                                                 
+                                                                                                                                                                                                           
+  If you want, I can turn this into an issue board with dependencies and acceptance criteria per phase to kick off V2 execution.   

@@ -1,4 +1,4 @@
-{% load static %}
+{% load static dict_extras %}
 <div class="js-layout-block-root" id="layout-block-{{ instance_id }}" data-instance-id="{{ instance_id }}" data-block-name="{{ block_name }}">
 {% if not embedded %}
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
@@ -43,6 +43,19 @@
   </div>
   
 </div>
+
+{# Show active filter fields as badges #}
+{% if selected_filter_values %}
+  <div class="mb-2">
+    {% for k, v in selected_filter_values.items %}
+      {% if v %}
+        {% with cfg=filter_schema|get_item:k %}
+          <span class="badge rounded-pill bg-secondary me-1">{{ cfg.label|default:k }}</span>
+        {% endwith %}
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
 
 <form method="get" id="dynamic-filters-form-{{ block_name }}-{{ instance_id }}" class="mb-3">
   {% if active_pivot_config_id %}
