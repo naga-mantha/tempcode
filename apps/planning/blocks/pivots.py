@@ -1,7 +1,7 @@
-from apps.blocks.block_types.pivot.generic_pivot_block import GenericPivotBlock
+from apps.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.common.models import PlannedPurchaseOrder
 
-class PlannedPurchaseOrdersPivot(GenericPivotBlock):
+class PlannedPurchaseOrdersPivot(PivotBlock):
     def __init__(self):
         super().__init__("planned_purchase_orders_pivot")
 

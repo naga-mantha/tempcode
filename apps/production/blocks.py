@@ -1,6 +1,5 @@
 from apps.blocks.block_types.table.table_block import TableBlock
 from apps.blocks.block_types.pivot.pivot_block import PivotBlock
-from apps.blocks.block_types.pivot.generic_pivot_block import GenericPivotBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation, Item, BusinessPartner
 from apps.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
@@ -176,7 +175,7 @@ class ProductionOrderOperationTableBlock(TableBlock):
         }
 
 
-class ProductionGenericPivot(GenericPivotBlock):
+class ProductionGenericPivot(PivotBlock):
     def __init__(self):
         super().__init__("production_generic_pivot")
 

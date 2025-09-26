@@ -4,12 +4,25 @@ from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.models.pivot_config import PivotConfig
+from apps.blocks.services.filtering import apply_filter_registry
+from django.contrib.admin.utils import label_for_field
+from django.db.models import Count, Sum, Avg, Min, Max
+from django.db.models.functions import (
+    TruncDate,
+    TruncMonth,
+    TruncQuarter,
+    TruncYear,
+)
 import json
 import uuid
 
 
 class PivotBlock(BaseBlock, FilterResolutionMixin):
-    """Base class for pivot-style blocks with a pivot-specific template."""
+    """User-configurable pivot (formerly GenericPivotBlock) with saved schemas.
+
+    Subclasses should implement get_model() and may override get_base_queryset().
+    """
 
     template_name = "blocks/pivot/pivot_table.html"
     supported_features = ["filters"]
@@ -205,9 +218,293 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
         overrides = self.get_tabulator_options_overrides(user) or {}
         return {**defaults, **overrides}
 
-    # Subclasses must provide this (return columns, rows)
+    # Default base queryset used by the generic pivot implementation
+    def get_base_queryset(self, user):
+        try:
+            model = self.get_model()
+        except Exception:
+            return None
+        return model.objects.all()
+
+    def _select_pivot_config(self, request, instance_id=None):
+        user = request.user
+        ns = f"{self.block_name}__{instance_id}__" if instance_id else f"{self.block_name}__"
+        config_id = (
+            request.GET.get(f"{ns}pivot_config_id")
+            or request.GET.get("pivot_config_id")
+        )
+        from django.db.models import Q, Case, When, IntegerField
+        qs = PivotConfig.objects.filter(block=self.block).filter(
+            Q(user=user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC)
+        ).annotate(
+            _vis_order=Case(
+                When(visibility=PivotConfig.VISIBILITY_PRIVATE, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by("_vis_order", "name")
+        active = None
+        if config_id:
+            try:
+                active = qs.get(pk=config_id)
+            except PivotConfig.DoesNotExist:
+                pass
+        if not active:
+            try:
+                active = (
+                    qs.filter(user=user, is_default=True).first()
+                    or qs.filter(visibility=PivotConfig.VISIBILITY_PUBLIC, is_default=True).first()
+                    or qs.filter(user=user).first()
+                    or qs.filter(visibility=PivotConfig.VISIBILITY_PUBLIC).first()
+                )
+            except Exception:
+                active = None
+        return qs, active
+
+    # Generic pivot data engine (formerly in GenericPivotBlock)
     def build_columns_and_rows(self, user, filter_values):
-        raise NotImplementedError
+        # Resolve active pivot config (prefer selection injected by base)
+        active = getattr(self, "_active_pivot_config", None)
+        from django.db.models import Q
+        configs = PivotConfig.objects.filter(block=self.block).filter(
+            Q(user=user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC)
+        )
+        if not active:
+            active = configs.filter(is_default=True).first()
+        if not active:
+            return [], []
+        # Resolve base queryset
+        qs = self.get_base_queryset(user)
+        if qs is None:
+            return [], []
+
+        schema = (active.schema or {})
+        rows = schema.get("rows", [])
+        cols = schema.get("cols", [])
+        measures = schema.get("measures", [])
+        if not measures:
+            return [], []
+
+        # Apply registered filters then permission/state scoping
+        qs = apply_filter_registry(self.block_name, qs, filter_values or {}, user)
+        try:
+            from apps.permissions.checks import filter_viewable_queryset as filter_viewable_queryset_generic
+            from apps.workflow.permissions import filter_viewable_queryset_state
+            qs = filter_viewable_queryset_generic(user, qs)
+            qs = filter_viewable_queryset_state(user, qs)
+        except Exception:
+            pass
+
+        # Support date bucketing for dimensions
+        model = self.get_model()
+        try:
+            from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+            try:
+                max_depth = int(getattr(self, "get_column_config_max_depth")())
+            except Exception:
+                max_depth = 10
+            all_meta = get_model_fields_for_column_config(model, user, max_depth=max_depth) or []
+            label_map = {m.get("name"): m.get("label") for m in all_meta if m.get("name")}
+        except Exception:
+            label_map = {}
+
+        def resolve_label(field_path: str) -> str:
+            if field_path in label_map:
+                return label_map[field_path]
+            try:
+                return label_for_field(field_path, model, return_attr=False)
+            except Exception:
+                try:
+                    return field_path.replace("__", " ").replace("_", " ").title()
+                except Exception:
+                    return field_path
+
+        def normalize_dim(defn):
+            if isinstance(defn, str):
+                return {"source": defn, "label": resolve_label(defn)}
+            d = dict(defn or {})
+            if d.get("source") and not d.get("label"):
+                d["label"] = resolve_label(d["source"])
+            return d
+
+        row_defs = [normalize_dim(d) for d in (rows or [])]
+        col_defs = [normalize_dim(d) for d in (cols or [])]
+
+        # Apply bucket functions to queryset via annotate
+        def bucketize(qs, d):
+            src = (d or {}).get("source")
+            bucket = (d or {}).get("bucket")
+            alias = (d or {}).get("alias")
+            if not src:
+                return qs, None
+            if bucket:
+                b = str(bucket).lower()
+                if b in ("day", "date"):
+                    fn = TruncDate
+                elif b == "month":
+                    fn = TruncMonth
+                elif b == "quarter":
+                    fn = TruncQuarter
+                elif b == "year":
+                    fn = TruncYear
+                else:
+                    fn = None
+                if fn is not None:
+                    alias = alias or f"{src}__{b}"
+                    qs = qs.annotate(**{alias: fn(src)})
+                    return qs, alias
+            return qs, (alias or src)
+
+        for i, d in enumerate(row_defs):
+            qs, alias = bucketize(qs, d)
+            if alias:
+                row_defs[i]["alias"] = alias
+        for i, d in enumerate(col_defs):
+            qs, alias = bucketize(qs, d)
+            if alias:
+                col_defs[i]["alias"] = alias
+
+        # Build the list of group-by fields using aliases if present
+        group_fields = [*(d["alias"] for d in row_defs), *(d["alias"] for d in col_defs)]
+        if not group_fields:
+            group_fields = [measures[0].get("source")]
+        qs = qs.values(*group_fields)
+
+        import re
+        agg_map = {}
+        alias_to_title = {}
+        used_aliases = set()
+        for idx, m in enumerate(measures):
+            src_field = m.get("source")
+            agg = (m.get("agg") or "sum").lower()
+            base_field_label = resolve_label(src_field) if src_field else src_field
+            title = m.get("label") or f"{agg.upper()} {base_field_label}"
+            base_alias = re.sub(r"[^0-9a-zA-Z_]", "_", (m.get("label") or f"{agg}_{src_field}"))
+            if re.match(r"^[0-9]", base_alias or ""):
+                base_alias = f"m_{base_alias}"
+            alias = base_alias or f"m_{idx}"
+            suffix = 1
+            while alias in used_aliases:
+                alias = f"{base_alias}_{suffix}"
+                suffix += 1
+            used_aliases.add(alias)
+            alias_to_title[alias] = title
+            if agg == "sum":
+                agg_map[alias] = Sum(src_field)
+            elif agg == "count":
+                agg_map[alias] = Count(src_field)
+            elif agg == "avg":
+                agg_map[alias] = Avg(src_field)
+            elif agg == "min":
+                agg_map[alias] = Min(src_field)
+            elif agg == "max":
+                agg_map[alias] = Max(src_field)
+            else:
+                agg_map[alias] = Sum(src_field)
+        qs = qs.annotate(**agg_map)
+        records = list(qs)
+        if not records:
+            return [], []
+
+        # Helper to format bucketed dimension values for display
+        from datetime import date, datetime as dt
+
+        def format_dim_value(dim_def, value):
+            bucket = (dim_def or {}).get("bucket")
+            if not bucket:
+                return value
+            b = str(bucket).lower()
+            if value is None:
+                return value
+            if isinstance(value, dt):
+                vdate = value.date()
+            else:
+                vdate = value if isinstance(value, date) else None
+            if b in ("day", "date") and vdate:
+                return vdate.strftime("%Y-%m-%d")
+            if b == "month" and vdate:
+                return vdate.strftime("%Y-%m")
+            if b == "year" and vdate:
+                return str(vdate.year)
+            if b == "quarter" and vdate:
+                q = (vdate.month - 1) // 3 + 1
+                return f"{vdate.year}-Q{q}"
+            return value
+
+        # Collect column distinct values (support single column dimension)
+        col_values = []
+        if col_defs:
+            col_def = col_defs[0]
+            col_key = col_def["alias"]
+            seen = set()
+            for r in records:
+                v = r.get(col_key)
+                if v not in seen:
+                    seen.add(v)
+                    col_values.append(v)
+            def as_date_for_sort(v):
+                if v is None:
+                    return None
+                if isinstance(v, dt):
+                    return v.date()
+                if isinstance(v, date):
+                    return v
+                return v
+            is_bucketed_date = bool(col_def.get("bucket"))
+            are_dateish = all((v is None) or isinstance(v, (date, dt)) for v in col_values)
+            if is_bucketed_date or are_dateish:
+                col_values.sort(key=lambda v: (v is None, as_date_for_sort(v)))
+
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        row_keys = [d["alias"] for d in row_defs] if row_defs else []
+        for r in records:
+            k = tuple(r.get(x) for x in row_keys) if row_keys else ("All",)
+            grouped[k].append(r)
+
+        data = []
+        for key, items in grouped.items():
+            out = {}
+            for i, rk in enumerate(row_keys):
+                rdef = row_defs[i] if i < len(row_defs) else None
+                out[rk] = format_dim_value(rdef, key[i])
+            if not col_defs:
+                first = items[0]
+                for alias, title in alias_to_title.items():
+                    out[title] = first.get(alias)
+            else:
+                col_def = col_defs[0]
+                col_key = col_def["alias"]
+                by_col = {it.get(col_key): it for it in items}
+                for raw_col_val in col_values:
+                    rec = by_col.get(raw_col_val)
+                    disp_val = format_dim_value(col_def, raw_col_val)
+                    for alias, title in alias_to_title.items():
+                        col_name = f"{disp_val} {title}"
+                        out[col_name] = rec.get(alias) if rec else 0
+            data.append(out)
+
+        # Columns
+        columns = []
+        for i, rk in enumerate(row_keys):
+            rdef = row_defs[i] if i < len(row_defs) else None
+            if rdef:
+                base = rdef.get("label") or resolve_label(rdef.get("source"))
+                bucket = rdef.get("bucket")
+                title = f"{base} ({str(bucket).capitalize()})" if bucket else base
+            else:
+                title = rk.replace("__", " ").title()
+            columns.append({"title": title, "field": rk})
+        if not col_defs:
+            for alias, title in alias_to_title.items():
+                columns.append({"title": title, "field": title})
+        else:
+            for raw_col_val in col_values:
+                disp_val = format_dim_value(col_defs[0], raw_col_val)
+                for alias, title in alias_to_title.items():
+                    col_name = f"{disp_val} {title}"
+                    columns.append({"title": col_name, "field": col_name})
+        return columns, data
 
     # -------------------------------------------------------------
     # Download options (XLSX/PDF) similar to TableBlock

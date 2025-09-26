@@ -69,7 +69,7 @@
       <td>{{ config.fields|join:"<br>"|safe }}</td>
       <td>{% if config.is_default %}✔{% endif %}</td>
       <td>
-        {% if (request.user.is_staff and config.visibility == 'public') or (config.visibility == 'private' and config.user_id == request.user.id) %}
+        {% if request.user.is_staff and config.visibility == 'public' or config.visibility == 'private' and config.user_id == request.user.id %}
           <form method="post" style="display:inline-block">
             {% csrf_token %}
             <input type="hidden" name="action" value="set_default">
