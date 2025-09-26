@@ -220,6 +220,8 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                     "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
                     "block_name": lb.block.name,
                     "id": lb.id,
+                    "wrapper_class": "card p-2",
+                    "is_spacer": False,
                 })
                 continue
             # Build a per-block namespaced GET overlay from selected layout filters
@@ -291,6 +293,8 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
                 "id": lb.id,
                 "title": getattr(lb, "title", ""),
                 "note": getattr(lb, "note", ""),
+                "wrapper_class": ("card p-2"),
+                "is_spacer": (lb.block.code == "spacer"),
             })
         can_manage = self.can_manage(self.request.user, self.layout)
         # Sidebar lists: private (current user) and all public, ascending by name
@@ -436,6 +440,8 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
                 "html": html,
                 "title": getattr(lb, "title", ""),
                 "note": getattr(lb, "note", ""),
+                "wrapper_class": ("card p-2"),
+                "is_spacer": (lb.block.code == "spacer"),
             })
         add_form = AddBlockForm()
         return self.render_to_response({

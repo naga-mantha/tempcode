@@ -52,7 +52,7 @@
     <div class="grid-stack" id="grid-edit" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
       {% for b in blocks %}
         <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}" data-id="{{ b.id }}">
-          <div class="grid-stack-item-content card p-2">
+          <div class="grid-stack-item-content {% if not b.is_spacer %}card p-2{% endif %}">
             <div class="d-flex justify-content-end">
               <button type="button" class="btn btn-sm btn-outline-danger js-del-widget" data-id="{{ b.id }}">Delete</button>
             </div>

@@ -139,10 +139,16 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
                     block=self.block, user=self.user, name=name, fields=field_list, visibility=visibility
                 )
         elif action == "delete" and config_id:
-            qs = BlockColumnConfig.objects.filter(id=config_id, block=self.block)
-            if not self.request.user.is_staff:
-                qs = qs.filter(user=self.user, visibility=BlockColumnConfig.VISIBILITY_PRIVATE)
-            qs.first() and qs.first().delete()
+            # Allow delete if owner of a private config, or admin deleting a public config
+            cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
+            if not cfg:
+                return redirect("column_config_view", block_name=self.block.code)
+            can_delete = (
+                (cfg.visibility == BlockColumnConfig.VISIBILITY_PRIVATE and cfg.user_id == self.user.id)
+                or (self.request.user.is_staff and cfg.visibility == BlockColumnConfig.VISIBILITY_PUBLIC)
+            )
+            if can_delete:
+                cfg.delete()
         elif action == "set_default" and config_id:
             cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
             if not cfg:

@@ -77,6 +77,12 @@
             <input type="hidden" name="config_id" value="{{ config.id }}">
             <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
           </form>
+          <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
         {% elif config.visibility == 'private' and config.user_id == request.user.id %}
           <form method="post" style="display:inline-block" action="{% url 'table_filter_config' route_block_name %}">
             {% csrf_token %}

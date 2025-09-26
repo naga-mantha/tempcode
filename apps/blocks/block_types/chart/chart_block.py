@@ -308,8 +308,17 @@ class DonutChartBlock(ChartBlock, ABC):
         """Return mapping with ``labels`` and ``values`` lists."""
 
     def get_pie_default_trace(self, user):
-        """Base defaults for donut/pie trace options."""
-        return {"hole": 0.4}
+        """Base defaults for donut/pie trace options.
+
+        Force percentage text inside slices to avoid overflow/glitches in
+        smaller embedded tiles.
+        """
+        return {
+            "hole": 0.4,
+            "textposition": "inside",
+            "insidetextorientation": "radial",
+            "textinfo": "percent",
+        }
 
     def get_pie_trace_overrides(self, user):
         """Override point for apps to tweak pie trace options."""

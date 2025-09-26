@@ -85,7 +85,8 @@ class AddBlockForm(forms.ModelForm):
             return (meta.get("app_name") or "").strip()
         blocks.sort(key=lambda b: (_app(b).lower(), (b.name or "").lower()))
         # ModelChoiceField uses to_field_name='code', so values must be block.code
-        field.widget.choices = [
+        # Prepend an empty placeholder so the first real option isn't preselected.
+        field.widget.choices = [("", "-- Select a block --")] + [
             (b.code, f"{_app(b)}>{b.name}") for b in blocks
         ]
 

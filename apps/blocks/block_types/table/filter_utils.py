@@ -24,8 +24,14 @@ class FilterResolutionMixin:
         return schema
 
     @staticmethod
-    def _collect_filters(qd, schema, base=None, *, prefix="filters.", allow_flat=True):
-        """Collect filter values from a QueryDict overlaying optional base values."""
+    def _collect_filters(qd, schema, base=None, *, prefix="filters.", allow_flat=True, resolve_tokens=True):
+        """Collect filter values from a QueryDict overlaying optional base values.
+
+        When ``resolve_tokens`` is True (default), special date tokens like
+        "__today__" are expanded to concrete ISO dates. When False, tokens are
+        preserved as provided so they can be stored in saved filter configs and
+        evaluated at runtime later.
+        """
         base = dict(base or {})
 
         def _resolve_token(val):
@@ -82,8 +88,9 @@ class FilterResolutionMixin:
             return val
 
         # Pre-resolve any dynamic tokens in provided base values
-        for k, v in list(base.items()):
-            base[k] = _resolve_token(v)
+        if resolve_tokens:
+            for k, v in list(base.items()):
+                base[k] = _resolve_token(v)
         if not schema:
             return base
 
@@ -107,8 +114,7 @@ class FilterResolutionMixin:
                 else:
                     raw = qd.get(name)
                     if raw not in (None, ""):
-                        # Resolve tokens for request-provided values as well
-                        if cfg.get("type") in {"date", "text"}:
+                        if resolve_tokens and cfg.get("type") in {"date", "text"}:
                             base[key] = _resolve_token(raw)
                         else:
                             base[key] = raw

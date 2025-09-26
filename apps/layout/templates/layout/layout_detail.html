@@ -60,7 +60,7 @@
     <div class="grid-stack" id="grid-view" data-gs-static="true">
       {% for b in blocks %}
         <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}">
-          <div class="grid-stack-item-content card p-2">
+          <div class="grid-stack-item-content {% if not b.is_spacer %}card p-2{% endif %}">
             {{ b.html|safe }}
           </div>
         </div>

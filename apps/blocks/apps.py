@@ -16,6 +16,13 @@ class BlocksConfig(AppConfig):
         # can be either a module path that performs registration on import or a
         # "module:callable" string where the callable accepts the registry
         # instance.
+        # First, register built-in utility blocks (e.g., Spacer)
+        try:
+            from .builtins import register as register_builtins
+            register_builtins(block_registry)
+        except Exception:
+            pass
+
         blocks = getattr(settings, "BLOCKS", [])
         for entry in blocks:
             try:

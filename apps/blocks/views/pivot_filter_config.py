@@ -131,6 +131,7 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
                 base={},
                 prefix="filters.",
                 allow_flat=False,
+                resolve_tokens=False,
             )
             existing = BlockFilterConfig.objects.filter(block=self.block, user=self.user, name=name).first()
             if existing:

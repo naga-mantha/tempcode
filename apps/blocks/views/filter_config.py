@@ -98,7 +98,7 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             # Only collect namespaced inputs to avoid collisions with form fields like 'name'
             values = self._collect_filters(
                 self.request.POST, self.filter_schema, base={}, prefix="filters.", allow_flat=False
-            )
+            , resolve_tokens=False)
             existing = BlockFilterConfig.objects.filter(
                 block=self.db_block, user=self.request.user, name=name
             ).first()
@@ -119,15 +119,22 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
             except IntegrityError:
                 messages.error(self.request, "Filter name already taken. Please choose a different name.")
         elif action == "delete" and config_id:
-            # Only allow deleting own private filters
-            cfg = get_object_or_404(
-                BlockFilterConfig, id=config_id, block=self.db_block, user=self.request.user, visibility=BlockFilterConfig.VISIBILITY_PRIVATE
+            # Allow delete if:
+            # - owner of a private config, or
+            # - admin deleting a public config
+            cfg = get_object_or_404(BlockFilterConfig, id=config_id, block=self.db_block)
+            can_delete = (
+                (cfg.visibility == BlockFilterConfig.VISIBILITY_PRIVATE and cfg.user_id == self.request.user.id)
+                or (self.request.user.is_staff and cfg.visibility == BlockFilterConfig.VISIBILITY_PUBLIC)
             )
-            try:
-                cfg.delete()
-                messages.success(self.request, "Filter deleted.")
-            except Exception as exc:
-                messages.error(self.request, str(exc))
+            if not can_delete:
+                messages.error(self.request, "You do not have permission to delete this filter.")
+            else:
+                try:
+                    cfg.delete()
+                    messages.success(self.request, "Filter deleted.")
+                except Exception as exc:
+                    messages.error(self.request, str(exc))
         elif action == "set_default" and config_id:
             cfg = get_object_or_404(BlockFilterConfig, id=config_id, block=self.db_block)
             if self.request.user.is_staff and cfg.visibility == BlockFilterConfig.VISIBILITY_PUBLIC:
