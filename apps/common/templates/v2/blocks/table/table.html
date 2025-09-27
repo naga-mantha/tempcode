@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load dict_extras %}
+
+{% block title %}<title>{{ title }}</title>{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  {% include 'v2/blocks/table/table_card.html' %}
+</div>
+{% endblock %}

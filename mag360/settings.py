@@ -161,6 +161,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# --- V2 Policy flags ---
+# Mask unreadable fields in serializers when enabled. Initially False; enable during rollout.
+POLICY_ENFORCE_READ_MASK = env.bool('POLICY_ENFORCE_READ_MASK', default=False)
+
 # MAG360 SETTINGS
 LOGIN_REDIRECT_URL = "layout_list"
 LOGOUT_REDIRECT_URL = "home"

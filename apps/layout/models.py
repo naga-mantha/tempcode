@@ -26,6 +26,9 @@ class Layout(models.Model):
     )
     description = models.TextField(blank=True, default="")
     category = models.CharField(max_length=255, blank=True, default="")
+    # Timestamps for V2 filtering and auditing
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):  # noqa: D401 - override to auto-slugify
         """Persist the layout ensuring slug is derived from name."""
@@ -65,6 +68,8 @@ class LayoutBlock(models.Model):
     # Optional display metadata
     title = models.CharField(max_length=255, blank=True, default="")
     note = models.TextField(blank=True, default="")
+    # Per-instance settings for content blocks and minor data block tweaks
+    settings = models.JSONField(default=dict)
     # Optional per-instance default Block filter selection by name
     # When set, the layout will try to select the viewer's BlockFilterConfig
     # with this name for this block instance.
