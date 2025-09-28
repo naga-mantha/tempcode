@@ -343,23 +343,6 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     except Exception:
         values = {}
 
-    # Ensure JSON-serializable (dates → ISO strings, sets → lists)
-    def _json_safe(x):
-        try:
-            from datetime import date, datetime
-            if isinstance(x, (date, datetime)):
-                return x.isoformat()
-        except Exception:
-            pass
-        if isinstance(x, dict):
-            return {k: _json_safe(v) for k, v in x.items()}
-        if isinstance(x, (list, tuple)):
-            return [ _json_safe(v) for v in x ]
-        if isinstance(x, set):
-            return [ _json_safe(v) for v in x ]
-        return x
-    values = _json_safe(values)
-
     # Use the spec's filter resolver to clean values
     load_specs()
     spec = get_registry().get(spec_id)
@@ -383,7 +366,7 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     )
     # For HTMX requests, return updated Saved Filters partial so the page can refresh without full reload
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        from apps_v2.blocks.configs import list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         ctx = {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}
@@ -992,3 +975,4 @@ def save_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpRespon
         parsed = {}
     BlockFilterLayoutTemplate.objects.update_or_create(block=block, defaults={"layout": parsed})
     return HttpResponse(status=204)
+
