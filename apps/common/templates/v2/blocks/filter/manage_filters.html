@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}<title>Manage Filters — {{ spec.name }}</title>{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0">Manage Filters — {{ spec.name }}</h5>
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
+      {% if spec_id == 'v2.items.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_items' %}">Table Link</a>
+      {% elif spec_id == 'v2.layouts.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_layouts' %}">Table Link</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Table Link</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-7">
+      {% include "v2/blocks/filter/_saved_filters.html" with spec_id=spec_id filter_configs=filter_configs %}
+    </div>
+
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header">Filter Layout</div>
+        <div class="card-body">
+          <p class="text-muted small mb-2">Arrange which filter fields appear and their order.</p>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filter_layout' spec_id %}">Manage My Filter Layout</a>
+          {% if request.user.is_staff %}
+            <a class="btn btn-sm btn-outline-secondary ms-2" href="{% url 'blocks_v2:manage_filter_layout_default' spec_id %}">Manage Default Layout</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">Create Filter</div>
+        <div class="card-body">
+          <form id="v2ManageFilterForm" hx-post="{% url 'blocks_v2:save_filter_config' spec_id %}" hx-target="#savedFilters" hx-swap="outerHTML">
+            {% csrf_token %}
+            {% if filter_schema %}
+              <div class="mb-3">
+                {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values filter_layout=filter_layout name_prefix="" id_prefix="v2mf" %}
+              </div>
+            {% else %}
+              <div class="text-muted small">No filter schema defined for this spec.</div>
+            {% endif %}
+            <div class="row g-2 align-items-end">
+              <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Visibility</label>
+                <select name="visibility" class="form-select">
+                  <option value="private">Private</option>
+                  <option value="public">Public</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="is_default" id="mkDefaultFilt">
+                  <label class="form-check-label" for="mkDefaultFilt">Default</label>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" name="values_json" id="v2ManageFilterValues">
+            <div class="mt-3">
+              <button type="button" class="btn btn-primary" onclick="saveV2ManageFilter()">Save Filter</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('htmx:afterRequest', function(ev){
+    try {
+      var t = ev.target;
+      if (t.classList && t.classList.contains('js-reload-on-success')){
+        if (ev.detail && ev.detail.xhr && ev.detail.xhr.status >= 200 && ev.detail.xhr.status < 300){
+          window.location.reload();
+        }
+      }
+    } catch (e) {}
+  });
+
+  // Collect values and submit Save Filter
+  function saveV2ManageFilter(){
+    try {
+      const wrap = document.getElementById('v2ManageFilterForm');
+      const data = {};
+      if (wrap){
+        const fd = new FormData(wrap);
+        for (let [k, v] of fd.entries()){
+          if (k === 'name' || k === 'visibility' || k === 'is_default' || k === 'values_json' || k === 'csrfmiddlewaretoken') continue;
+          if (v === '') continue;
+          // Strip optional 'filters.' prefix used by shared templates
+          if (k.startsWith('filters.')) k = k.slice(8);
+          // Multiselects: accumulate values per key
+          if (data[k]){
+            if (!Array.isArray(data[k])) data[k] = [data[k]];
+            data[k].push(v);
+          } else {
+            data[k] = v;
+          }
+        }
+      }
+      document.getElementById('v2ManageFilterValues').value = JSON.stringify(data);
+      document.getElementById('v2ManageFilterForm').requestSubmit();
+    } catch (e) { alert('Unable to read filter values'); }
+  }
+
+  (function(){
+    // Minimal TomSelect init for AJAX choices on this page
+    try {
+      if (window.TomSelect){
+        document.querySelectorAll('#v2ManageFilterForm select.filter-field-select').forEach(function(sel){
+          var ajaxUrl = sel.getAttribute('data-ajax-url');
+          var opts = {};
+          try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}
+          var minLen = 3;
+          if (ajaxUrl){
+            new TomSelect(sel, Object.assign({
+              valueField: 'value',
+              labelField: 'label',
+              searchField: 'label',
+              persist: false,
+              closeAfterSelect: true,
+              preload: 'focus',
+              openOnFocus: true,
+              placeholder: 'Type at least ' + minLen + ' characters',
+              load: function(query, callback){
+                if (!query || query.length < minLen) { callback(); return; }
+                fetch(ajaxUrl + '?q=' + encodeURIComponent(query), {headers: {'X-Requested-With':'XMLHttpRequest'}})
+                  .then(r => r.json()).then(resp => callback(resp.results || []))
+                  .catch(() => callback());
+              }
+            }, opts));
+          }
+        });
+      }
+    } catch(e) { console.warn('TomSelect init failed', e); }
+  })();
+</script>
+{% endblock %}

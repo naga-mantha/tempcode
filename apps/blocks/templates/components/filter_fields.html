@@ -9,13 +9,13 @@
   {% for sec in filter_layout.sections %}
     {% if sec.title %}<h5 class="mt-3">{{ sec.title }}</h5>{% endif %}
     {% for row in sec.rows %}
-      <div class="filters-grid">
+      <div class="row g-2">
         {% for cell in row %}
           {% if cell.range %}
             {% with from_key=cell.range.0 to_key=cell.range.1 %}
               {% with from_cfg=filter_schema|get_item:from_key to_cfg=filter_schema|get_item:to_key %}
                 {% if from_cfg and to_cfg %}
-                  <div class="col-{{ cell.cols|default:12 }}">
+                  <div class="col-12 col-md-{{ cell.cols|default:12 }}">
                     <div class="mb-4 filter-field">
                       <label class="form-label">{{ cell.label|default:from_cfg.label|cut:" From" }} Between</label>
                       <div class="d-flex gap-3 align-items-start flex-wrap">
@@ -72,7 +72,7 @@
               {% endwith %}
             {% endwith %}
           {% elif cell.key %}
-            <div class="col-{{ cell.cols|default:12 }}">
+            <div class="col-12 col-md-{{ cell.cols|default:12 }}">
               {% include 'components/_single_filter_field.html' with key=cell.key %}
             </div>
           {% endif %}
@@ -464,21 +464,5 @@
   /* Compact spacing for inline controls within date fields */
   .date-filter-wrapper .form-text { margin-top: 0.25rem; }
   .date-filter-wrapper .btn.pick-date-btn { white-space: nowrap; }
-  /* Responsive auto-fit grid so filters wrap instead of shrinking */
-  .filters-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--filter-min-col, 260px), 1fr));
-    gap: 1rem 1rem;
-    align-items: stretch;
-  }
-  /* Make grid items behave nicely */
-  .filters-grid > * { min-width: 0; }
-  /* Neutralize Bootstrap column widths inside CSS Grid */
-  .filters-grid > [class^="col-"],
-  .filters-grid > [class*=" col-"] {
-    width: auto !important;
-    max-width: none !important;
-  }
-  /* Span full width for explicit 12-col cells */
-  .filters-grid > .col-12 { grid-column: 1 / -1; }
+  /* Using Bootstrap grid (row/col) for layout; no extra grid CSS needed */
 </style>

@@ -343,6 +343,23 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     except Exception:
         values = {}
 
+    # Ensure JSON-serializable (dates → ISO strings, sets → lists)
+    def _json_safe(x):
+        try:
+            from datetime import date, datetime
+            if isinstance(x, (date, datetime)):
+                return x.isoformat()
+        except Exception:
+            pass
+        if isinstance(x, dict):
+            return {k: _json_safe(v) for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            return [ _json_safe(v) for v in x ]
+        if isinstance(x, set):
+            return [ _json_safe(v) for v in x ]
+        return x
+    values = _json_safe(values)
+
     # Use the spec's filter resolver to clean values
     load_specs()
     spec = get_registry().get(spec_id)
@@ -364,6 +381,172 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
             "is_default": bool(is_default),
         }
     )
+    # For HTMX requests, return updated Saved Filters partial so the page can refresh without full reload
+    if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
+        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        block_row = get_block_for_spec(spec_id)
+        filter_configs = list(list_filter_configs(block_row, request.user))
+        ctx = {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}
+        from django.template.loader import render_to_string
+        html = render_to_string("v2/blocks/filter/_saved_filters.html", ctx, request=request)
+        return HttpResponse(html)
+    return HttpResponse(status=204)
+
+
+@login_required
+def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
+    """Manage Filters page (V2): list/rename/duplicate/delete/make-default filter configs.
+
+    Also links to Filter Layout (per-user) and Default Filter Layout (admin).
+    """
+    load_specs()
+    reg = get_registry()
+    spec = reg.get(spec_id)
+    if not spec:
+        raise Http404("Unknown block spec")
+    from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs, choose_active_filter_config
+    block = get_block_for_spec(spec_id)
+    # Load all user-visible filter configs
+    filter_configs = list(list_filter_configs(block, request.user))
+    # Active selection (optional via query param)
+    had_cfg_param = "filter_config_id" in request.GET
+    cfg_id = request.GET.get("filter_config_id")
+    try:
+        cfg_id_int = int(cfg_id) if cfg_id else None
+    except ValueError:
+        cfg_id_int = None
+    if had_cfg_param:
+        active_cfg = choose_active_filter_config(block, request.user, cfg_id_int)
+    else:
+        active_cfg = None
+    # Build filter schema (V2) for render + load per-user/default layout
+    services = spec.services or None
+    schema_list = []
+    if services and services.filter_resolver:
+        try:
+            resolver = services.filter_resolver(spec)
+        except TypeError:
+            resolver = services.filter_resolver()
+        try:
+            schema_list = list(resolver.schema())
+        except Exception:
+            schema_list = []
+    # Build mapping for template include (key -> cfg)
+    filter_schema = {s.get("key"): s for s in schema_list if isinstance(s, dict) and s.get("key")}
+    # Load user/default filter layout (if any)
+    from apps.blocks.models.block_filter_layout import BlockFilterLayout
+    from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
+    user_layout = BlockFilterLayout.objects.filter(block=block, user=request.user).first()
+    admin_layout = BlockFilterLayoutTemplate.objects.filter(block=block).first()
+    filter_layout = None
+    if user_layout and isinstance(user_layout.layout, dict):
+        filter_layout = user_layout.layout
+    elif admin_layout and isinstance(admin_layout.layout, dict):
+        filter_layout = admin_layout.layout
+
+    ctx = {
+        "spec": spec,
+        "spec_id": spec_id,
+        "filter_configs": filter_configs,
+        "active_filter_config_id": getattr(active_cfg, "id", None),
+        # Filter schema + layout for inline create form
+        "filter_schema": filter_schema,
+        "filter_layout": filter_layout,
+        "initial_values": {},
+    }
+    return render(request, "v2/blocks/filter/manage_filters.html", ctx)
+
+
+@login_required
+@require_POST
+def rename_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    # Guard: if not POST, just bounce back to Manage Filters (avoid 405 confusion)
+    if request.method != "POST":
+        return redirect("blocks_v2:manage_filters", spec_id=spec_id)
+
+    from apps.blocks.models.block_filter_config import BlockFilterConfig
+    try:
+        obj = BlockFilterConfig.objects.get(pk=config_id, user=request.user)
+    except BlockFilterConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    new_name = (request.POST.get("name") or "").strip()
+    if not new_name:
+        return HttpResponse(status=400)
+    obj.name = new_name
+    obj.save(update_fields=["name"])
+    if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
+        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        block_row = get_block_for_spec(spec_id)
+        filter_configs = list(list_filter_configs(block_row, request.user))
+        from django.template.loader import render_to_string
+        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        return HttpResponse(html)
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
+def duplicate_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.block_filter_config import BlockFilterConfig
+    try:
+        obj = BlockFilterConfig.objects.get(pk=config_id)
+    except BlockFilterConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    copy = BlockFilterConfig(
+        block=obj.block,
+        user=request.user,
+        name=f"{obj.name} (copy)",
+        values=dict(obj.values or {}),
+        visibility=BlockFilterConfig.VISIBILITY_PRIVATE,
+        is_default=False,
+    )
+    copy.save()
+    if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
+        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        block_row = get_block_for_spec(spec_id)
+        filter_configs = list(list_filter_configs(block_row, request.user))
+        from django.template.loader import render_to_string
+        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        return HttpResponse(html)
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
+def delete_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.block_filter_config import BlockFilterConfig
+    try:
+        obj = BlockFilterConfig.objects.get(pk=config_id, user=request.user)
+    except BlockFilterConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    obj.delete()
+    if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
+        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        block_row = get_block_for_spec(spec_id)
+        filter_configs = list(list_filter_configs(block_row, request.user))
+        from django.template.loader import render_to_string
+        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        return HttpResponse(html)
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
+def make_default_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.block_filter_config import BlockFilterConfig
+    try:
+        obj = BlockFilterConfig.objects.get(pk=config_id, user=request.user)
+    except BlockFilterConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    obj.is_default = True
+    obj.save(update_fields=["is_default"])  # model enforces single default
+    if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
+        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        block_row = get_block_for_spec(spec_id)
+        filter_configs = list(list_filter_configs(block_row, request.user))
+        from django.template.loader import render_to_string
+        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        return HttpResponse(html)
     return HttpResponse(status=204)
 
 
@@ -670,3 +853,142 @@ def make_default_table_config(request: HttpRequest, spec_id: str, config_id: int
 
 
 # Removed toggle_visibility endpoint per updated UX (visibility changes not supported here)
+
+
+@login_required
+def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
+    """V2-native Filter Layout (per-user) for a spec.
+
+    Uses V2 filter schema as the available fields source.
+    """
+    load_specs()
+    reg = get_registry()
+    spec = reg.get(spec_id)
+    if not spec:
+        raise Http404("Unknown block spec")
+    # Resolve available fields from spec's filter schema
+    services = spec.services or None
+    schema = []
+    if services and services.filter_resolver:
+        try:
+            resolver = services.filter_resolver(spec)
+        except TypeError:
+            resolver = services.filter_resolver()
+        try:
+            schema = list(resolver.schema())
+        except Exception:
+            schema = []
+    available = []
+    for f in (schema or []):
+        if not isinstance(f, dict):
+            continue
+        key = f.get("key")
+        if not key:
+            continue
+        available.append({
+            "key": str(key),
+            "label": str(f.get("label") or key),
+            "type": str(f.get("type") or "text"),
+        })
+    # Load saved user layout or fallback to admin default
+    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.models.block_filter_layout import BlockFilterLayout
+    from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
+    block = get_block_for_spec(spec_id)
+    user_layout = BlockFilterLayout.objects.filter(block=block, user=request.user).first()
+    admin_layout = BlockFilterLayoutTemplate.objects.filter(block=block).first()
+    layout_obj = {}
+    if user_layout and isinstance(user_layout.layout, dict):
+        layout_obj = user_layout.layout
+    elif admin_layout and isinstance(admin_layout.layout, dict):
+        layout_obj = admin_layout.layout
+    ctx = {
+        "spec": spec,
+        "spec_id": spec_id,
+        "available_fields": available,
+        "layout_json": json.dumps(layout_obj or {}),
+        "admin_mode": False,
+    }
+    return render(request, "v2/blocks/filter/filter_layout.html", ctx)
+
+
+@login_required
+def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResponse:
+    """V2-native Default Filter Layout (admin-only) for a spec."""
+    if not request.user.is_staff:
+        raise Http404()
+    load_specs()
+    reg = get_registry()
+    spec = reg.get(spec_id)
+    if not spec:
+        raise Http404("Unknown block spec")
+    services = spec.services or None
+    schema = []
+    if services and services.filter_resolver:
+        try:
+            resolver = services.filter_resolver(spec)
+        except TypeError:
+            resolver = services.filter_resolver()
+        try:
+            schema = list(resolver.schema())
+        except Exception:
+            schema = []
+    available = []
+    for f in (schema or []):
+        if not isinstance(f, dict):
+            continue
+        key = f.get("key")
+        if not key:
+            continue
+        available.append({
+            "key": str(key),
+            "label": str(f.get("label") or key),
+            "type": str(f.get("type") or "text"),
+        })
+    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
+    block = get_block_for_spec(spec_id)
+    tpl = BlockFilterLayoutTemplate.objects.filter(block=block).first()
+    layout_obj = tpl.layout if (tpl and isinstance(tpl.layout, dict)) else {}
+    ctx = {
+        "spec": spec,
+        "spec_id": spec_id,
+        "available_fields": available,
+        "layout_json": json.dumps(layout_obj or {}),
+        "admin_mode": True,
+    }
+    return render(request, "v2/blocks/filter/filter_layout.html", ctx)
+
+
+@login_required
+@require_POST
+def save_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
+    """Save per-user Filter Layout for a spec (V2)."""
+    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.models.block_filter_layout import BlockFilterLayout
+    block = get_block_for_spec(spec_id)
+    text = request.POST.get("layout") or "{}"
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = {}
+    BlockFilterLayout.objects.update_or_create(block=block, user=request.user, defaults={"layout": parsed})
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
+def save_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResponse:
+    """Save default Filter Layout (admin-only) for a spec (V2)."""
+    if not request.user.is_staff:
+        return HttpResponse(status=403)
+    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
+    block = get_block_for_spec(spec_id)
+    text = request.POST.get("layout") or "{}"
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = {}
+    BlockFilterLayoutTemplate.objects.update_or_create(block=block, defaults={"layout": parsed})
+    return HttpResponse(status=204)
