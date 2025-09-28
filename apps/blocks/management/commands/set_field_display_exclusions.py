@@ -124,3 +124,4 @@ class Command(BaseCommand):
                     f"Done. Created: {total_created}, Updated: {total_updated}"
                 )
             )
+

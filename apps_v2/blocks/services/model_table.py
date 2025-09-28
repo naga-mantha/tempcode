@@ -10,6 +10,41 @@ from apps_v2.policy.service import PolicyService
 from apps_v2.blocks.services.field_catalog import build_field_catalog
 
 
+def _resolve_date_token(s: str, *, as_datetime: bool = False):
+    """Translate simple tokens like __today__, __start_of_month__, __end_of_month__, __start_of_year__, __end_of_year__.
+
+    Returns a date or datetime in local time (naive), or None if not a token.
+    """
+    if not isinstance(s, str) or not s.startswith("__"):
+        return None
+    from datetime import date, datetime, time, timedelta
+    today = date.today()
+    if s == "__today__":
+        d = today
+    elif s == "__start_of_month__":
+        d = today.replace(day=1)
+    elif s == "__end_of_month__":
+        # next month start minus one day
+        if today.month == 12:
+            d = date(today.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            d = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    elif s == "__start_of_year__":
+        d = date(today.year, 1, 1)
+    elif s == "__end_of_year__":
+        d = date(today.year, 12, 31)
+    else:
+        return None
+    if as_datetime:
+        # start of day for start tokens, end of day for end tokens
+        if "start" in s:
+            return datetime.combine(d, time.min)
+        if "end" in s:
+            return datetime.combine(d, time.max)
+        return datetime.combine(d, time.min)
+    return d
+
+
 def _coerce_value(v: Any, typ: str):
     if v is None:
         return None
@@ -33,11 +68,17 @@ def _coerce_value(v: Any, typ: str):
             from datetime import date
             if isinstance(v, date):
                 return v
+            tok = _resolve_date_token(str(v), as_datetime=False)
+            if tok is not None:
+                return tok
             return date.fromisoformat(str(v))
         if typ == "datetime":
             from datetime import datetime
             if isinstance(v, datetime):
                 return v
+            tok = _resolve_date_token(str(v), as_datetime=True)
+            if tok is not None:
+                return tok
             return datetime.fromisoformat(str(v))
     except Exception:
         return None
@@ -163,8 +204,6 @@ class ModelColumnResolver(BaseColumnResolver):
             user=request.user,
             policy=self.policy,
             max_depth=getattr(self.spec, "column_max_depth", 0) or 0,
-            allow=getattr(self.spec, "column_allow", None),
-            deny=getattr(self.spec, "column_deny", None),
         )
 
 

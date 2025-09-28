@@ -16,6 +16,7 @@ from apps_v2.blocks.services.model_table import (
     ModelColumnResolver,
     ModelSerializer,
 )
+from apps_v2.blocks.services.export_options import DefaultExportOptions
 
 
 """V2 Layouts table spec using schema-driven services (no hard-coded filters).
@@ -37,6 +38,7 @@ class LayoutsTableSpec:
             column_resolver=ModelColumnResolver,
             query_builder=ModelQueryBuilder,
             serializer=ModelSerializer,
+            export_options=DefaultExportOptions,
         ),
         category="System",
         description="User's layouts listing (V2 table via schema-driven services).",
@@ -52,7 +54,6 @@ class LayoutsTableSpec:
             {"key": "created_from", "field": "created_at__date", "type": "date", "lookups": {"created_from": "created_at__date__gte"}},
             {"key": "created_to", "field": "created_at__date", "type": "date", "lookups": {"created_to": "created_at__date__lte"}},
         ],
-        column_allow=["name", "slug", "visibility", "category", "created_at", "updated_at"],
         column_max_depth=0,
         table_options={
             "pagination": True,

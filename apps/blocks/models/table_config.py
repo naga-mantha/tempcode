@@ -16,7 +16,6 @@ class BlockTableConfig(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     columns = models.JSONField(default=list)  # ordered list of keys
-    options = models.JSONField(default=dict)  # allowlisted Tabulator options
     visibility = models.CharField(max_length=7, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE)
     is_default = models.BooleanField(default=False)
 

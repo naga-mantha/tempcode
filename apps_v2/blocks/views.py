@@ -9,6 +9,7 @@ from apps_v2.blocks.registry import get_registry
 from apps_v2.blocks.register import load_specs
 from apps_v2.policy.service import PolicyService
 from django.http import JsonResponse
+from django.core.cache import cache
 from django.views.decorators.http import require_POST
 from django.middleware.csrf import get_token
 import json
@@ -210,9 +211,26 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
     if not entry:
         return JsonResponse({"results": []})
     model_field = entry.get("field") or entry.get("key")
+    # Min query length (default 3) to avoid expensive scans on short probes
+    try:
+        min_len = int(entry.get("min_query_length", 3))
+    except Exception:
+        min_len = 3
+    q = (request.GET.get("q") or "").strip()
+    if len(q) < (min_len or 0):
+        return JsonResponse({"results": []})
     # Build filters and remove target field values to avoid self-filtering
     filters = resolver.resolve(request)
     filters.pop(field, None)
+    # Cache key includes spec, field, query (lowercased), and a stable filter fingerprint
+    try:
+        filt_fp = ":".join(f"{k}={v}" for k, v in sorted(filters.items()))
+    except Exception:
+        filt_fp = ""
+    cache_key = f"v2:choices:{spec_id}:{field}:{q.lower()}:{filt_fp}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse({"results": cached})
     # Build queryset
     try:
         try:
@@ -223,7 +241,6 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
     except Exception:
         qs = []
     # Optional text search narrowing
-    q = (request.GET.get("q") or "").strip()
     if q and model_field:
         try:
             qs = qs.filter(**{f"{model_field}__icontains": q})
@@ -241,6 +258,10 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
         data = [{"value": v, "label": v} for v in values]
     except Exception:
         data = []
+    try:
+        cache.set(cache_key, data, timeout=60)
+    except Exception:
+        pass
     return JsonResponse({"results": data})
 
 
@@ -270,32 +291,30 @@ def save_table_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = get_registry().get(spec_id)
     model = getattr(spec, "model", None) if spec else None
     allowed_cols = set()
+    mandatory_cols = set()
     if model is not None:
-        allowed_cols = {c["key"] for c in build_field_catalog(
+        catalog = build_field_catalog(
             model,
             user=request.user,
             policy=policy,
             max_depth=getattr(spec, "column_max_depth", 0) or 0,
-            allow=getattr(spec, "column_allow", None),
-            deny=getattr(spec, "column_deny", None),
-        )}
+        )
+        allowed_cols = {c["key"] for c in catalog}
+        mandatory_cols = {c["key"] for c in catalog if c.get("mandatory")}
     cols = [c for c in cols if c in allowed_cols]
+    # Ensure mandatory fields are always included in saved configs
+    for m in mandatory_cols:
+        if m not in cols:
+            cols.append(m)
 
     # Merge/clean options via allowlist
-    try:
-        raw_opts = json.loads(request.POST.get("options_json") or "{}")
-        if not isinstance(raw_opts, dict):
-            raw_opts = {}
-    except Exception:
-        raw_opts = {}
-    from apps_v2.blocks.options import merge_table_options
-    options = merge_table_options({}, raw_opts)
+    # Per-view options disabled; keep options empty and rely on spec.table_options
+    options = {}
 
     obj, _ = BlockTableConfig.objects.update_or_create(
         block=block, user=request.user, name=name or "Default",
         defaults={
             "columns": cols,
-            "options": options,
             "visibility": visibility if visibility in {BlockTableConfig.VISIBILITY_PRIVATE, BlockTableConfig.VISIBILITY_PUBLIC} else BlockTableConfig.VISIBILITY_PRIVATE,
             "is_default": bool(is_default),
         }
@@ -415,6 +434,17 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
         key_to_col = {c.get("key"): c for c in columns}
         columns = [key_to_col[k] for k in ordered if k in key_to_col]
 
+    # Optional ExportOptions hook: allow spec to transform columns before serialization
+    from apps_v2.blocks.services.export_options import DefaultExportOptions
+    try:
+        exopts = services.export_options(spec) if getattr(services, "export_options", None) else DefaultExportOptions()
+    except TypeError:
+        exopts = services.export_options() if getattr(services, "export_options", None) else DefaultExportOptions()
+    try:
+        columns = list(exopts.transform_columns(columns, request=request, filters=filters, spec=spec))
+    except Exception:
+        pass
+
     # Sorting (optional)
     sort = request.GET.get("sort")
     direction = request.GET.get("dir", "asc")
@@ -443,9 +473,20 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
     else:
         rows = []
 
+    # Allow ExportOptions to transform rows (formatting/mapping) after serialization
+    try:
+        rows = list(exopts.transform_rows(rows, columns, request=request, filters=filters, spec=spec))
+    except Exception:
+        pass
+
     # Build filename
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    base = spec_id.replace(".", "_")
+    # Filename via export options (fallback to default)
+    try:
+        opt_name = exopts.filename(spec, fmt, request, filters)  # type: ignore[arg-type]
+    except Exception:
+        opt_name = None
+    base = (opt_name or spec_id).replace(".", "_")
 
     if fmt == "csv":
         buf = StringIO()
@@ -464,7 +505,11 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
             return HttpResponse("XLSX export not available", status=501)
         wb = Workbook()
         ws = wb.active
-        ws.title = spec.name[:31]
+        try:
+            sheet = exopts.sheet_name(spec)
+        except Exception:
+            sheet = None
+        ws.title = (sheet or spec.name)[:31]
         header = [c.get("label") for c in columns]
         ws.append(header)
         keys = [c.get("key") for c in columns]
@@ -497,11 +542,8 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
     if not services:
         raise Http404("Spec has no services")
 
-    # Available columns via field catalog with optional depth
-    try:
-        depth = max(0, min(3, int(request.GET.get("depth", "0"))))
-    except ValueError:
-        depth = 0
+    # Available columns via field catalog; depth comes from spec setting
+    depth = int(getattr(spec, "column_max_depth", 0) or 0)
     policy = PolicyService()
     # Use the spec's model and column controls
     model = getattr(spec, "model", None)
@@ -512,35 +554,56 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
         user=request.user,
         policy=policy,
         max_depth=depth,
-        allow=getattr(spec, "column_allow", None),
-        deny=getattr(spec, "column_deny", None),
     )
     key_to_meta = {c.get("key"): c for c in available_cols}
 
     # Active view selection
     from apps_v2.blocks.configs import get_block_for_spec, list_table_configs, choose_active_table_config
     block_row = get_block_for_spec(spec_id)
+    had_cfg_param = "config_id" in request.GET
     cfg_id = request.GET.get("config_id")
     try:
         cfg_id_int = int(cfg_id) if cfg_id else None
     except ValueError:
         cfg_id_int = None
     table_configs = list(list_table_configs(block_row, request.user))
-    active_cfg = choose_active_table_config(block_row, request.user, cfg_id_int)
-    selected_keys = list(active_cfg.columns) if (active_cfg and active_cfg.columns) else [c.get("key") for c in available_cols]
+    if had_cfg_param:
+        active_cfg = choose_active_table_config(block_row, request.user, cfg_id_int)
+    else:
+        # Explicit "New (default)" selection: do not fall back to default view
+        active_cfg = None
+    # Default behavior for new views: show all fields on the left (Available)
+    # and none on the right (Selected). If a config exists with columns,
+    # use that list.
+    if active_cfg and active_cfg.columns:
+        selected_keys = list(active_cfg.columns)
+        # Ensure any newly-mandatory fields are present
+        mandatory_keys = [c.get("key") for c in available_cols if c.get("mandatory")]
+        for mk in mandatory_keys:
+            if mk not in selected_keys:
+                selected_keys.append(mk)
+    else:
+        # New view: preselect mandatory fields
+        selected_keys = [c.get("key") for c in available_cols if c.get("mandatory")]
 
     # Partition available/selected lists
     selected_set = set(selected_keys)
     available_only = [k for k in key_to_meta.keys() if k not in selected_set]
 
+    selected_meta = []
+    for k in selected_keys:
+        meta = key_to_meta.get(k)
+        if meta:
+            selected_meta.append(meta)
+        # If a key is no longer in the catalog (e.g., newly excluded), drop it silently
+
     ctx = {
         "spec": spec,
         "spec_id": spec_id,
         "available": [key_to_meta.get(k) for k in available_only],
-        "selected": [key_to_meta.get(k) for k in selected_keys if k in key_to_meta],
+        "selected": selected_meta,
         "table_configs": table_configs,
         "active_table_config_id": getattr(active_cfg, "id", None),
-        "depth": depth,
     }
     return render(request, "v2/blocks/table/manage_columns.html", ctx)
 
@@ -574,7 +637,6 @@ def duplicate_table_config(request: HttpRequest, spec_id: str, config_id: int) -
         user=request.user,
         name=f"{obj.name} (copy)",
         columns=list(obj.columns or []),
-        options=dict(obj.options or {}),
         visibility=BlockTableConfig.VISIBILITY_PRIVATE,
         is_default=False,
     )
@@ -607,19 +669,4 @@ def make_default_table_config(request: HttpRequest, spec_id: str, config_id: int
     return HttpResponse(status=204)
 
 
-@login_required
-@require_POST
-def toggle_visibility_table_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
-    from apps.blocks.models.table_config import BlockTableConfig
-    try:
-        obj = BlockTableConfig.objects.get(pk=config_id, user=request.user)
-    except BlockTableConfig.DoesNotExist:
-        return HttpResponse(status=404)
-    new_vis = (
-        BlockTableConfig.VISIBILITY_PUBLIC
-        if obj.visibility == BlockTableConfig.VISIBILITY_PRIVATE
-        else BlockTableConfig.VISIBILITY_PRIVATE
-    )
-    obj.visibility = new_vis
-    obj.save(update_fields=["visibility"])
-    return HttpResponse(status=204)
+# Removed toggle_visibility endpoint per updated UX (visibility changes not supported here)

@@ -1,0 +1,17 @@
+I need a new model (in apps/common). Call it Roadmap
+
+Fields
+- title (string)
+- description (text)
+- technical specifications (text)
+- status (enum: planned, in progress, completed)
+- Timeframe (options: Q1, Q2, Q3, Q4)
+- App (options: Common, Workflows, Permissions, Blocks, Layouts, Purchase, Production, Sales, Planning, Service)
+
+Then create a script which creates/updates the Roadmap instances. You can create a few sample entries
+
+Then create a page which lists all the Roadmap entries in a bootstrap accordion. Each accordion item should show the title/status/timeframe in the header, and the description/technical specifications in the body.
+
+The page should have ability to sort by timeframe or app. If sorted by timeframe, it should group entries by Q1, Q2, Q3, Q4. If sorted by app, it should group entries by app name.
+
+User should be able to filter by status (default all)

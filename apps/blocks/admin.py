@@ -19,6 +19,12 @@ class BlockFilterConfigAdmin(admin.ModelAdmin):
     search_fields = ("name", "is_default",)
     list_filter = ("visibility",)
 
+@admin.register(BlockTableConfig)
+class BlockTableConfigAdmin(admin.ModelAdmin):
+    list_display = ("block", "user", "name", "is_default", "visibility")
+    search_fields = ("name",)
+    list_filter = ("visibility",)
+
 @admin.register(FieldDisplayRule)
 class FieldDisplayRuleAdmin(admin.ModelAdmin):
     list_display = ("model_label", "field_name", "is_mandatory", "is_excluded" )

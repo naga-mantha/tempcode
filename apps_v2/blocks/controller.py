@@ -112,9 +112,8 @@ class BlockController:
         # will fetch data from the JSON endpoint immediately.
         rows = []
         # Merge allowlisted Tabulator options: spec defaults + request overrides
-        request_overrides = {k: v for k, v in request.GET.items()}
-        config_overrides = getattr(active_cfg, "options", {}) if active_cfg else {}
-        table_options = merge_table_options(getattr(self.spec, "table_options", {}) or {}, config_overrides or {}, request_overrides)
+        # Options are fixed at the spec level (per-view overrides removed)
+        table_options = merge_table_options(getattr(self.spec, "table_options", {}) or {})
         if str(table_options.get("pagination", "")).lower() != "remote" and services.query_builder and services.serializer:
             try:
                 qb = services.query_builder(request, self.policy, self.spec)

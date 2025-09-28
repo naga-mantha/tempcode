@@ -5,3 +5,4 @@ from apps.blocks.models.block_filter_layout import BlockFilterLayout
 from apps.blocks.models.field_display_rule import FieldDisplayRule
 from apps.blocks.models.pivot_config import PivotConfig
 from apps.blocks.models.repeater_config import RepeaterConfig
+from apps.blocks.models.table_config import BlockTableConfig

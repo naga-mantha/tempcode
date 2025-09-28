@@ -24,6 +24,7 @@ function move_js() {
         'node_modules/tabulator-tables/dist/js/tabulator.min.js',
         'node_modules/sortablejs/Sortable.min.js',
         'node_modules/tom-select/dist/js/tom-select.complete.min.js',
+        'node_modules/htmx.org/dist/htmx.min.js',
         ], {"allowEmpty": true})
         .pipe(gulp.dest('apps/common/src/vendor-js'))
 }

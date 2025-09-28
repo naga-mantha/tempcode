@@ -277,4 +277,14 @@ class ExchangeRateAdmin(admin.ModelAdmin):
 class SoValidateAggregateAdmin(admin.ModelAdmin):
     list_display = ("item",)
 
+
+from apps.common.models import Roadmap
+
+
+@admin.register(Roadmap)
+class RoadmapAdmin(admin.ModelAdmin):
+    list_display = ("title", "app", "timeframe", "status")
+    list_filter = ("app", "timeframe", "status")
+    search_fields = ("title", "description", "technical_specifications")
+
     

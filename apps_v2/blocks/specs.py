@@ -31,7 +31,5 @@ class BlockSpec:
     # Optional filter schema driving UI + parsing
     # Each item: {key, type, label?, choices?, choices_url?, params?, lookup?/lookups?}
     filter_schema: Optional[Sequence[dict[str, Any]]] = None
-    # Column catalog controls
-    column_allow: Optional[Sequence[str]] = None
-    column_deny: Optional[Sequence[str]] = None
+    # Column catalog control: how deep to traverse relations when listing fields
     column_max_depth: int = 0

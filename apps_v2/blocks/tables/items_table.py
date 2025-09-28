@@ -16,6 +16,7 @@ from apps_v2.blocks.services.model_table import (
     ModelColumnResolver,
     ModelSerializer,
 )
+from apps_v2.blocks.services.export_options import DefaultExportOptions
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class ItemsTableSpec:
             column_resolver=ModelColumnResolver,
             query_builder=ModelQueryBuilder,
             serializer=ModelSerializer,
+            export_options=DefaultExportOptions,
         ),
         category="Master Data",
         description="Items listing (V2 table via schema-driven services).",
@@ -41,8 +43,7 @@ class ItemsTableSpec:
             {"key": "item_group_codes", "field": "item_group__code", "type": "multiselect", "label": "Item Groups"},
             {"key": "item_type_codes", "field": "type__code", "type": "multiselect", "label": "Item Types"},
         ],
-        column_allow=["code", "description", "item_group__code", "type__code"],
-        column_max_depth=1,
+        column_max_depth=20,
         table_options={
             "pagination": True,
             "paginationMode": "remote",

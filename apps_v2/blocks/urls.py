@@ -20,7 +20,6 @@ urlpatterns = [
     path("config/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_table_config, name="duplicate_table_config"),
     path("config/delete/<str:spec_id>/<int:config_id>", views.delete_table_config, name="delete_table_config"),
     path("config/make_default/<str:spec_id>/<int:config_id>", views.make_default_table_config, name="make_default_table_config"),
-    path("config/toggle_visibility/<str:spec_id>/<int:config_id>", views.toggle_visibility_table_config, name="toggle_visibility_table_config"),
     path("filter/save/<str:spec_id>", views.save_filter_config, name="save_filter_config"),
     path("manage/<str:spec_id>", views.manage_columns, name="manage_columns"),
     # Demo table block (V2)

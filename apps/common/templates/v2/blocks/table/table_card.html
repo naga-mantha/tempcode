@@ -75,7 +75,7 @@
                 {% endif %}
               </select>
             {% elif f.type == 'multiselect' %}
-              <select id="filter-{{ f.key }}-{{ dom_id }}" name="{{ f.key }}" multiple class="form-select form-select-sm" style="min-width:220px"></select>
+              <select id="filter-{{ f.key }}-{{ dom_id }}" name="{{ f.key }}" multiple class="form-select form-select-sm" style="min-width:220px" placeholder="Type at least {{ f.min_query_length|default:3 }} characters"></select>
             {% elif f.type == 'date' %}
               <input type="date" name="{{ f.key }}" value="{{ filters|get_item:f.key|default:'' }}" class="form-control form-control-sm" onchange="this.form.requestSubmit()">
             {% else %}
@@ -120,40 +120,13 @@
             <input class="form-check-input" type="checkbox" name="is_default" id="defChk-{{ dom_id }}">
             <label class="form-check-label" for="defChk-{{ dom_id }}">Make default</label>
           </div>
-          <hr>
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label">Layout</label>
-              <select id="optLayout-{{ dom_id }}" class="form-select">
-                <option value="fitColumns" {% if table_options.layout == 'fitColumns' %}selected{% endif %}>fitColumns</option>
-                <option value="fitDataTable" {% if table_options.layout == 'fitDataTable' %}selected{% endif %}>fitDataTable</option>
-                <option value="fitData" {% if table_options.layout == 'fitData' %}selected{% endif %}>fitData</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Page Size</label>
-              <select id="optPageSize-{{ dom_id }}" class="form-select">
-                {% with sizes=table_options.paginationSizeSelector|default:'[10,25,50,100]' %}
-                  {% for s in sizes %}
-                    <option value="{{ s }}" {% if s == table_options.paginationSize %}selected{% endif %}>{{ s }}</option>
-                  {% endfor %}
-                {% endwith %}
-              </select>
-            </div>
-            <div class="col-md-6 d-flex align-items-end">
-              <div class="form-check mt-2">
-                <input type="checkbox" class="form-check-input" id="optMovable-{{ dom_id }}" {% if table_options.movableColumns %}checked{% endif %}>
-                <label class="form-check-label" for="optMovable-{{ dom_id }}">Movable Columns</label>
-              </div>
-            </div>
-          </div>
           <input type="hidden" name="columns_json" id="colsJson-{{ dom_id }}">
-          <input type="hidden" name="options_json" id="optsJson-{{ dom_id }}">
+          
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" onclick="(function(){ try{ var t=window['{{ dom_id }}']; var cols=(t?.getColumns?.()||[]).map(c=>c.getField()).filter(Boolean); document.getElementById('colsJson-{{ dom_id }}').value = JSON.stringify(cols); var opts={}; var l=document.getElementById('optLayout-{{ dom_id }}'); if(l) opts.layout=l.value; var ps=document.getElementById('optPageSize-{{ dom_id }}'); if(ps) opts.paginationSize=parseInt(ps.value||'10'); var mv=document.getElementById('optMovable-{{ dom_id }}'); if(mv) opts.movableColumns=!!mv.checked; document.getElementById('optsJson-{{ dom_id }}').value = JSON.stringify(opts); document.getElementById('saveCfgForm-{{ dom_id }}').requestSubmit(); }catch(e){ alert('Unable to read columns/options'); } })()">Save</button>
+        <button type="button" class="btn btn-primary" onclick="(function(){ try{ var t=window['{{ dom_id }}']; var cols=(t?.getColumns?.()||[]).map(c=>c.getField()).filter(Boolean); document.getElementById('colsJson-{{ dom_id }}').value = JSON.stringify(cols); document.getElementById('saveCfgForm-{{ dom_id }}').requestSubmit(); }catch(e){ alert('Unable to read columns'); } })()">Save</button>
   </div>
   </div>
  </div>
@@ -260,6 +233,7 @@
           if (f.type === 'multiselect'){
             var selEl = document.querySelector('#filter-' + f.key + '-{{ dom_id }}');
             if (!selEl) return;
+            var minLen = (typeof f.min_query_length === 'number' && f.min_query_length >= 0) ? f.min_query_length : 3;
             var ts = new TomSelect(selEl, {
               valueField: 'value',
               labelField: 'label',
@@ -268,10 +242,12 @@
               closeAfterSelect: true,
               preload: 'focus',
               openOnFocus: true,
+              placeholder: 'Type at least ' + minLen + ' characters',
               load: function(query, callback){
                 var url = '{% url "blocks_v2:choices_spec" spec_id "__FIELD__" %}'.replace('__FIELD__', f.key);
                 var p = new URLSearchParams();
-                if (query && query.length >= 1) p.set('q', query);
+                if (!query || query.length < minLen) { callback(); return; }
+                p.set('q', query);
                 try {
                   const form = document.querySelector('#{{ dom_wrapper_id }} form');
                   if (form){ const fd=new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') p.append(k,v); } }
