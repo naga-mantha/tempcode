@@ -8,6 +8,10 @@ from django.shortcuts import render
 
 from apps.common.models.items import Item
 from apps_v2.blocks.specs import BlockSpec, Services
+from apps.common.filters.schemas import text_filter, multiselect_filter
+from apps.common.filters.item_groups import item_group_choices
+from apps.common.filters.item_types import item_type_choices
+from apps.common.filters.items import item_choices
 from apps_v2.policy.service import PolicyService
 from apps_v2.blocks.controller import BlockController
 from apps_v2.blocks.services.model_table import (
@@ -38,10 +42,10 @@ class ItemsTableSpec:
         description="Items listing (V2 table via schema-driven services).",
         model=Item,
         filter_schema=[
-            {"key": "code", "field": "code", "type": "text", "lookup": "icontains", "label": "Code"},
-            {"key": "description", "field": "description", "type": "text", "lookup": "icontains", "label": "Description"},
-            {"key": "item_group_codes", "field": "item_group__code", "type": "multiselect", "label": "Item Groups"},
-            {"key": "item_type_codes", "field": "type__code", "type": "multiselect", "label": "Item Types"},
+            dict({"key": "code"}, **{**multiselect_filter("code", label="Item Codes", choices_func=item_choices), "min_query_length": 0}),
+            dict({"key": "description"}, **text_filter("description", label="Description")),
+            dict({"key": "item_group_codes"}, **{**multiselect_filter("item_group__code", label="Item Groups", choices_func=item_group_choices), "min_query_length": 0}),
+            dict({"key": "item_type_codes"}, **{**multiselect_filter("type__code", label="Item Types", choices_func=item_type_choices), "min_query_length": 0}),
         ],
         column_max_depth=20,
         table_options={

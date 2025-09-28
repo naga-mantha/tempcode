@@ -24,7 +24,7 @@
           {% if table_configs %}
             <optgroup label="Private views">
               {% for cfg in table_configs %}
-                {% if cfg.user_id == request.user.id %}
+                {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
                   <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
                 {% endif %}
               {% endfor %}

@@ -17,6 +17,7 @@ from apps_v2.blocks.services.model_table import (
     ModelSerializer,
 )
 from apps_v2.blocks.services.export_options import DefaultExportOptions
+from apps.common.filters.schemas import text_filter, multiselect_filter
 
 
 """V2 Layouts table spec using schema-driven services (no hard-coded filters).
@@ -48,9 +49,9 @@ class LayoutsTableSpec:
                 {"value": Layout.VISIBILITY_PRIVATE, "label": "Private"},
                 {"value": Layout.VISIBILITY_PUBLIC, "label": "Public"},
             ]},
-            {"key": "name", "field": "name", "type": "text", "lookup": "icontains"},
-            {"key": "category", "field": "category", "type": "text", "lookup": "icontains"},
-            {"key": "categories", "field": "category", "type": "multiselect"},
+            dict({"key": "name"}, **text_filter("name", label="Name")),
+            dict({"key": "category"}, **text_filter("category", label="Category")),
+            dict({"key": "categories"}, **multiselect_filter("category", label="Categories")),
             {"key": "created_from", "field": "created_at__date", "type": "date", "lookups": {"created_from": "created_at__date__gte"}},
             {"key": "created_to", "field": "created_at__date", "type": "date", "lookups": {"created_to": "created_at__date__lte"}},
         ],

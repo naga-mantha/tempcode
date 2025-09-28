@@ -211,6 +211,7 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
     if not entry:
         return JsonResponse({"results": []})
     model_field = entry.get("field") or entry.get("key")
+    choices_callable = entry.get("choices") if callable(entry.get("choices")) else None
     # Min query length (default 3) to avoid expensive scans on short probes
     try:
         min_len = int(entry.get("min_query_length", 3))
@@ -240,24 +241,56 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
         qs = qb.get_queryset(filters)
     except Exception:
         qs = []
-    # Optional text search narrowing
-    if q and model_field:
-        try:
-            qs = qs.filter(**{f"{model_field}__icontains": q})
-        except Exception:
-            pass
-    # Return distinct values
     data = []
-    try:
-        values = (
-            qs.exclude(**{model_field: ""})
-              .values_list(model_field, flat=True)
-              .distinct()
-              .order_by(model_field)[:50]
-        )
-        data = [{"value": v, "label": v} for v in values]
-    except Exception:
-        data = []
+    if choices_callable:
+        # Compute allowed ids from current queryset when possible
+        allowed_ids = None
+        if model_field:
+            try:
+                raw_vals = (
+                    qs.exclude(**{model_field: ""})
+                      .values_list(model_field, flat=True)
+                      .distinct()
+                )
+                allowed_ids = [str(v) for v in raw_vals if v not in (None, "")]
+            except Exception:
+                allowed_ids = None
+        # ids for callable: hydrate labels (ids param) or narrow on current allowed ids
+        ids_param = (request.GET.get("ids") or "").strip()
+        ids_list = [s.strip() for s in ids_param.split(",") if s.strip()] if ids_param else None
+        try:
+            kwargs = {"query": q}
+            if ids_list is not None:
+                kwargs["ids"] = ids_list
+            elif allowed_ids is not None:
+                # pass a capped allowed set when no explicit ids provided
+                kwargs["ids"] = allowed_ids[:200]
+            pairs = choices_callable(request.user, **kwargs)
+            # If callable doesn't narrow by ids for typed queries, intersect here
+            if ids_list is None and allowed_ids is not None:
+                allowed = set(allowed_ids)
+                pairs = [(v, lbl) for (v, lbl) in pairs if str(v) in allowed]
+            data = [{"value": v, "label": str(lbl)} for (v, lbl) in (pairs or [])][:50]
+        except Exception:
+            data = []
+    else:
+        # Optional text search narrowing
+        if q and model_field:
+            try:
+                qs = qs.filter(**{f"{model_field}__icontains": q})
+            except Exception:
+                pass
+        # Return distinct values
+        try:
+            values = (
+                qs.exclude(**{model_field: ""})
+                  .values_list(model_field, flat=True)
+                  .distinct()
+                  .order_by(model_field)[:50]
+            )
+            data = [{"value": v, "label": v} for v in values]
+        except Exception:
+            data = []
     try:
         cache.set(cache_key, data, timeout=60)
     except Exception:
@@ -414,8 +447,23 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
             schema_list = list(resolver.schema())
         except Exception:
             schema_list = []
-    # Build mapping for template include (key -> cfg)
-    filter_schema = {s.get("key"): s for s in schema_list if isinstance(s, dict) and s.get("key")}
+    # Build mapping for template include (key -> cfg) and attach V2 choices URLs
+    from django.urls import reverse
+    filter_schema = {}
+    for s in (schema_list or []):
+        if not isinstance(s, dict):
+            continue
+        key = s.get("key")
+        if not key:
+            continue
+        entry = dict(s)
+        typ = entry.get("type")
+        if typ in {"select", "multiselect"}:
+            try:
+                entry["choices_url"] = reverse("blocks_v2:choices_spec", args=[spec_id, key])
+            except Exception:
+                pass
+        filter_schema[key] = entry
     # Load user/default filter layout (if any)
     from apps.blocks.models.block_filter_layout import BlockFilterLayout
     from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
@@ -427,6 +475,23 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
     elif admin_layout and isinstance(admin_layout.layout, dict):
         filter_layout = admin_layout.layout
 
+    # Pre-fill inline create form when a saved filter is selected
+    initial_values: dict[str, object] = {}
+    try:
+        if active_cfg and isinstance(getattr(active_cfg, "values", None), dict):
+            initial_values = dict(getattr(active_cfg, "values", {}) or {})
+            if services and getattr(services, "filter_resolver", None):
+                try:
+                    cleaner = services.filter_resolver(spec)
+                except TypeError:
+                    cleaner = services.filter_resolver()
+                try:
+                    initial_values = cleaner.clean(initial_values) or {}
+                except Exception:
+                    pass
+    except Exception:
+        initial_values = {}
+
     ctx = {
         "spec": spec,
         "spec_id": spec_id,
@@ -435,7 +500,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         # Filter schema + layout for inline create form
         "filter_schema": filter_schema,
         "filter_layout": filter_layout,
-        "initial_values": {},
+        "initial_values": initial_values,
     }
     return render(request, "v2/blocks/filter/manage_filters.html", ctx)
 

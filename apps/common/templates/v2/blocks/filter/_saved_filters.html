@@ -5,6 +5,7 @@
       {% if filter_configs %}
         <ul class="list-group">
           {% for cfg in filter_configs %}
+            {% if cfg.user_id == request.user.id %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <span>
                 {{ cfg.name }}
@@ -43,6 +44,7 @@
                 </form>
               </span>
             </li>
+            {% endif %}
           {% endfor %}
         </ul>
       {% else %}
@@ -51,4 +53,3 @@
     </div>
   </div>
 </div>
-
