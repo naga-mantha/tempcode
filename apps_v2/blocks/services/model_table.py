@@ -127,16 +127,34 @@ class SchemaFilterResolver(BaseFilterResolver):
                 # comma list fallback
                 raw = [s.strip() for s in str(raw).split(",") if s.strip()]
             if isinstance(raw, (list, tuple)):
-                coerced = [_coerce_value(v, typ) for v in raw]
-                coerced = [v for v in coerced if v is not None]
+                values = []
+                for item in raw:
+                    coerced = _coerce_value(item, typ)
+                    if coerced is None:
+                        continue
+                    if typ == "multiselect" and isinstance(coerced, (list, tuple)):
+                        values.extend(str(x) for x in coerced if x not in (None, ""))
+                    else:
+                        values.append(coerced)
                 # Drop empty lists to avoid filtering with __in=[] (matches nothing)
-                if coerced:
-                    out[key] = coerced
+                values = [v for v in values if v not in (None, [], "")]
+                if values:
+                    if typ == "multiselect":
+                        out[key] = values
+                    else:
+                        out[key] = values[0]
                 else:
                     continue
             else:
                 val = _coerce_value(raw, typ)
-                if val is not None:
+                if val is None:
+                    continue
+                if typ == "multiselect" and isinstance(val, (list, tuple)):
+                    val = [str(v) for v in val if v not in (None, "")]
+                    if not val:
+                        continue
+                    out[key] = val
+                else:
                     out[key] = val
         return out
 

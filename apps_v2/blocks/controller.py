@@ -41,6 +41,7 @@ class BlockController:
         filters: Mapping[str, Any]
         filter_schema_list = []
         filter_schema: Dict[str, Any] = {}
+        filter_keys = []
         if services.filter_resolver:
             # Instantiate resolver with optional spec
             try:
@@ -107,6 +108,8 @@ class BlockController:
             except Exception:
                 filter_schema = {str(s.get("key")): dict(s) for s in (filter_schema_list or []) if isinstance(s, dict) and s.get("key")}
 
+        filter_keys = list(filter_schema.keys()) if filter_schema else []
+
         # Load user/default filter layout (if any)
         filter_layout = None
         try:
@@ -168,6 +171,7 @@ class BlockController:
             "rows": rows,
             "filters": dict(filters),
             "filter_schema": filter_schema,
+            "filter_keys": filter_keys,
             "filter_layout": filter_layout,
             "dom_id": dom_base,
             "dom_table_id": f"{dom_base}-table",

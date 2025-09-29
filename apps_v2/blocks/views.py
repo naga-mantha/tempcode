@@ -262,7 +262,7 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
             kwargs = {"query": q}
             if ids_list is not None:
                 kwargs["ids"] = ids_list
-            elif allowed_ids is not None:
+            elif allowed_ids is not None and not q:
                 # pass a capped allowed set when no explicit ids provided
                 kwargs["ids"] = allowed_ids[:200]
             pairs = choices_callable(request.user, **kwargs)

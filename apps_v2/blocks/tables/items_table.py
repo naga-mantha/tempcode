@@ -21,8 +21,13 @@ from apps_v2.blocks.services.model_table import (
     ModelSerializer,
 )
 from apps_v2.blocks.services.export_options import DefaultExportOptions
+from apps_v2.blocks.services.model_table import ModelQueryBuilder as BaseQueryBuilder
 
-
+# This class is used to pre-filter the queryset if needed. For ex: Open PO only
+class ActiveItemsQueryBuilder(BaseQueryBuilder):
+    def get_queryset(self, filters):
+        qs = super().get_queryset(filters)
+        return qs.filter(code='MS15795-817B')  # or whatever condition you need
 @dataclass(frozen=True)
 class ItemsTableSpec:
     spec = BlockSpec(
@@ -35,6 +40,7 @@ class ItemsTableSpec:
             filter_resolver=SchemaFilterResolver,
             column_resolver=ModelColumnResolver,
             query_builder=ModelQueryBuilder,
+            # query_builder=ActiveItemsQueryBuilder,  # Use the custom query builder, in case we have to pre-filter
             serializer=ModelSerializer,
             export_options=DefaultExportOptions,
         ),

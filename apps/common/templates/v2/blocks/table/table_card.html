@@ -180,9 +180,8 @@
       if (sel && sel.value) { params.set('filter_config_id', sel.value); } else { params.delete('filter_config_id'); }
       // Clear ad-hoc filter params so saved filter takes full effect
       try {
-        var schemaMap = {{ filter_schema|tojson }} || {};
-        var keys = (typeof schemaMap === 'object' && schemaMap) ? Object.keys(schemaMap) : [];
-        keys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
+        var filterKeys = {{ filter_keys|tojson }} || [];
+        filterKeys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
       } catch(e){}
       var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
       window.location.assign(dest);
@@ -199,11 +198,18 @@
       var filt = form.querySelector('input[name="filter_config_id"]')?.value || '';
       if (cfg) params.set('config_id', cfg); else params.delete('config_id');
       if (filt) params.set('filter_config_id', filt); else params.delete('filter_config_id');
-      // Apply current filter inputs (overwrite or clear empty)
+      // Clear previous filter params before applying current inputs
+      try {
+        var filterKeys = {{ filter_keys|tojson }} || [];
+        filterKeys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
+      } catch(e){}
       var fd = new FormData(form);
+      var seen = new Set();
       for (const [k,v] of fd.entries()){
         if (k === 'config_id' || k === 'filter_config_id') continue;
-        if (v === '') { params.delete(k); } else { params.set(k, v); }
+        if (!seen.has(k)) { params.delete(k); seen.add(k); }
+        if (v === '') { continue; }
+        params.append(k, v);
       }
       var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
       window.location.assign(dest);
