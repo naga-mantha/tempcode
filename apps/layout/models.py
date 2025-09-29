@@ -66,18 +66,18 @@ class LayoutBlock(models.Model):
     col_span = models.PositiveIntegerField(default=1)
     row_span = models.PositiveIntegerField(default=1)
     # Optional display metadata
-    title = models.CharField(max_length=255, blank=True, default="")
-    note = models.TextField(blank=True, default="")
+    title = models.CharField(max_length=255, blank=True, default="", null=True)
+    note = models.TextField(blank=True, default="", null=True)
     # Per-instance settings for content blocks and minor data block tweaks
-    settings = models.JSONField(default=dict)
+    settings = models.JSONField(default=dict, blank=True, null=True)
     # Optional per-instance default Block filter selection by name
     # When set, the layout will try to select the viewer's BlockFilterConfig
     # with this name for this block instance.
-    preferred_filter_name = models.CharField(max_length=255, blank=True, default="")
+    preferred_filter_name = models.CharField(max_length=255, blank=True, default="", null=True)
     # Optional per-instance default Block column config selection by name
     # When set, the layout will try to select the viewer's BlockColumnConfig
     # with this name for this block instance.
-    preferred_column_config_name = models.CharField(max_length=255, blank=True, default="")
+    preferred_column_config_name = models.CharField(max_length=255, blank=True, default="", null=True)
     # Note: vertical sizing not currently used; remove old width/height fields
 
     class Meta:
