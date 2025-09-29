@@ -16,5 +16,6 @@ def register(registry):
 
     registry.register("late_receiving_date_per_buyer_pie", LateReceivingDatePerBuyerPie())
     registry.register("late_receiving_date_per_supplier_pie", LateReceivingDatePerSupplierPie())
+    registry.register("mrp_messages_per_buyer_pie", MrpMessagesPerBuyerPie())
 
     registry.register("open_po_amount_per_month_bar", OpenPoAmountPerMonthBar())
