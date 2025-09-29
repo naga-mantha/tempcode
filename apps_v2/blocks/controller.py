@@ -39,7 +39,8 @@ class BlockController:
 
         # Resolve filters
         filters: Mapping[str, Any]
-        filter_schema = []
+        filter_schema_list = []
+        filter_schema: Dict[str, Any] = {}
         if services.filter_resolver:
             # Instantiate resolver with optional spec
             try:
@@ -48,9 +49,9 @@ class BlockController:
                 resolver = services.filter_resolver()
             filters = resolver.resolve(request)
             try:
-                filter_schema = list(resolver.schema())
+                filter_schema_list = list(resolver.schema())
             except Exception:
-                filter_schema = []
+                filter_schema_list = []
         else:
             filters = {}
 
@@ -66,7 +67,7 @@ class BlockController:
                     colr = services.column_resolver()
             columns = colr.get_columns(request)
 
-        # Saved table configs (per-user)
+        # Saved table configs (per-user) and filter layout
         block_row = get_block_for_spec(self.spec.id)
         cfg_id = request.GET.get("config_id")
         try:
@@ -85,6 +86,41 @@ class BlockController:
         filter_configs = list(list_filter_configs(block_row, request.user))
         active_filter_cfg = choose_active_filter_config(block_row, request.user, filt_cfg_id_int)
 
+        # Build filter schema mapping and attach AJAX choices URLs for selects
+        if filter_schema_list:
+            try:
+                from django.urls import reverse
+                for s in (filter_schema_list or []):
+                    if not isinstance(s, dict):
+                        continue
+                    key = s.get("key")
+                    if not key:
+                        continue
+                    entry = dict(s)
+                    typ = entry.get("type")
+                    if typ in {"select", "multiselect"}:
+                        try:
+                            entry["choices_url"] = reverse("blocks_v2:choices_spec", args=[self.spec.id, key])
+                        except Exception:
+                            pass
+                    filter_schema[str(key)] = entry
+            except Exception:
+                filter_schema = {str(s.get("key")): dict(s) for s in (filter_schema_list or []) if isinstance(s, dict) and s.get("key")}
+
+        # Load user/default filter layout (if any)
+        filter_layout = None
+        try:
+            from apps.blocks.models.block_filter_layout import BlockFilterLayout
+            from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
+            user_layout = BlockFilterLayout.objects.filter(block=block_row, user=request.user).first()
+            admin_layout = BlockFilterLayoutTemplate.objects.filter(block=block_row).first()
+            if user_layout and isinstance(user_layout.layout, dict):
+                filter_layout = user_layout.layout
+            elif admin_layout and isinstance(admin_layout.layout, dict):
+                filter_layout = admin_layout.layout
+        except Exception:
+            filter_layout = None
+
         # Merge saved filter values over defaults, then apply request overrides via resolver
         base_filter_values = getattr(active_filter_cfg, "values", {}) or {}
         if services.filter_resolver:
@@ -97,13 +133,10 @@ class BlockController:
         # Merge order: saved config -> request overrides
         filters = {**base_filter_values, **filters}
 
-        # If active config specifies columns, re-order and filter allowed ones
+        # If active config specifies columns, use only those (in order)
         if active_cfg and active_cfg.columns:
             allowed = {c.get("key") for c in columns}
             ordered = [k for k in (active_cfg.columns or []) if k in allowed]
-            # Append any remaining allowed columns not explicitly listed
-            ordered += [k for k in (c.get("key") for c in columns) if k not in ordered]
-            # Rebuild columns
             key_to_col = {c.get("key"): c for c in columns}
             columns = [key_to_col[k] for k in ordered if k in key_to_col]
 
@@ -135,6 +168,7 @@ class BlockController:
             "rows": rows,
             "filters": dict(filters),
             "filter_schema": filter_schema,
+            "filter_layout": filter_layout,
             "dom_id": dom_base,
             "dom_table_id": f"{dom_base}-table",
             "dom_wrapper_id": f"{dom_base}-card",

@@ -104,10 +104,23 @@ class SchemaFilterResolver(BaseFilterResolver):
         for f in self._iter_fields():
             key = f.get("key")
             typ = f.get("type", "text")
-            if lists and typ == "multiselect":
-                raw = src.getlist(key) if hasattr(src, "getlist") else src.get(key)
-            else:
-                raw = src.get(key)
+            # Support both plain keys (e.g., "status") and namespaced keys (e.g., "filters.status")
+            names = [str(key), f"filters.{key}"]
+            raw = None
+            for name in names:
+                if lists and typ == "multiselect":
+                    if hasattr(src, "getlist") and src.getlist(name):
+                        raw = src.getlist(name)
+                        break
+                    val = src.get(name) if not hasattr(src, "getlist") else None
+                    if val not in (None, ""):
+                        raw = val
+                        break
+                else:
+                    val = src.get(name)
+                    if val not in (None, ""):
+                        raw = val
+                        break
             if raw is None or raw == "":
                 continue
             if typ == "multiselect" and not isinstance(raw, (list, tuple)):

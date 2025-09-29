@@ -3,30 +3,68 @@
 <div id="{{ dom_wrapper_id }}" class="card shadow-sm">
   <div class="card-header d-flex justify-content-between align-items-center">
     <div class="fw-semibold">{{ title }}</div>
-    <div class="d-flex gap-2 align-items-center">
-      <select class="form-select form-select-sm" style="width:auto;" onchange="(function(sel){ const url=new URL(window.location.href); if(sel.value){ url.searchParams.set('config_id', sel.value);} else { url.searchParams.delete('config_id'); } window.location.href=url.toString(); })(this)">
-        <option value="">View: (Default)</option>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <label class="mb-0 small text-muted">View</label>
+      <select class="form-select form-select-sm w-auto" onchange="(function(sel){ try{ var params=new URLSearchParams(window.location.search||''); if(sel.value){ params.set('config_id', sel.value);} else { params.delete('config_id'); } var dest=window.location.pathname + (params.toString() ? ('?'+params.toString()) : ''); window.location.assign(dest); }catch(e){ window.location.href=window.location.pathname + '?config_id=' + encodeURIComponent(sel.value||''); } })(this)">
+        <option value="">(Default)</option>
         {% if table_configs %}
-          {% for cfg in table_configs %}
-            <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
-          {% endfor %}
+          <optgroup label="Private views">
+            {% for cfg in table_configs %}
+              {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Public views">
+            {% for cfg in table_configs %}
+              {% if cfg.visibility == 'public' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
         {% endif %}
       </select>
-      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#saveCfgModal-{{ dom_id }}">Save View</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" title="Reset View"
-              onclick="(function(){ const url=new URL(window.location.href); url.searchParams.delete('config_id'); window.location.href=url.toString(); })()">Reset View</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" title="Reset Filters"
-              onclick="(function(){ window.location.href = window.location.pathname; })()">Reset</button>
-      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm" style="width:auto;" onchange="(function(sel){ const url=new URL(window.location.href); if(sel.value){ url.searchParams.set('filter_config_id', sel.value);} else { url.searchParams.delete('filter_config_id'); } window.location.href=url.toString(); })(this)">
-        <option value="">Filter: (None)</option>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_columns' spec_id %}">Table Settings</a>
+      {% if spec_id == 'v2.items.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_items' %}">Table Link</a>
+      {% elif spec_id == 'v2.layouts.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_layouts' %}">Table Link</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Table Link</a>
+      {% endif %}
+      <span class="mx-1 text-muted">—</span>
+      <label class="mb-0 small text-muted">Filter</label>
+      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" onchange="return v2FilterSelectChange_{{ dom_id|slugify|cut:"-" }}(this)">
+        <option value="">(None)</option>
         {% if filter_configs %}
-          {% for cfg in filter_configs %}
-            <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
-          {% endfor %}
+          <optgroup label="Private filters">
+            {% for cfg in filter_configs %}
+              {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Public filters">
+            {% for cfg in filter_configs %}
+              {% if cfg.visibility == 'public' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
         {% endif %}
       </select>
-      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#saveFilterModal-{{ dom_id }}">Save Filter</button>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_columns' spec_id %}">Manage Columns</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filters' spec_id %}">Filter Settings</a>
+      <span class="mx-1 text-muted">—</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+              title="Download to Excel"
+              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } if(!window.XLSX){ console.warn('XLSX lib missing'); } t.download('xlsx', '{{ spec_id|default:'table' }}.xlsx', {sheetName: '{{ title|default:'Sheet1' }}'}); })('{{ dom_id }}')">
+        Download to Excel
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+              title="Download to PDF"
+              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } try { if (window.jspdf && window.jspdf.jsPDF && !window.jsPDF) { window.jsPDF = window.jspdf.jsPDF; } } catch(e){} t.download('pdf', '{{ spec_id|default:'table' }}.pdf', { orientation: 'portrait', title: '{{ title|default:'Table' }}', jsPDF: { unit: 'pt', format: 'a4', compress: true }, autoTable: { styles: { halign: 'left', overflow: 'linebreak' }}}); })('{{ dom_id }}')">
+        Download to PDF
+      </button>
       <div class="btn-group">
         <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
           Server Export
@@ -36,57 +74,35 @@
           <li><a class="dropdown-item" href="#" onclick="exportServer('{{ spec_id }}','xlsx','{{ dom_wrapper_id }}', {{ active_table_config_id|default:'null' }})">Excel</a></li>
         </ul>
       </div>
-      <button type="button" class="btn btn-sm btn-outline-secondary"
-              title="Export CSV"
-              onclick="(function(id){ var t=window[id]; if(t){ t.download('csv', '{{ spec_id|default:'table' }}.csv'); } else { alert('Table not ready'); } })('{{ dom_id }}')">
-        CSV
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary"
-              title="Export Excel"
-              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } if(!window.XLSX){ console.warn('XLSX lib missing'); } t.download('xlsx', '{{ spec_id|default:'table' }}.xlsx', {sheetName: '{{ title|default:'Sheet1' }}'}); })('{{ dom_id }}')">
-        Excel
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary"
-              title="Export PDF"
-              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } try { if (window.jspdf && window.jspdf.jsPDF && !window.jsPDF) { window.jsPDF = window.jspdf.jsPDF; } } catch(e){} t.download('pdf', '{{ spec_id|default:'table' }}.pdf', { orientation: 'portrait', title: '{{ title|default:'Table' }}', jsPDF: { unit: 'pt', format: 'a4', compress: true }, autoTable: { styles: { halign: 'left', overflow: 'linebreak' }}}); })('{{ dom_id }}')">
-        PDF
-      </button>
       <span class="text-muted small">V2</span>
     </div>
   </div>
   <div class="card-body">
     <div class="htmx-indicator spinner-border spinner-border-sm text-secondary" role="status" style="display:none"></div>
-    <form class="row g-2 align-items-end mb-3"
-          hx-get="{{ refresh_url }}"
-          hx-target="#{{ dom_wrapper_id }}"
-          hx-swap="outerHTML"
-          hx-indicator="closest .card .htmx-indicator">
-      {% if filter_schema %}
-        {% for f in filter_schema %}
-          <div class="col-auto">
-            <label class="form-label mb-0 small">{{ f.label|default:f.key|title }}</label>
-            {% if f.type == 'select' %}
-              <select name="{{ f.key }}" class="form-select form-select-sm" onchange="this.form.requestSubmit()">
-                <option value="">(All)</option>
-                {% if f.choices %}
-                  {% for opt in f.choices %}
-                    <option value="{{ opt.value }}" {% if filters|get_item:f.key == opt.value %}selected{% endif %}>{{ opt.label|default:opt.value }}</option>
-                  {% endfor %}
-                {% endif %}
-              </select>
-            {% elif f.type == 'multiselect' %}
-              <select id="filter-{{ f.key }}-{{ dom_id }}" name="{{ f.key }}" multiple class="form-select form-select-sm" style="min-width:220px" placeholder="Type at least {{ f.min_query_length|default:3 }} characters"></select>
-            {% elif f.type == 'date' %}
-              <input type="date" name="{{ f.key }}" value="{{ filters|get_item:f.key|default:'' }}" class="form-control form-control-sm" onchange="this.form.requestSubmit()">
-            {% else %}
-              <input type="text" name="{{ f.key }}" value="{{ filters|get_item:f.key|default:'' }}" class="form-control form-control-sm" placeholder="" onkeydown="if(event.key==='Enter'){ this.form.requestSubmit(); }">
-            {% endif %}
+    <form id="v2TableFilterForm-{{ dom_id }}" onsubmit="return applyV2Filters_{{ dom_id|slugify|cut:"-" }}(this)">
+      <input type="hidden" name="config_id" value="{{ active_table_config_id|default:'' }}">
+      <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id|default:'' }}">
+      <div class="accordion mb-3" id="accordion-{{ dom_id }}">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading-{{ dom_id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ dom_id }}" aria-expanded="false" aria-controls="collapse-{{ dom_id }}">
+              Filter Conditions
+            </button>
+          </h2>
+          <div id="collapse-{{ dom_id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ dom_id }}" data-bs-parent="#accordion-{{ dom_id }}">
+            <div class="accordion-body">
+              {% if filter_schema %}
+                {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=filters filter_layout=filter_layout name_prefix="" id_prefix=dom_id %}
+                <div class="mt-2">
+                  <button type="submit" class="btn btn-sm btn-primary">Apply Filters</button>
+                </div>
+              {% else %}
+                <div class="text-muted small">No filter schema defined.</div>
+              {% endif %}
+            </div>
           </div>
-        {% endfor %}
-        <div class="col-auto d-flex align-items-end">
-          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
         </div>
-      {% endif %}
+      </div>
     </form>
 
     <div id="{{ dom_table_id }}" class="border rounded" style="height: 520px;"></div>
@@ -96,76 +112,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="saveCfgModal-{{ dom_id }}" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Save Table View</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="saveCfgForm-{{ dom_id }}" hx-post="{% url 'blocks_v2:save_table_config' spec_id %}" hx-swap="none">
-          <div class="mb-2">
-            <label class="form-label">Name</label>
-            <input type="text" name="name" class="form-control" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Visibility</label>
-            <select name="visibility" class="form-select">
-              <option value="private">Private</option>
-              <option value="public">Public</option>
-            </select>
-          </div>
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" name="is_default" id="defChk-{{ dom_id }}">
-            <label class="form-check-label" for="defChk-{{ dom_id }}">Make default</label>
-          </div>
-          <input type="hidden" name="columns_json" id="colsJson-{{ dom_id }}">
-          
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" onclick="(function(){ try{ var t=window['{{ dom_id }}']; var cols=(t?.getColumns?.()||[]).map(c=>c.getField()).filter(Boolean); document.getElementById('colsJson-{{ dom_id }}').value = JSON.stringify(cols); document.getElementById('saveCfgForm-{{ dom_id }}').requestSubmit(); }catch(e){ alert('Unable to read columns'); } })()">Save</button>
-  </div>
-  </div>
- </div>
-</div>
-
-<div class="modal fade" id="saveFilterModal-{{ dom_id }}" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Save Filter</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="saveFilterForm-{{ dom_id }}" hx-post="{% url 'blocks_v2:save_filter_config' spec_id %}" hx-swap="none">
-          <div class="mb-2">
-            <label class="form-label">Name</label>
-            <input type="text" name="name" class="form-control" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Visibility</label>
-            <select name="visibility" class="form-select">
-              <option value="private">Private</option>
-              <option value="public">Public</option>
-            </select>
-          </div>
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" name="is_default" id="defFilter-{{ dom_id }}">
-            <label class="form-check-label" for="defFilter-{{ dom_id }}">Make default</label>
-          </div>
-          <input type="hidden" name="values_json" id="filterJson-{{ dom_id }}">
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" onclick="(function(){ try{ const form=document.querySelector('#{{ dom_wrapper_id }} form'); const data={}; if(form){ const fd=new FormData(form); for(const [k,v] of fd.entries()){ if(v!== '') data[k]=v; } } document.getElementById('filterJson-{{ dom_id }}').value = JSON.stringify(data); document.getElementById('saveFilterForm-{{ dom_id }}').requestSubmit(); }catch(e){ alert('Unable to read filters'); } })()">Save</button>
-      </div>
-    </div>
-  </div>
- </div>
+<!-- removed unused Save View and Save Filter modals to slim template -->
 
 <script>
   (function () {
@@ -193,23 +140,26 @@
       placeholder: 'No data',
       ajaxURL: '{{ data_url }}',
       ajaxURLGenerator: function(url, config, params){
-        const p = new URLSearchParams();
+        const p = new URLSearchParams(window.location.search || '');
         p.set('page', params.page || 1);
         p.set('size', params.size || (tableOptions && tableOptions.paginationSize) || 10);
         if (Array.isArray(params.sorters) && params.sorters.length){
           const s = params.sorters[0];
           if (s && s.field){ p.set('sort', s.field); p.set('dir', s.dir || 'asc'); }
+        } else {
+          p.delete('sort'); p.delete('dir');
         }
-        // Include current simple filters from the form (visibility)
+        // Include current simple filters from the accordion form
         try {
-          const form = document.querySelector('#{{ dom_wrapper_id }} form');
+          const form = document.getElementById('v2TableFilterForm-{{ dom_id }}');
           if (form){
             const fdata = new FormData(form);
             for (const [k, v] of fdata.entries()){
-              if (v !== '') p.append(k, v);
+              if (v !== '') p.set(k, v);
             }
           }
         } catch(e){}
+        // Ensure saved filter id reflects current dropdown
         try {
           const sel = document.getElementById('filterCfgSelect-{{ dom_id }}');
           if (sel && sel.value) { p.set('filter_config_id', sel.value); }
@@ -224,17 +174,53 @@
   })();
 </script>
 <script>
+  function v2FilterSelectChange_{{ dom_id|slugify|cut:"-" }}(sel){
+    try{
+      var params = new URLSearchParams(window.location.search||'');
+      if (sel && sel.value) { params.set('filter_config_id', sel.value); } else { params.delete('filter_config_id'); }
+      // Clear ad-hoc filter params so saved filter takes full effect
+      try {
+        var schemaMap = {{ filter_schema|tojson }} || {};
+        var keys = (typeof schemaMap === 'object' && schemaMap) ? Object.keys(schemaMap) : [];
+        keys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
+      } catch(e){}
+      var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
+      window.location.assign(dest);
+    } catch(e) {
+      window.location.href = window.location.pathname + (sel && sel.value ? ('?filter_config_id='+encodeURIComponent(sel.value)) : '');
+    }
+    return false;
+  }
+  function applyV2Filters_{{ dom_id|slugify|cut:"-" }}(form){
+    try{
+      var params = new URLSearchParams(window.location.search||'');
+      // Preserve selected view/filter ids
+      var cfg = form.querySelector('input[name="config_id"]')?.value || '';
+      var filt = form.querySelector('input[name="filter_config_id"]')?.value || '';
+      if (cfg) params.set('config_id', cfg); else params.delete('config_id');
+      if (filt) params.set('filter_config_id', filt); else params.delete('filter_config_id');
+      // Apply current filter inputs (overwrite or clear empty)
+      var fd = new FormData(form);
+      for (const [k,v] of fd.entries()){
+        if (k === 'config_id' || k === 'filter_config_id') continue;
+        if (v === '') { params.delete(k); } else { params.set(k, v); }
+      }
+      var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
+      window.location.assign(dest);
+    }catch(e){ console.warn('Apply filters failed', e); }
+    return false;
+  }
   (function(){
     try {
-      if (window.TomSelect && Array.isArray({{ filter_schema|tojson }})) {
-        var schema = {{ filter_schema|tojson }};
-        var seedFilters = {{ filters|tojson }};
-        schema.forEach(function(f){
-          if (f.type === 'multiselect'){
-            var selEl = document.querySelector('#filter-' + f.key + '-{{ dom_id }}');
-            if (!selEl) return;
-            var minLen = (typeof f.min_query_length === 'number' && f.min_query_length >= 0) ? f.min_query_length : 3;
-            var ts = new TomSelect(selEl, {
+      // Initialize TomSelect for dynamic filter fields within accordion using data-ajax-url
+      if (window.TomSelect){
+        document.querySelectorAll('#v2TableFilterForm-{{ dom_id }} select.filter-field-select').forEach(function(sel){
+          var ajaxUrl = sel.getAttribute('data-ajax-url');
+          var opts = {};
+          try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}
+          var minLen = 3;
+          if (ajaxUrl){
+            new TomSelect(sel, Object.assign({
               valueField: 'value',
               labelField: 'label',
               searchField: 'label',
@@ -244,27 +230,15 @@
               openOnFocus: true,
               placeholder: 'Type at least ' + minLen + ' characters',
               load: function(query, callback){
-                var url = '{% url "blocks_v2:choices_spec" spec_id "__FIELD__" %}'.replace('__FIELD__', f.key);
-                var p = new URLSearchParams();
                 if (!query || query.length < minLen) { callback(); return; }
+                var p = new URLSearchParams();
                 p.set('q', query);
-                try {
-                  const form = document.querySelector('#{{ dom_wrapper_id }} form');
-                  if (form){ const fd=new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') p.append(k,v); } }
-                } catch(e){}
-                fetch(url + '?' + p.toString(), {headers: {'X-Requested-With':'XMLHttpRequest'}})
+                try { const form = document.getElementById('v2TableFilterForm-{{ dom_id }}'); if (form){ const fd=new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') p.append(k,v); } } } catch(e){}
+                fetch(ajaxUrl + '?' + p.toString(), {headers: {'X-Requested-With':'XMLHttpRequest'}})
                   .then(r => r.json()).then(resp => callback(resp.results || []))
                   .catch(() => callback());
               }
-            });
-            try {
-              var initial = (seedFilters && seedFilters[f.key]) ? seedFilters[f.key] : [];
-              if (Array.isArray(initial) && initial.length){
-                initial.forEach(function(v){ ts.addOption({value:v, label:v}); ts.addItem(v, true); });
-              }
-            } catch(e){}
-            // Auto-apply on change
-            try { ts.on('change', function(){ try{ document.querySelector('#{{ dom_wrapper_id }} form')?.requestSubmit(); } catch(e){} }); } catch(e){}
+            }, opts));
           }
         });
       }
@@ -274,12 +248,14 @@
 <script>
   function exportServer(specId, fmt, wrapperId, activeCfgId){
     try{
-      var url = new URL('{% url "blocks_v2:export_spec" spec_id "csv" %}'.replace('csv', fmt), window.location.origin);
-      if (activeCfgId) url.searchParams.set('config_id', activeCfgId);
-      try { var sel = document.getElementById('filterCfgSelect-{{ dom_id }}'); if (sel && sel.value) url.searchParams.set('filter_config_id', sel.value); } catch(e){}
+      var base = '{% url "blocks_v2:export_spec" spec_id "csv" %}'.replace('csv', fmt);
+      var params = new URLSearchParams(window.location.search||'');
+      if (activeCfgId) params.set('config_id', activeCfgId);
+      try { var sel = document.getElementById('filterCfgSelect-{{ dom_id }}'); if (sel && sel.value) params.set('filter_config_id', sel.value); } catch(e){}
       var form = document.querySelector('#' + wrapperId + ' form');
-      if (form){ const fd = new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') url.searchParams.append(k, v); } }
-      window.location.href = url.toString();
+      if (form){ const fd = new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') params.set(k, v); } }
+      var url = base + (params.toString() ? ('?' + params.toString()) : '');
+      window.location.href = url;
     } catch(e){ alert('Export failed'); }
   }
   // Basic HTMX error handler for this block
@@ -295,3 +271,4 @@
     } catch(e) {}
   });
 </script>
+
