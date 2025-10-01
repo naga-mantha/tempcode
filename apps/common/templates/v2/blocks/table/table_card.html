@@ -153,9 +153,17 @@
         try {
           const form = document.getElementById('v2TableFilterForm-{{ dom_id }}');
           if (form){
+            try {
+              const filterKeys = {{ filter_keys|tojson }} || [];
+              filterKeys.forEach(function(k){ p.delete(k); p.delete('filters.' + k); });
+            } catch(e){}
             const fdata = new FormData(form);
+            const seen = new Set();
             for (const [k, v] of fdata.entries()){
-              if (v !== '') p.set(k, v);
+              if (k === 'config_id' || k === 'filter_config_id') continue;
+              if (!seen.has(k)) { p.delete(k); seen.add(k); }
+              if (v === '') { continue; }
+              p.append(k, v);
             }
           }
         } catch(e){}
@@ -221,6 +229,7 @@
       // Initialize TomSelect for dynamic filter fields within accordion using data-ajax-url
       if (window.TomSelect){
         document.querySelectorAll('#v2TableFilterForm-{{ dom_id }} select.filter-field-select').forEach(function(sel){
+          if (sel.tomselect) { return; }
           var ajaxUrl = sel.getAttribute('data-ajax-url');
           var opts = {};
           try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}

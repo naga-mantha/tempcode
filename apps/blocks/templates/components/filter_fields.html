@@ -328,6 +328,11 @@
               paramName = 'filters.' + nameAttr.slice(idx + '__filters.'.length);
             }
           }
+          if (!paramName && nameAttr) {
+            if (nameAttr !== 'config_id' && nameAttr !== 'filter_config_id') {
+              paramName = nameAttr;
+            }
+          }
           if (!paramName) return;
           const isMulti = s.hasAttribute('multiple');
           const values = isMulti ? (Array.from(s.selectedOptions).map(o => o.value).filter(Boolean)) : [s.value].filter(Boolean);
@@ -412,23 +417,30 @@
         // Inline helper mirroring reloadOptions above
         const ajaxUrl = sel.dataset.ajaxUrl;
         const params = new URLSearchParams();
-        container.querySelectorAll('select.filter-field-select').forEach(s => {
-          const nameAttr = s.getAttribute('name') || '';
-          let paramName = null;
-          if (nameAttr.startsWith('filters.')) {
-            paramName = nameAttr;
-          } else {
-            const idx = nameAttr.indexOf('__filters.');
-            if (idx !== -1) {
-              paramName = 'filters.' + nameAttr.slice(idx + '__filters.'.length);
+        try {
+          const formEl = container instanceof HTMLFormElement ? container : container.querySelector('form');
+          if (formEl) {
+            const fd = new FormData(formEl);
+            for (const [key, value] of fd.entries()) {
+              if (key === 'config_id' || key === 'filter_config_id') continue;
+              if (key === sel.getAttribute('name')) continue;
+              if (value === '') continue;
+              params.append(key, value);
             }
           }
-          if (!paramName) return;
-          const isMulti = s.hasAttribute('multiple');
-          const values = isMulti ? (Array.from(s.selectedOptions).map(o => o.value).filter(Boolean)) : [s.value].filter(Boolean);
-          values.forEach(v => params.append(paramName, v));
-        });
-        const url = ajaxUrl + (Array.from(params.keys()).length ? ('?' + params.toString()) : '');
+          container.querySelectorAll('select.filter-field-select').forEach(s => {
+            if (s === sel) return;
+            const nameAttr = s.getAttribute('name') || '';
+            if (!nameAttr || nameAttr === 'config_id' || nameAttr === 'filter_config_id') return;
+            if (formEl && formEl.contains(s)) return;
+            const isMulti = s.hasAttribute('multiple');
+            const values = isMulti ? Array.from(s.selectedOptions || []).map(o => o.value).filter(Boolean) : [s.value].filter(Boolean);
+            values.forEach(v => params.append(nameAttr, v));
+          });
+        } catch (err) { /* ignore */ }
+        if (!params.has('q')) { params.set('q', ''); }
+        const query = params.toString();
+        const url = ajaxUrl + (query ? ('?' + query) : '');
         fetch(url).then(r => r.ok ? r.json() : []).then(list => {
           const allowed = new Set((list || []).map(x => String(x.value)));
           ts.clearOptions();
