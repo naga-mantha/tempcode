@@ -21,7 +21,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Receipts-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Receipts-"
+                prefix = "/srv/mag360mai/reports/Receipts-"
 
             # Example columns in source:
             # Receipt | Sq | Receipt Dt | Rec, Qty | Order | Pos. | Seq | Item | BP | Prod.Ord | ImpRic (CAD)

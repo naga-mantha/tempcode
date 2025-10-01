@@ -23,7 +23,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Purchase-Orders-BP-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Purchase-Orders-BP-"
+                prefix = "/srv/mag360mai/reports/Purchase-Orders-BP-"
 
             # Create a cleaned copy of the latest date-stamped file
             file_copy = files_utils.read_text_contents(prefix, ["Order", "-"])

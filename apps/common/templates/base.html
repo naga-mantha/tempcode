@@ -16,6 +16,9 @@
 <!--    UNCOMMENT BELOW LINE LATER-->
 <!--    <script src="{% static 'script.min.js' %}"></script>-->
     <link rel="stylesheet" href="{% static 'bootstrap-icons.min.css' %}">
+<!--    The above BS-icons.min.css isnt working, hence we are loading via CDN. To be fixed later-->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <link rel="stylesheet" href="{% static 'vendor.min.css' %}">
     <link rel="stylesheet" href="{% static 'style.min.css' %}">
 
@@ -43,12 +46,12 @@
           <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0"> <!--  Menu Container -->
               <li class="nav-item">
-                <a class="nav-link active" aria-current="page" href="{% url 'layout_list' %}">MAG360</a>
-              </li>
-              <li class="nav-item">
                 <a class="nav-link" href="#" role="button" data-bs-toggle="offcanvas" data-bs-target="#layoutSidebar" aria-controls="layoutSidebar" title="Sidebar">
                   <i class="bi bi-list"></i>
                 </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link active" aria-current="page" href="{% url 'layout_list' %}">MAG360</a>
               </li>
             </ul>
           </div>

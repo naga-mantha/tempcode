@@ -24,7 +24,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Parts-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Parts-"
+                prefix = "/srv/mag360mai/reports/Parts-"
 
             # Create a cleaned copy of the latest date-stamped file
             # Header is: "Item Group | Description | Item | Description | Item Type | tcibd001.srce | Signal"

@@ -21,7 +21,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Buyers-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Buyers-"
+                prefix = "/srv/mag360mai/reports/Buyers-"
 
             file_copy = files_utils.read_text_contents(prefix, ["Date", "MAI - ", "ELIMETAL - ", "Employee", "|", "-"])
             try:

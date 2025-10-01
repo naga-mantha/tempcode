@@ -21,7 +21,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Planned-PO-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Planned-PO-"
+                prefix = "/srv/mag360mai/reports/Planned-PO-"
 
             # Source columns example:
             # Order | Order Item | Order Quantity | Pl.St.Dt | Pl.Fi.Dt | Req.Date | Buyer | supplier | Shop Floor Pln

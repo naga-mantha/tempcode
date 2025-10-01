@@ -21,7 +21,7 @@ class Command(BaseCommand):
             if status == "DEV":
                 prefix = "C:/Users/n.mantha/Desktop/datafiles/Business-Partners-"
             else:
-                prefix = "C:/inetpub/wwwroot/reports/Business-Partners-"
+                prefix = "/srv/mag360mai/reports/Business-Partners-"
 
             # Create a cleaned copy of the latest date-stamped file
             # Header is: "BP | Name"; also strip separator rows

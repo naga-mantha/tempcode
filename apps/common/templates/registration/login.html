@@ -5,6 +5,13 @@
   <div class="container mt-5 mb-5 px-4">
     <h1 class="page-title">Login</h1>
 
+    <p>Please use following credentials to login</p>
+    <ul class="mb-5">
+      <li>Username: <strong>demo</strong></li>
+      <li>Password: <strong>mecaermai</strong></li>
+    </ul>
+
+
     <div class="row">
       <div class="mx-auto col-12 col-md-8 col-lg-6">
         <form method="post">
@@ -13,12 +20,12 @@
           <div class="row g-3">
             <div class="col-12">
               {{ form.username.errors }}
-              {{ form.username|add_class:'form-control'|append_attr:"placeholder:Username" }}
+              {{ form.username|add_class:'form-control'|append_attr:"placeholder:Username"|attr:"value:demo" }}
             </div>
 
             <div class="col-12">
               {{ form.password.errors }}
-              {{ form.password|add_class:'form-control'|append_attr:"placeholder:Password" }}
+              {{ form.password|add_class:'form-control'|append_attr:"placeholder:Password"|attr:"value:mecaermai" }}
             </div>
           </div>
 
