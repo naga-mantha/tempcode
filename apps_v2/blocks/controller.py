@@ -163,6 +163,23 @@ class BlockController:
             rows = list(ser.serialize_rows(qs, columns, user=request.user, policy=self.policy))
 
         dom_base = f"v2-{self.spec.id.replace('.', '-')}"
+        refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
+        data_url = reverse("blocks_v2:data_spec", args=[self.spec.id])
+        export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
+        frontend_config = {
+            "domId": dom_base,
+            "wrapperId": f"{dom_base}-card",
+            "tableElementId": f"{dom_base}-table",
+            "specId": self.spec.id,
+            "columns": columns,
+            "rows": rows,
+            "dataUrl": data_url,
+            "filterKeys": filter_keys,
+            "tableOptions": table_options,
+            "activeTableConfigId": getattr(active_cfg, "id", None),
+            "exportUrlTemplate": export_url,
+        }
+
 
         return {
             "title": self.spec.name,
@@ -176,11 +193,13 @@ class BlockController:
             "dom_id": dom_base,
             "dom_table_id": f"{dom_base}-table",
             "dom_wrapper_id": f"{dom_base}-card",
-            "refresh_url": reverse("blocks_v2:render_spec", args=[self.spec.id]),
-            "data_url": reverse("blocks_v2:data_spec", args=[self.spec.id]),
+            "refresh_url": refresh_url,
+            "data_url": data_url,
             "table_options": table_options,
             "table_configs": table_configs,
             "active_table_config_id": getattr(active_cfg, "id", None),
             "filter_configs": filter_configs,
             "active_filter_config_id": getattr(active_filter_cfg, "id", None),
+            "export_url_template": export_url,
+            "frontend_config": frontend_config,
         }

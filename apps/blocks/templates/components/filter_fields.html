@@ -272,6 +272,15 @@
 {% endif %}
 
 <script>
+  (function(){
+    var domId = '{{ id_prefix|default:"" }}';
+    var form = domId ? document.getElementById('v2TableFilterForm-' + domId) : null;
+    if (domId && form && window.v2TableFilters && window.v2TableFilters.handlesFilterFields) {
+      if (typeof window.v2TableFilters.bootstrapFilterForm === 'function') {
+        window.v2TableFilters.bootstrapFilterForm(domId, form);
+      }
+      return;
+    }
   // Initialize Tom Select only on actual <select> elements and guard parsing.
   document.querySelectorAll('select.filter-field-select').forEach(function(el){
     try {
@@ -467,6 +476,7 @@
       quickSel?.addEventListener('change', function(){ if (quickSel.value && textInput) { textInput.value = quickSel.value; } });
     } catch(e) {}
   });
+  })();
 </script>
 <style>
   /* Ensure consistent spacing under each filter field */

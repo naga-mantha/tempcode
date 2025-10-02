@@ -1,6 +1,10 @@
 {% load dict_extras %}
 
-<div id="{{ dom_wrapper_id }}" class="card shadow-sm">
+<script type="application/json" id="v2-table-config-{{ dom_id }}">
+  {{ frontend_config|tojson }}
+</script>
+
+<div id="{{ dom_wrapper_id }}" class="card shadow-sm" data-v2-table-root="{{ dom_id }}">
   <div class="card-header d-flex justify-content-between align-items-center">
     <div class="fw-semibold">{{ title }}</div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -32,9 +36,9 @@
       {% else %}
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Table Link</a>
       {% endif %}
-      <span class="mx-1 text-muted">—</span>
+      <span class="mx-1 text-muted">&mdash;</span>
       <label class="mb-0 small text-muted">Filter</label>
-      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" onchange="return v2FilterSelectChange_{{ dom_id|slugify|cut:"-" }}(this)">
+      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" data-v2-filter-select data-dom-id="{{ dom_id }}">
         <option value="">(None)</option>
         {% if filter_configs %}
           <optgroup label="Private filters">
@@ -54,7 +58,7 @@
         {% endif %}
       </select>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filters' spec_id %}">Filter Settings</a>
-      <span class="mx-1 text-muted">—</span>
+      <span class="mx-1 text-muted">&mdash;</span>
       <button type="button" class="btn btn-sm btn-outline-secondary"
               title="Download to Excel"
               onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } if(!window.XLSX){ console.warn('XLSX lib missing'); } t.download('xlsx', '{{ spec_id|default:'table' }}.xlsx', {sheetName: '{{ title|default:'Sheet1' }}'}); })('{{ dom_id }}')">
@@ -70,8 +74,8 @@
           Server Export
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#" onclick="exportServer('{{ spec_id }}','csv','{{ dom_wrapper_id }}', {{ active_table_config_id|default:'null' }})">CSV</a></li>
-          <li><a class="dropdown-item" href="#" onclick="exportServer('{{ spec_id }}','xlsx','{{ dom_wrapper_id }}', {{ active_table_config_id|default:'null' }})">Excel</a></li>
+          <li><a class="dropdown-item" href="#" data-v2-export data-format="csv" data-dom-id="{{ dom_id }}">CSV</a></li>
+          <li><a class="dropdown-item" href="#" data-v2-export data-format="xlsx" data-dom-id="{{ dom_id }}">Excel</a></li>
         </ul>
       </div>
       <span class="text-muted small">V2</span>
@@ -79,7 +83,7 @@
   </div>
   <div class="card-body">
     <div class="htmx-indicator spinner-border spinner-border-sm text-secondary" role="status" style="display:none"></div>
-    <form id="v2TableFilterForm-{{ dom_id }}" onsubmit="return applyV2Filters_{{ dom_id|slugify|cut:"-" }}(this)">
+    <form id="v2TableFilterForm-{{ dom_id }}" data-v2-filter-form data-dom-id="{{ dom_id }}">
       <input type="hidden" name="config_id" value="{{ active_table_config_id|default:'' }}">
       <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id|default:'' }}">
       <div class="accordion mb-3" id="accordion-{{ dom_id }}">
@@ -111,179 +115,4 @@
     </noscript>
   </div>
 </div>
-
-<!-- removed unused Save View and Save Filter modals to slim template -->
-
-<script>
-  (function () {
-    const serverColumns = {{ columns|tojson }};
-    const tableOptions = {{ table_options|tojson }};
-    const tableEl = document.getElementById('{{ dom_table_id }}');
-    if (!tableEl || typeof Tabulator === 'undefined') return;
-
-    const columns = serverColumns.map(c => ({
-      title: c.label,
-      field: c.key,
-      headerFilter: true,
-    }));
-
-    const table = new Tabulator(tableEl, {
-      columns,
-      layout: 'fitColumns',
-      pagination: true,
-      paginationMode: 'remote',
-      paginationSize: 10,
-      paginationSizeSelector: [10, 25, 50, 100],
-      dataReceiveParams: { last_page: 'last_page', data: 'data' },
-      movableColumns: true,
-      initialSort: (columns.length ? [{column: columns[0].field, dir: 'asc'}] : []),
-      placeholder: 'No data',
-      ajaxURL: '{{ data_url }}',
-      ajaxURLGenerator: function(url, config, params){
-        const p = new URLSearchParams(window.location.search || '');
-        p.set('page', params.page || 1);
-        p.set('size', params.size || (tableOptions && tableOptions.paginationSize) || 10);
-        if (Array.isArray(params.sorters) && params.sorters.length){
-          const s = params.sorters[0];
-          if (s && s.field){ p.set('sort', s.field); p.set('dir', s.dir || 'asc'); }
-        } else {
-          p.delete('sort'); p.delete('dir');
-        }
-        // Include current simple filters from the accordion form
-        try {
-          const form = document.getElementById('v2TableFilterForm-{{ dom_id }}');
-          if (form){
-            try {
-              const filterKeys = {{ filter_keys|tojson }} || [];
-              filterKeys.forEach(function(k){ p.delete(k); p.delete('filters.' + k); });
-            } catch(e){}
-            const fdata = new FormData(form);
-            const seen = new Set();
-            for (const [k, v] of fdata.entries()){
-              if (k === 'config_id' || k === 'filter_config_id') continue;
-              if (!seen.has(k)) { p.delete(k); seen.add(k); }
-              if (v === '') { continue; }
-              p.append(k, v);
-            }
-          }
-        } catch(e){}
-        // Ensure saved filter id reflects current dropdown
-        try {
-          const sel = document.getElementById('filterCfgSelect-{{ dom_id }}');
-          if (sel && sel.value) { p.set('filter_config_id', sel.value); }
-        } catch(e){}
-        return url + '?' + p.toString();
-      },
-      ...tableOptions
-    });
-    // Ensure jsPDF alias if using UMD build
-    try { if (window.jspdf && window.jspdf.jsPDF && !window.jsPDF) { window.jsPDF = window.jspdf.jsPDF; } } catch (e) {}
-    window['{{ dom_id }}'] = table; // debug handle per-block
-  })();
-</script>
-<script>
-  function v2FilterSelectChange_{{ dom_id|slugify|cut:"-" }}(sel){
-    try{
-      var params = new URLSearchParams(window.location.search||'');
-      if (sel && sel.value) { params.set('filter_config_id', sel.value); } else { params.delete('filter_config_id'); }
-      // Clear ad-hoc filter params so saved filter takes full effect
-      try {
-        var filterKeys = {{ filter_keys|tojson }} || [];
-        filterKeys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
-      } catch(e){}
-      var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
-      window.location.assign(dest);
-    } catch(e) {
-      window.location.href = window.location.pathname + (sel && sel.value ? ('?filter_config_id='+encodeURIComponent(sel.value)) : '');
-    }
-    return false;
-  }
-  function applyV2Filters_{{ dom_id|slugify|cut:"-" }}(form){
-    try{
-      var params = new URLSearchParams(window.location.search||'');
-      // Preserve selected view/filter ids
-      var cfg = form.querySelector('input[name="config_id"]')?.value || '';
-      var filt = form.querySelector('input[name="filter_config_id"]')?.value || '';
-      if (cfg) params.set('config_id', cfg); else params.delete('config_id');
-      if (filt) params.set('filter_config_id', filt); else params.delete('filter_config_id');
-      // Clear previous filter params before applying current inputs
-      try {
-        var filterKeys = {{ filter_keys|tojson }} || [];
-        filterKeys.forEach(function(k){ params.delete(k); params.delete('filters.' + k); });
-      } catch(e){}
-      var fd = new FormData(form);
-      var seen = new Set();
-      for (const [k,v] of fd.entries()){
-        if (k === 'config_id' || k === 'filter_config_id') continue;
-        if (!seen.has(k)) { params.delete(k); seen.add(k); }
-        if (v === '') { continue; }
-        params.append(k, v);
-      }
-      var dest = window.location.pathname + (params.toString()?('?'+params.toString()):'');
-      window.location.assign(dest);
-    }catch(e){ console.warn('Apply filters failed', e); }
-    return false;
-  }
-  (function(){
-    try {
-      // Initialize TomSelect for dynamic filter fields within accordion using data-ajax-url
-      if (window.TomSelect){
-        document.querySelectorAll('#v2TableFilterForm-{{ dom_id }} select.filter-field-select').forEach(function(sel){
-          if (sel.tomselect) { return; }
-          var ajaxUrl = sel.getAttribute('data-ajax-url');
-          var opts = {};
-          try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}
-          var minLen = 3;
-          if (ajaxUrl){
-            new TomSelect(sel, Object.assign({
-              valueField: 'value',
-              labelField: 'label',
-              searchField: 'label',
-              persist: false,
-              closeAfterSelect: true,
-              preload: 'focus',
-              openOnFocus: true,
-              placeholder: 'Type at least ' + minLen + ' characters',
-              load: function(query, callback){
-                if (!query || query.length < minLen) { callback(); return; }
-                var p = new URLSearchParams();
-                p.set('q', query);
-                try { const form = document.getElementById('v2TableFilterForm-{{ dom_id }}'); if (form){ const fd=new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') p.append(k,v); } } } catch(e){}
-                fetch(ajaxUrl + '?' + p.toString(), {headers: {'X-Requested-With':'XMLHttpRequest'}})
-                  .then(r => r.json()).then(resp => callback(resp.results || []))
-                  .catch(() => callback());
-              }
-            }, opts));
-          }
-        });
-      }
-    } catch (e) { console.warn('TomSelect init failed', e); }
-  })();
-</script>
-<script>
-  function exportServer(specId, fmt, wrapperId, activeCfgId){
-    try{
-      var base = '{% url "blocks_v2:export_spec" spec_id "csv" %}'.replace('csv', fmt);
-      var params = new URLSearchParams(window.location.search||'');
-      if (activeCfgId) params.set('config_id', activeCfgId);
-      try { var sel = document.getElementById('filterCfgSelect-{{ dom_id }}'); if (sel && sel.value) params.set('filter_config_id', sel.value); } catch(e){}
-      var form = document.querySelector('#' + wrapperId + ' form');
-      if (form){ const fd = new FormData(form); for (const [k,v] of fd.entries()) { if (v !== '') params.set(k, v); } }
-      var url = base + (params.toString() ? ('?' + params.toString()) : '');
-      window.location.href = url;
-    } catch(e){ alert('Export failed'); }
-  }
-  // Basic HTMX error handler for this block
-  document.addEventListener('htmx:responseError', function(ev) {
-    try {
-      var card = document.getElementById('{{ dom_wrapper_id }}');
-      if (!card) return;
-      var note = document.createElement('div');
-      note.className = 'alert alert-danger mt-2';
-      note.textContent = 'Error refreshing block.';
-      var body = card.querySelector('.card-body');
-      if (body) { body.prepend(note); setTimeout(function(){ note.remove(); }, 3000); }
-    } catch(e) {}
-  });
-</script>
 
