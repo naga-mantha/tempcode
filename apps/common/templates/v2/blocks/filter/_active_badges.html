@@ -1,0 +1,11 @@
+﻿{% if badges %}
+  <div class="bg-body-tertiary border-top px-3 py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% for badge in badges %}
+        <span class="badge text-bg-secondary">
+          {{ badge.label }}{% if badge.value %}: {{ badge.value }}{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}

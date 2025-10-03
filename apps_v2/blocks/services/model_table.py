@@ -143,11 +143,36 @@ def prune_filter_schema(schema_list: Sequence[Dict[str, Any]], *, model: Optiona
 
 
 def prune_filter_values(values: Mapping[str, Any], allowed_keys: Collection[str]) -> Dict[str, Any]:
-    # Restrict a mapping of filter values to the allowed key set.
+    """Restrict a mapping of filter values to the allowed key set.
+
+    Supports plain dicts as well as Django ``QueryDict`` instances, preserving
+    multi-value lists so that __in filters continue to receive full lists.
+    """
+
     if not values or not allowed_keys:
         return {}
-    allowed_set = set(allowed_keys)
-    return {k: v for k, v in dict(values or {}).items() if k in allowed_set}
+
+    allowed_set = {str(k) for k in allowed_keys if k is not None}
+    if not allowed_set:
+        return {}
+
+    cleaned: Dict[str, Any] = {}
+
+    if hasattr(values, "lists"):
+        try:
+            iterator = values.lists()
+        except Exception:  # pragma: no cover - defensive fallback
+            iterator = values.items()
+    else:
+        iterator = getattr(values, "items", lambda: dict(values or {}).items())()
+
+    for key, val in iterator:
+        key_str = str(key)
+        if key_str not in allowed_set:
+            continue
+        cleaned[key_str] = val
+
+    return cleaned
 
 
 class SchemaFilterResolver(BaseFilterResolver):

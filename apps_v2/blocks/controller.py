@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, List
 
 from django.http import HttpRequest
 from django.urls import reverse
@@ -146,6 +146,40 @@ class BlockController:
         # Merge order: saved config -> request overrides
         filters = {**base_filter_values, **filters}
         filters = prune_filter_values(filters, allowed_filter_keys)
+        active_filter_badges: List[Dict[str, str]] = []
+        for key in allowed_filter_keys:
+            raw_value = filters.get(key)
+            if raw_value is None:
+                continue
+            if isinstance(raw_value, str):
+                value_text = raw_value.strip()
+                if not value_text:
+                    continue
+            elif isinstance(raw_value, (list, tuple, set)):
+                cleaned = []
+                for item in raw_value:
+                    if item is None:
+                        continue
+                    if isinstance(item, str):
+                        item_text = item.strip()
+                        if not item_text:
+                            continue
+                        cleaned.append(item_text)
+                    else:
+                        cleaned.append(str(item))
+                if not cleaned:
+                    continue
+                value_text = ", ".join(cleaned)
+            else:
+                value_text = str(raw_value)
+            entry = filter_schema.get(key, {}) or {}
+            label = entry.get("label") or key
+            active_filter_badges.append({
+                "key": key,
+                "label": str(label),
+                "value": value_text,
+            })
+
 
         # If active config specifies columns, use only those (in order)
         if active_cfg and active_cfg.columns:
@@ -188,6 +222,7 @@ class BlockController:
             "rows": rows,
             "dataUrl": data_url,
             "filterKeys": filter_keys,
+            "activeFilterBadges": active_filter_badges,
             "tableOptions": table_options,
             "activeTableConfigId": getattr(active_cfg, "id", None),
             "exportUrlTemplate": export_url,
@@ -202,6 +237,7 @@ class BlockController:
             "filters": dict(filters),
             "filter_schema": filter_schema,
             "filter_keys": filter_keys,
+            "active_filter_badges": active_filter_badges,
             "filter_layout": filter_layout,
             "dom_id": dom_base,
             "dom_table_id": f"{dom_base}-table",

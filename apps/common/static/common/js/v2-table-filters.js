@@ -162,8 +162,29 @@
     }
     const ts = select.tomselect;
     const list = Array.isArray(optionList) ? optionList : [];
-    const allowed = new Set(list.map((entry) => String(entry.value)));
     const selectedBefore = Array.isArray(ts.items) ? ts.items.slice() : [];
+    const allowed = new Set(list.map((entry) => String(entry.value)));
+
+    selectedBefore.forEach((value) => {
+      const key = String(value);
+      if (!allowed.has(key)) {
+        allowed.add(key);
+        let label = key;
+        try {
+          if (ts.options && ts.options[key] && ts.options[key].text) {
+            label = ts.options[key].text;
+          } else {
+            const optNode = ts.getOption ? ts.getOption(key) : null;
+            if (optNode && optNode.textContent) {
+              label = optNode.textContent.trim();
+            }
+          }
+        } catch (err) {
+          /* ignore label lookup errors */
+        }
+        list.push({ value: key, label });
+      }
+    });
 
     ts.clearOptions();
     list.forEach((entry) => {
@@ -246,12 +267,6 @@
       },
     }, options));
 
-    if (ajaxUrl) {
-      fetchOptionsForSelect(select, form, { selectedOnly: true })
-        .then((items) => applyOptionListToTomSelect(select, items))
-        .catch(() => {});
-    }
-
     ts.on('change', () => {
       refreshDependentSelects(form, select);
     });
@@ -261,6 +276,23 @@
     ts.on('item_remove', () => {
       refreshDependentSelects(form, select);
     });
+
+    if (ajaxUrl) {
+      const refreshSelfOptions = () => {
+        fetchOptionsForSelect(select, form)
+          .then((items) => applyOptionListToTomSelect(select, items))
+          .catch(() => {});
+      };
+
+      fetchOptionsForSelect(select, form, { selectedOnly: true })
+        .then((items) => applyOptionListToTomSelect(select, items))
+        .then(() => refreshSelfOptions())
+        .catch(() => refreshSelfOptions());
+
+      ts.on('dropdown_open', () => {
+        refreshSelfOptions();
+      });
+    }
 
     return ts;
   }

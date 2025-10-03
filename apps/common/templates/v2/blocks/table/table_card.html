@@ -93,6 +93,7 @@
               Filter Conditions
             </button>
           </h2>
+          {% include "v2/blocks/filter/_active_badges.html" with badges=active_filter_badges %}
           <div id="collapse-{{ dom_id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ dom_id }}" data-bs-parent="#accordion-{{ dom_id }}">
             <div class="accordion-body">
               {% if filter_schema %}
