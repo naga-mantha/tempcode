@@ -16,6 +16,7 @@ import json
 from apps_v2.blocks.configs import get_block_for_spec
 from apps_v2.blocks.options import merge_table_options
 from apps_v2.blocks.services.field_catalog import build_field_catalog
+from apps_v2.blocks.services.model_table import prune_filter_schema, prune_filter_values
 from io import StringIO, BytesIO
 import csv
 from django.http import HttpResponse
@@ -48,7 +49,8 @@ def render_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
-    ctx = BlockController(spec, PolicyService()).build_context(request)
+    policy = PolicyService()
+    ctx = BlockController(spec, policy).build_context(request)
     # Choose partial template by kind
     template = spec.template
     if spec.kind == "table":
@@ -64,19 +66,36 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
-
-    services = spec.services or None
     policy = PolicyService()
 
+    services = spec.services or None
+
     # Resolve filters + merge saved filter config
+    filters = {}
+    filter_schema_list = []
+    allowed_filter_keys: list[str] = []
     if services and services.filter_resolver:
         try:
             resolver = services.filter_resolver(spec)
         except TypeError:
             resolver = services.filter_resolver()
         filters = resolver.resolve(request)
-    else:
-        filters = {}
+        try:
+            filter_schema_list = list(resolver.schema())
+        except Exception:
+            filter_schema_list = []
+        filter_schema_list = prune_filter_schema(
+            filter_schema_list,
+            model=getattr(spec, "model", None),
+            user=request.user,
+            policy=policy,
+        )
+        allowed_filter_keys = [
+            str(entry.get("key"))
+            for entry in filter_schema_list
+            if isinstance(entry, dict) and entry.get("key")
+        ]
+    filters = prune_filter_values(filters, allowed_filter_keys)
     from apps_v2.blocks.configs import get_block_for_spec, choose_active_filter_config
     block_row = get_block_for_spec(spec_id)
     filt_cfg_id = request.GET.get("filter_config_id")
@@ -92,7 +111,9 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
         except TypeError:
             cleaner = services.filter_resolver()
         base_filter_values = cleaner.clean(base_filter_values)
+    base_filter_values = prune_filter_values(base_filter_values, allowed_filter_keys)
     filters = {**base_filter_values, **filters}
+    filters = prune_filter_values(filters, allowed_filter_keys)
     # Build queryset
     if services and services.query_builder:
         try:
@@ -194,8 +215,8 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
-    services = spec.services or None
     policy = PolicyService()
+    services = spec.services or None
     if not (services and services.filter_resolver and services.query_builder and spec):
         return JsonResponse({"results": []})
     # Load schema
@@ -207,6 +228,19 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
         schema = list(resolver.schema())
     except Exception:
         schema = []
+    schema = prune_filter_schema(
+        schema,
+        model=getattr(spec, "model", None),
+        user=request.user,
+        policy=policy,
+    )
+    allowed_filter_keys = [
+        str(s.get("key"))
+        for s in schema
+        if isinstance(s, dict) and s.get("key")
+    ]
+    if field not in allowed_filter_keys:
+        return JsonResponse({"results": []})
     entry = next((s for s in schema if s.get("key") == field), None)
     if not entry:
         return JsonResponse({"results": []})
@@ -222,6 +256,7 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
         return JsonResponse({"results": []})
     # Build filters and remove target field values to avoid self-filtering
     filters = resolver.resolve(request)
+    filters = prune_filter_values(filters, allowed_filter_keys)
     filters.pop(field, None)
     # Cache key includes spec, field, query (lowercased), and a stable filter fingerprint
     try:
@@ -379,6 +414,7 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     # Use the spec's filter resolver to clean values
     load_specs()
     spec = get_registry().get(spec_id)
+    policy = PolicyService()
     services = spec.services or None
     if services and services.filter_resolver:
         try:
@@ -386,6 +422,22 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
         except TypeError:
             cleaner = services.filter_resolver()
         values = cleaner.clean(values)
+        try:
+            schema_list = list(cleaner.schema())
+        except Exception:
+            schema_list = []
+        schema_list = prune_filter_schema(
+            schema_list,
+            model=getattr(spec, "model", None),
+            user=request.user,
+            policy=policy,
+        )
+        allowed_filter_keys = [
+            str(entry.get("key"))
+            for entry in schema_list
+            if isinstance(entry, dict) and entry.get("key")
+        ]
+        values = prune_filter_values(values, allowed_filter_keys)
     else:
         values = {}
 
@@ -420,6 +472,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
+    policy = PolicyService()
     from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs, choose_active_filter_config
     block = get_block_for_spec(spec_id)
     # Load all user-visible filter configs
@@ -447,6 +500,17 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
             schema_list = list(resolver.schema())
         except Exception:
             schema_list = []
+    schema_list = prune_filter_schema(
+        schema_list,
+        model=getattr(spec, "model", None),
+        user=request.user,
+        policy=policy,
+    )
+    allowed_filter_keys = [
+        str(s.get("key"))
+        for s in (schema_list or [])
+        if isinstance(s, dict) and s.get("key")
+    ]
     # Build mapping for template include (key -> cfg) and attach V2 choices URLs
     from django.urls import reverse
     filter_schema = {}
@@ -492,6 +556,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
     except Exception:
         initial_values = {}
 
+    initial_values = prune_filter_values(initial_values, allowed_filter_keys)
     ctx = {
         "spec": spec,
         "spec_id": spec_id,
@@ -606,20 +671,37 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
+    policy = PolicyService()
     services = spec.services or None
     if not services:
         raise Http404("Spec has no services")
 
-    policy = PolicyService()
     # Resolve filters and queryset
+    filters = {}
+    filter_schema_list = []
+    allowed_filter_keys: list[str] = []
     if services.filter_resolver:
         try:
             resolver = services.filter_resolver(spec)
         except TypeError:
             resolver = services.filter_resolver()
         filters = resolver.resolve(request)
-    else:
-        filters = {}
+        try:
+            filter_schema_list = list(resolver.schema())
+        except Exception:
+            filter_schema_list = []
+        filter_schema_list = prune_filter_schema(
+            filter_schema_list,
+            model=getattr(spec, "model", None),
+            user=request.user,
+            policy=policy,
+        )
+        allowed_filter_keys = [
+            str(entry.get("key"))
+            for entry in filter_schema_list
+            if isinstance(entry, dict) and entry.get("key")
+        ]
+        filters = prune_filter_values(filters, allowed_filter_keys)
     if services.query_builder:
         try:
             qb = services.query_builder(request, policy, spec)
@@ -769,6 +851,7 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
+    policy = PolicyService()
     services = spec.services or None
     if not services:
         raise Http404("Spec has no services")
@@ -914,6 +997,7 @@ def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
+    policy = PolicyService()
     # Resolve available fields from spec's filter schema
     services = spec.services or None
     schema = []
@@ -926,6 +1010,12 @@ def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
             schema = list(resolver.schema())
         except Exception:
             schema = []
+    schema = prune_filter_schema(
+        schema,
+        model=getattr(spec, "model", None),
+        user=request.user,
+        policy=policy,
+    )
     available = []
     for f in (schema or []):
         if not isinstance(f, dict):
@@ -970,6 +1060,7 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
     spec = reg.get(spec_id)
     if not spec:
         raise Http404("Unknown block spec")
+    policy = PolicyService()
     services = spec.services or None
     schema = []
     if services and services.filter_resolver:
@@ -981,6 +1072,12 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
             schema = list(resolver.schema())
         except Exception:
             schema = []
+    schema = prune_filter_schema(
+        schema,
+        model=getattr(spec, "model", None),
+        user=request.user,
+        policy=policy,
+    )
     available = []
     for f in (schema or []):
         if not isinstance(f, dict):

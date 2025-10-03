@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Mapping, Sequence, Optional, Tuple
+from typing import Any, Dict, Iterable, Mapping, Sequence, Optional, Tuple, List, Collection
 
 from django.db import models
 
@@ -83,6 +83,71 @@ def _coerce_value(v: Any, typ: str):
     except Exception:
         return None
     return v
+
+
+def _resolve_policy_field_target(model: Optional[type[models.Model]], path: str) -> Tuple[Optional[type[models.Model]], Optional[str]]:
+    # Return the model/field pair to apply policy checks for a lookup path.
+    if not model or not path:
+        return None, None
+    parts = [p for p in str(path).split("__") if p]
+    if not parts:
+        return None, None
+    current_model: Optional[type[models.Model]] = model
+    last_model: Optional[type[models.Model]] = None
+    last_field: Optional[str] = None
+    for part in parts:
+        if current_model is None:
+            break
+        try:
+            field = current_model._meta.get_field(part)
+        except Exception:
+            break
+        last_model = current_model
+        last_field = getattr(field, "name", str(part))
+        remote = getattr(field, "remote_field", None)
+        if remote and getattr(remote, "model", None):
+            current_model = remote.model
+        else:
+            current_model = None
+    if last_model and last_field:
+        return last_model, last_field
+    return None, None
+
+
+def prune_filter_schema(schema_list: Sequence[Dict[str, Any]], *, model: Optional[type[models.Model]], user: Any, policy: Optional[PolicyService]) -> List[Dict[str, Any]]:
+    # Filter schema entries to those allowed by policy read checks.
+    if not schema_list:
+        return []
+    if model is None or policy is None:
+        return list(schema_list)
+    pruned: List[Dict[str, Any]] = []
+    for entry in schema_list:
+        if not isinstance(entry, dict):
+            pruned.append(entry)
+            continue
+        key = entry.get("key")
+        if not key:
+            pruned.append(entry)
+            continue
+        field_path = entry.get("field") or key
+        allowed = True
+        target_model, target_field = _resolve_policy_field_target(model, field_path)
+        if target_model and target_field and user is not None:
+            try:
+                allowed = policy.can_read_field(user, target_model, target_field, None)
+            except Exception:
+                allowed = True
+        if allowed:
+            pruned.append(entry)
+    return pruned
+
+
+def prune_filter_values(values: Mapping[str, Any], allowed_keys: Collection[str]) -> Dict[str, Any]:
+    # Restrict a mapping of filter values to the allowed key set.
+    if not values or not allowed_keys:
+        return {}
+    allowed_set = set(allowed_keys)
+    return {k: v for k, v in dict(values or {}).items() if k in allowed_set}
 
 
 class SchemaFilterResolver(BaseFilterResolver):

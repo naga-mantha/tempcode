@@ -9,6 +9,7 @@ from django.urls import reverse
 from apps_v2.blocks.specs import BlockSpec
 from apps_v2.policy.service import PolicyService
 from apps_v2.blocks.options import merge_table_options
+from apps_v2.blocks.services.model_table import prune_filter_schema, prune_filter_values
 from apps_v2.blocks.configs import (
     get_block_for_spec,
     list_table_configs,
@@ -53,6 +54,12 @@ class BlockController:
                 filter_schema_list = list(resolver.schema())
             except Exception:
                 filter_schema_list = []
+            filter_schema_list = prune_filter_schema(
+                filter_schema_list,
+                model=getattr(self.spec, "model", None),
+                user=request.user,
+                policy=self.policy,
+            )
         else:
             filters = {}
 
@@ -109,6 +116,8 @@ class BlockController:
                 filter_schema = {str(s.get("key")): dict(s) for s in (filter_schema_list or []) if isinstance(s, dict) and s.get("key")}
 
         filter_keys = list(filter_schema.keys()) if filter_schema else []
+        allowed_filter_keys = filter_keys
+        filters = prune_filter_values(filters, allowed_filter_keys)
 
         # Load user/default filter layout (if any)
         filter_layout = None
@@ -133,8 +142,10 @@ class BlockController:
             except TypeError:
                 cleaner = services.filter_resolver()
             base_filter_values = cleaner.clean(base_filter_values)
+        base_filter_values = prune_filter_values(base_filter_values, allowed_filter_keys)
         # Merge order: saved config -> request overrides
         filters = {**base_filter_values, **filters}
+        filters = prune_filter_values(filters, allowed_filter_keys)
 
         # If active config specifies columns, use only those (in order)
         if active_cfg and active_cfg.columns:
