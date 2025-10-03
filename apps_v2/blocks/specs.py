@@ -33,3 +33,4 @@ class BlockSpec:
     filter_schema: Optional[Sequence[dict[str, Any]]] = None
     # Column catalog control: how deep to traverse relations when listing fields
     column_max_depth: int = 0
+    download_options: Optional[dict[str, Any]] = field(default_factory=dict)

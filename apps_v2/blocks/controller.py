@@ -213,11 +213,16 @@ class BlockController:
         refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
         data_url = reverse("blocks_v2:data_spec", args=[self.spec.id])
         export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
+        download_options = getattr(self.spec, "download_options", {}) or {}
+        excel_download_options = dict(download_options.get("excel") or {})
+        pdf_download_options = dict(download_options.get("pdf") or {})
+
         frontend_config = {
             "domId": dom_base,
             "wrapperId": f"{dom_base}-card",
             "tableElementId": f"{dom_base}-table",
             "specId": self.spec.id,
+            "title": self.spec.name,
             "columns": columns,
             "rows": rows,
             "dataUrl": data_url,
@@ -226,6 +231,8 @@ class BlockController:
             "tableOptions": table_options,
             "activeTableConfigId": getattr(active_cfg, "id", None),
             "exportUrlTemplate": export_url,
+            "excelDownloadOptions": excel_download_options,
+            "pdfDownloadOptions": pdf_download_options,
         }
 
 
@@ -250,5 +257,7 @@ class BlockController:
             "filter_configs": filter_configs,
             "active_filter_config_id": getattr(active_filter_cfg, "id", None),
             "export_url_template": export_url,
+            "excel_download_options": excel_download_options,
+            "pdf_download_options": pdf_download_options,
             "frontend_config": frontend_config,
         }

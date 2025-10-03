@@ -59,24 +59,19 @@
       </select>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filters' spec_id %}">Filter Settings</a>
       <span class="mx-1 text-muted">&mdash;</span>
-      <button type="button" class="btn btn-sm btn-outline-secondary"
-              title="Download to Excel"
-              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } if(!window.XLSX){ console.warn('XLSX lib missing'); } t.download('xlsx', '{{ spec_id|default:'table' }}.xlsx', {sheetName: '{{ title|default:'Sheet1' }}'}); })('{{ dom_id }}')">
-        Download to Excel
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary"
-              title="Download to PDF"
-              onclick="(function(id){ var t=window[id]; if(!t){ alert('Table not ready'); return; } try { if (window.jspdf && window.jspdf.jsPDF && !window.jsPDF) { window.jsPDF = window.jspdf.jsPDF; } } catch(e){} t.download('pdf', '{{ spec_id|default:'table' }}.pdf', { orientation: 'portrait', title: '{{ title|default:'Table' }}', jsPDF: { unit: 'pt', format: 'a4', compress: true }, autoTable: { styles: { halign: 'left', overflow: 'linebreak' }}}); })('{{ dom_id }}')">
-        Download to PDF
-      </button>
-      <div class="btn-group">
-        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-          Server Export
+      <div class="btn-group" role="group" aria-label="Exports">
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-v2-export-excel
+                data-dom-id="{{ dom_id }}">
+          Export Excel
         </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#" data-v2-export data-format="csv" data-dom-id="{{ dom_id }}">CSV</a></li>
-          <li><a class="dropdown-item" href="#" data-v2-export data-format="xlsx" data-dom-id="{{ dom_id }}">Excel</a></li>
-        </ul>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-v2-export-pdf
+                data-dom-id="{{ dom_id }}">
+          Export PDF
+        </button>
       </div>
       <span class="text-muted small">V2</span>
     </div>

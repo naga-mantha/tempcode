@@ -25,6 +25,8 @@ function move_js() {
         'node_modules/sortablejs/Sortable.min.js',
         'node_modules/tom-select/dist/js/tom-select.complete.min.js',
         'node_modules/htmx.org/dist/htmx.min.js',
+        'node_modules/jspdf/dist/jspdf.umd.min.js',
+        'node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js',
         ], {"allowEmpty": true})
         .pipe(gulp.dest('apps/common/src/vendor-js'))
 }
@@ -74,6 +76,8 @@ function vendor_js() {
 	return gulp.src('apps/common/src/vendor-js/*.js')
 	.pipe(plumber())
 	.pipe(order([
+	    'apps/common/src/vendor-js/jspdf.umd.min.js',
+        'apps/common/src/vendor-js/jspdf.plugin.autotable.min.js',
 		"apps/common/src/vendor-js/*.js"
 	], { base: __dirname }))
 	.pipe(concat('vendor.min.js'))

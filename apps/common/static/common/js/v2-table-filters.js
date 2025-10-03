@@ -12,6 +12,7 @@
   ns._htmxHandlers = ns._htmxHandlers || new Map();
   ns.tables = ns.tables || {};
   ns.handlesFilterFields = true;
+  ns._scriptLoaders = ns._scriptLoaders || {};
 
   function parseFilterKeys(value) {
     if (Array.isArray(value)) {
@@ -72,6 +73,77 @@
       return null;
     }
     return document.getElementById(`v2TableFilterForm-${domId}`);
+  }
+
+  function loadExternalScript(src) {
+    if (!src) {
+      return Promise.reject(new Error('Missing script src'));
+    }
+    if (ns._scriptLoaders[src]) {
+      return ns._scriptLoaders[src];
+    }
+    ns._scriptLoaders[src] = new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-v2-dynamic-script="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') {
+          resolve();
+        } else {
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', (err) => reject(err));
+        }
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.v2DynamicScript = src;
+      script.addEventListener('load', () => {
+        script.dataset.loaded = 'true';
+        resolve();
+      });
+      script.addEventListener('error', (err) => {
+        reject(err);
+      });
+      document.head.appendChild(script);
+    });
+    return ns._scriptLoaders[src];
+  }
+
+  function ensureExcelScripts() {
+    if (typeof XLSX !== 'undefined') {
+      return Promise.resolve();
+    }
+    const src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
+    return loadExternalScript(src);
+  }
+
+  function ensurePdfScripts() {
+    if (window.jsPDF || (window.jspdf && window.jspdf.jsPDF)) {
+      if (!window.jsPDF && window.jspdf && window.jspdf.jsPDF) {
+        window.jsPDF = window.jspdf.jsPDF;
+      }
+      return Promise.resolve();
+    }
+    const core = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    const autotable = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js';
+    return loadExternalScript(core)
+      .then(() => loadExternalScript(autotable))
+      .then(() => {
+        if (!window.jsPDF && window.jspdf && window.jspdf.jsPDF) {
+          window.jsPDF = window.jspdf.jsPDF;
+        }
+      });
+  }
+
+  function normalizeFilename(base, extension) {
+    if (!base) {
+      return `export.${extension}`;
+    }
+    const trimmed = String(base).trim();
+    if (!trimmed.toLowerCase().endsWith(`.${extension}`)) {
+      return `${trimmed}.${extension}`;
+    }
+    return trimmed;
   }
 
   function getSelectValues(select) {
@@ -534,6 +606,87 @@
             ns.exportServer({ domId, format: link.dataset.format });
           });
         });
+        const excelBtn = wrapper.querySelector('[data-v2-export-excel]');
+        if (excelBtn) {
+          excelBtn.addEventListener('click', function onExcel(ev) {
+            ev.preventDefault();
+            ensureExcelScripts()
+              .then(() => {
+                const table = ns.tables[domId];
+                if (!table) {
+                  alert('Table not ready');
+                  return;
+                }
+                const opts = config.excelDownloadOptions || {};
+                const filename = normalizeFilename((opts.filename || `${config.specId || 'table'}.xlsx`).replace(/\s+/g, '_'), 'xlsx');
+                const sheetName = opts.sheetName || config.title || config.specId || 'Sheet1';
+                const downloadOpts = Object.assign({ sheetName }, opts.options || {});
+                try {
+                  table.download('xlsx', filename, downloadOpts);
+                } catch (err) {
+                  console.error('Excel export failed', err);
+                  alert('Unable to export Excel. Please try again.');
+                }
+              })
+              .catch((err) => {
+                console.error('Failed to load Excel export library', err);
+                alert('Unable to load Excel export library.');
+              });
+          });
+        }
+        const pdfBtn = wrapper.querySelector('[data-v2-export-pdf]');
+        if (pdfBtn) {
+          pdfBtn.addEventListener('click', function onPdf(ev) {
+            ev.preventDefault();
+            ensurePdfScripts()
+              .then(() => {
+                const table = ns.tables[domId];
+                if (!table) {
+                  alert('Table not ready');
+                  return;
+                }
+                const opts = config.pdfDownloadOptions || {};
+                const filename = normalizeFilename((opts.filename || `${config.specId || 'table'}.pdf`).replace(/\s+/g, '_'), 'pdf');
+                const orientation = String(opts.orientation || 'portrait').toLowerCase();
+                const baseOptions = Object.assign({
+                  orientation,
+                  title: opts.title || config.title || config.specId || 'Report',
+                }, opts.options || {});
+                if (opts.autoTable) {
+                  baseOptions.autoTable = opts.autoTable;
+                }
+                try {
+                  table.download('pdf', filename, function () {
+              try {
+                const doc = (window.jspdf && window.jspdf.jsPDF) ? new window.jspdf.jsPDF({ orientation: orientation === 'landscape' ? 'l' : 'p' }) : (new window.jsPDF({ orientation: orientation === 'landscape' ? 'l' : 'p' }));
+                const columns = table.getColumns();
+                const headers = columns.map((col) => col.getDefinition().title || col.getField() || '');
+                const rows = table.getData().map((row) => columns.map((col) => {
+                  const field = col.getField();
+                  return field ? (row[field] != null ? row[field] : '') : '';
+                }));
+                if (typeof doc.autoTable === 'function') {
+                  doc.autoTable({ head: [headers], body: rows, ...(opts.autoTable || {}) });
+                  doc.save(filename);
+                } else {
+                  alert('PDF export is unavailable (autoTable plugin missing).');
+                }
+              } catch (error) {
+                console.error('PDF export failed', error);
+                alert('Unable to export PDF. Please try again.');
+              }
+            });
+                } catch (err) {
+                  console.error('PDF export failed', err);
+                  alert('Unable to export PDF. Please try again.');
+                }
+              })
+              .catch((err) => {
+                console.error('Failed to load PDF export libraries', err);
+                alert('Unable to load PDF export libraries.');
+              });
+          });
+        }
       }
       if (!ns._htmxHandlers.has(wrapperId)) {
         const handler = function handleHtmxError() {

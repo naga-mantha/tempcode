@@ -63,6 +63,17 @@ class ItemsTableSpec:
             "layout": "fitColumns",
             "placeholder": "No items",
         },
+        download_options={
+            "excel": {
+                "filename": "items.xlsx",
+                "sheetName": "Items",
+            },
+            "pdf": {
+                "filename": "items.pdf",
+                "orientation": "landscape",
+                "title": "Items",
+            },
+        },
     )
 
 

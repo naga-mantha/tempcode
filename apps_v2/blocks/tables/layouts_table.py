@@ -64,6 +64,17 @@ class LayoutsTableSpec:
             "movableColumns": True,
             "layout": "fitColumns",
         },
+        download_options={
+            "excel": {
+                "filename": "layouts.xlsx",
+                "sheetName": "Layouts",
+            },
+            "pdf": {
+                "filename": "layouts.pdf",
+                "orientation": "portrait",
+                "title": "Layouts",
+            },
+        },
     )
 
 
