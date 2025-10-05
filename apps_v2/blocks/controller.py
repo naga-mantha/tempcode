@@ -117,6 +117,13 @@ class BlockController:
 
         filter_keys = list(filter_schema.keys()) if filter_schema else []
         allowed_filter_keys = filter_keys
+        cleared_filter_keys = set()
+        try:
+            raw_cleared = request.GET.getlist("filters.__cleared")
+        except Exception:
+            raw_cleared = []
+        allowed_filter_set = {str(k) for k in allowed_filter_keys}
+        cleared_filter_keys = {str(k) for k in raw_cleared if str(k) in allowed_filter_set}
         filters = prune_filter_values(filters, allowed_filter_keys)
 
         # Load user/default filter layout (if any)
@@ -143,6 +150,9 @@ class BlockController:
                 cleaner = services.filter_resolver()
             base_filter_values = cleaner.clean(base_filter_values)
         base_filter_values = prune_filter_values(base_filter_values, allowed_filter_keys)
+        if cleared_filter_keys:
+            for key in cleared_filter_keys:
+                base_filter_values.pop(key, None)
         # Merge order: saved config -> request overrides
         filters = {**base_filter_values, **filters}
         filters = prune_filter_values(filters, allowed_filter_keys)

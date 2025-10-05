@@ -33,6 +33,8 @@
 
   function createBaseParams(filterKeys) {
     const params = new URLSearchParams(window.location.search || "");
+    params.delete("filters.__active");
+    params.delete("filters.__cleared");
     (filterKeys || []).forEach((key) => {
       if (!key) {
         return;
@@ -62,6 +64,53 @@
       }
       params.append(key, value);
     }
+  }
+
+  function appendClearedMetadata(params, form, filterKeys) {
+    if (!params || !form) {
+      return;
+    }
+    const fields = form.querySelectorAll('[name]');
+    if (!fields.length) {
+      return;
+    }
+    const allowed = Array.isArray(filterKeys) && filterKeys.length ? new Set(filterKeys.map((key) => String(key))) : null;
+    const nameMap = new Map();
+    fields.forEach((field) => {
+      const nameAttr = field.getAttribute('name') || '';
+      if (!nameAttr || IGNORED_FIELDS.has(nameAttr)) {
+        return;
+      }
+      let key = null;
+      if (nameAttr.startsWith('filters.')) {
+        key = nameAttr.slice('filters.'.length);
+      } else if (!allowed || allowed.has(nameAttr)) {
+        key = nameAttr;
+      }
+      if (!key) {
+        return;
+      }
+      if (allowed && !allowed.has(key)) {
+        return;
+      }
+      if (!nameMap.has(key)) {
+        nameMap.set(key, new Set());
+      }
+      nameMap.get(key).add(nameAttr);
+    });
+    nameMap.forEach((names, key) => {
+      const hasValue = Array.from(names).some((name) => {
+        const values = params.getAll(name);
+        if (!values.length) {
+          return false;
+        }
+        return values.some((val) => val !== '');
+      });
+      params.append('filters.__active', key);
+      if (!hasValue) {
+        params.append('filters.__cleared', key);
+      }
+    });
   }
 
   function hasValue(value) {
@@ -441,6 +490,7 @@
     }
 
     appendFormValues(params, form);
+    appendClearedMetadata(params, form, filterKeys);
 
     const dest = window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
     window.location.assign(dest);
@@ -502,6 +552,7 @@
 
     const form = document.getElementById(`v2TableFilterForm-${domId}`);
     appendFormValues(params, form);
+    appendClearedMetadata(params, form, filterKeys);
 
     const select = document.getElementById(`filterCfgSelect-${domId}`);
     if (select && hasValue(select.value)) {
@@ -542,6 +593,7 @@
 
     const form = document.getElementById(`v2TableFilterForm-${domId}`);
     appendFormValues(params, form);
+    appendClearedMetadata(params, form, filterKeys);
 
     const format = (options && options.format) || "csv";
     const base = template.replace(/csv(?=[^/]*$)/, format);

@@ -74,6 +74,7 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     filters = {}
     filter_schema_list = []
     allowed_filter_keys: list[str] = []
+    cleared_filter_keys: set[str] = set()
     if services and services.filter_resolver:
         try:
             resolver = services.filter_resolver(spec)
@@ -96,6 +97,13 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
             if isinstance(entry, dict) and entry.get("key")
         ]
     filters = prune_filter_values(filters, allowed_filter_keys)
+    if allowed_filter_keys:
+        try:
+            raw_cleared = request.GET.getlist("filters.__cleared")
+        except Exception:
+            raw_cleared = []
+        allowed_filter_set = {str(k) for k in allowed_filter_keys}
+        cleared_filter_keys = {str(k) for k in raw_cleared if str(k) in allowed_filter_set}
     from apps_v2.blocks.configs import get_block_for_spec, choose_active_filter_config
     block_row = get_block_for_spec(spec_id)
     filt_cfg_id = request.GET.get("filter_config_id")
@@ -112,6 +120,9 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
             cleaner = services.filter_resolver()
         base_filter_values = cleaner.clean(base_filter_values)
     base_filter_values = prune_filter_values(base_filter_values, allowed_filter_keys)
+    if cleared_filter_keys:
+        for key in cleared_filter_keys:
+            base_filter_values.pop(key, None)
     filters = {**base_filter_values, **filters}
     filters = prune_filter_values(filters, allowed_filter_keys)
     # Build queryset
