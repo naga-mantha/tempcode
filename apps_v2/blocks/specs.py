@@ -11,6 +11,7 @@ class Services:
     query_builder: Optional[type] = None
     serializer: Optional[type] = None
     export_options: Optional[type] = None
+    pivot_engine: Optional[type] = None
 
 
 @dataclass(frozen=True)

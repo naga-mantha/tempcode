@@ -4,7 +4,7 @@
   }
 
   const ns = window.v2TableFilters || (window.v2TableFilters = {});
-  const IGNORED_FIELDS = new Set(["config_id", "filter_config_id"]);
+  const IGNORED_FIELDS = new Set(["config_id", "filter_config_id", "pivot_config_id"]);
 
   ns._filterKeys = ns._filterKeys || {};
   ns._exportTemplates = ns._exportTemplates || {};

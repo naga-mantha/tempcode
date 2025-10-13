@@ -4,6 +4,7 @@ from .registry import register, get_registry
 from .specs import BlockSpec, Services
 from apps_v2.blocks.tables.layouts_table import LayoutsTableSpec
 from apps_v2.blocks.tables.items_table import ItemsTableSpec
+from apps_v2.blocks.pivots.items_pivot import ItemsPivotSpec
 
 _LOADED = False
 
@@ -31,4 +32,6 @@ def load_specs() -> None:
         register(LayoutsTableSpec.spec)
     if ItemsTableSpec.spec.id not in reg:
         register(ItemsTableSpec.spec)
+    if ItemsPivotSpec.spec.id not in reg:
+        register(ItemsPivotSpec.spec)
     _LOADED = True

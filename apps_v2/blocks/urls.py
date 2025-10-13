@@ -5,6 +5,7 @@ from django.urls import path
 from . import views
 from apps_v2.blocks.tables.layouts_table import render_layouts_table
 from apps_v2.blocks.tables.items_table import render_items_table
+from apps_v2.blocks.pivots.items_pivot import render_items_pivot
 
 
 app_name = "blocks_v2"
@@ -33,7 +34,14 @@ urlpatterns = [
     path("filter-layout/save/<str:spec_id>", views.save_filter_layout, name="save_filter_layout"),
     path("filter-layout/save-default/<str:spec_id>", views.save_filter_layout_default, name="save_filter_layout_default"),
     path("manage/<str:spec_id>", views.manage_columns, name="manage_columns"),
+    path("pivot/manage/<str:spec_id>", views.manage_pivot_configs, name="manage_pivot_configs"),
+    path("pivot/save/<str:spec_id>", views.save_pivot_config, name="save_pivot_config"),
+    path("pivot/rename/<str:spec_id>/<int:config_id>", views.rename_pivot_config, name="rename_pivot_config"),
+    path("pivot/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_pivot_config, name="duplicate_pivot_config"),
+    path("pivot/delete/<str:spec_id>/<int:config_id>", views.delete_pivot_config, name="delete_pivot_config"),
+    path("pivot/make_default/<str:spec_id>/<int:config_id>", views.make_default_pivot_config, name="make_default_pivot_config"),
     # Demo table block (V2)
     path("table/layouts", render_layouts_table, name="table_layouts"),
     path("table/items", render_items_table, name="table_items"),
+    path("pivot/items", render_items_pivot, name="pivot_items"),
 ]

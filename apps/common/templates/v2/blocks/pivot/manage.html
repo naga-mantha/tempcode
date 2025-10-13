@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% load dict_extras %}
+
+{% block title %}<title>Manage Pivot Settings - {{ spec.name }}</title>{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0">Manage Pivot Settings - {{ spec.name }}</h5>
+    <div class="d-flex align-items-center gap-2">
+      <label class="mb-0 small text-muted">Load Pivot</label>
+      <form method="get" class="d-inline m-0 p-0">
+        <select name="pivot_config_id" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+          <option value="" {% if not active_pivot_config_id %}selected{% endif %}>New (default)</option>
+          {% if pivot_configs %}
+            <optgroup label="Private pivots">
+              {% for cfg in pivot_configs %}
+                {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                  <option value="{{ cfg.id }}" {% if cfg.id == active_pivot_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Public pivots">
+              {% for cfg in pivot_configs %}
+                {% if cfg.visibility == 'public' %}
+                  <option value="{{ cfg.id }}" {% if cfg.id == active_pivot_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
+      </form>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
+      {% if spec_id == 'v2.items.pivot' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:pivot_items' %}">Pivot Link</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Pivot Link</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <form id="pivotConfigForm" method="post" action="{% url 'blocks_v2:save_pivot_config' spec_id %}">
+    {% csrf_token %}
+    <input type="hidden" name="schema_json" id="pivotSchemaJson">
+    <input type="hidden" name="pivot_config_id" value="{{ active_pivot_config_id|default:'' }}">
+    <div class="row g-3">
+      <div class="col-xl-4">
+        <div class="card h-100">
+          <div class="card-header">Available Fields</div>
+          <div class="card-body">
+            <input type="search" class="form-control form-control-sm mb-2" id="fieldSearch" placeholder="Search fields">
+            <ul class="list-group small" id="fieldsList">
+              {% for field in available_fields %}
+              <li class="list-group-item" data-key="{{ field.key }}">
+                <div class="d-flex justify-content-between">
+                  <span>{{ field.label }}</span>
+                  <small class="text-muted ms-2">{{ field.key }}</small>
+                </div>
+                <div class="text-muted small">{{ field.type|default:'text' }}</div>
+              </li>
+              {% empty %}
+              <li class="list-group-item text-muted">No fields available</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="card mb-3">
+          <div class="card-header">General</div>
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" name="name" value="{{ active_pivot.name|default:'' }}" required>
+              </div>
+              {% if request.user.is_staff %}
+              <div class="col-md-3">
+                <label class="form-label">Visibility</label>
+                <select class="form-select" name="visibility">
+                  <option value="private" {% if active_pivot.visibility == 'private' or not active_pivot %}selected{% endif %}>Private</option>
+                  <option value="public" {% if active_pivot.visibility == 'public' %}selected{% endif %}>Public</option>
+                </select>
+              </div>
+              {% else %}
+              <input type="hidden" name="visibility" value="private">
+              {% endif %}
+              <div class="col-md-3">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="is_default" id="pivotDefault" {% if active_pivot.is_default %}checked{% endif %}>
+                  <label class="form-check-label" for="pivotDefault">Make default</label>
+                </div>
+              </div>
+              <div class="col-md-2 text-end">
+                <button type="button" class="btn btn-primary" onclick="MagPivot.save()">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-header">Rows</div>
+          <div class="card-body">
+            <select multiple size="8" class="form-select" id="rowsSelect">
+              {% for field in available_fields %}
+                <option value="{{ field.key }}" {% if field.key in rows_selected %}selected{% endif %}>{{ field.label }} ({{ field.key }})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Hold Ctrl / Cmd to select multiple rows. Use the arrows to reorder.</div>
+            <div class="mt-2 d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('rowsSelect', -1)">?</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('rowsSelect', 1)">?</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-header">Columns</div>
+          <div class="card-body">
+            <select multiple size="5" class="form-select" id="colsSelect">
+              {% for field in available_fields %}
+                <option value="{{ field.key }}" {% if field.key in cols_selected %}selected{% endif %}>{{ field.label }} ({{ field.key }})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Optional: choose fields to pivot across columns.</div>
+            <div class="mt-2 d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('colsSelect', -1)">?</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('colsSelect', 1)">?</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Measures</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="MagPivot.addMeasure()">Add Measure</button>
+          </div>
+          <div class="card-body" id="measureList">
+            {% if measures %}
+              {% for measure in measures %}
+                <div class="border rounded p-2 mb-2" data-measure>
+                  <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                      <label class="form-label mb-0">Field</label>
+                      <select class="form-select" data-measure-field>
+                        {% for field in available_fields %}
+                          <option value="{{ field.key }}" {% if field.key == measure.source %}selected{% endif %}>{{ field.label }} ({{ field.key }})</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label mb-0">Aggregation</label>
+                      <select class="form-select" data-measure-agg>
+                        {% for value, label in measure_agg_choices %}
+                          <option value="{{ value }}" {% if value == measure.agg %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label mb-0">Label</label>
+                      <input type="text" class="form-control" data-measure-label value="{{ measure.label }}" placeholder="Optional label">
+                    </div>
+                    <div class="col-md-1 text-end">
+                      <button type="button" class="btn btn-outline-danger btn-sm" onclick="MagPivot.removeMeasure(this)">&times;</button>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="border rounded p-2 text-muted" data-empty-measure>No measures yet. Use "Add Measure".</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mt-3">
+    <div class="col-xl-6">
+      <div class="card h-100">
+        <div class="card-header">My Pivot Settings</div>
+        <div class="card-body">
+          {% if pivot_configs %}
+            <ul class="list-group list-group-flush">
+              {% for cfg in pivot_configs %}
+                {% if cfg.user_id == request.user.id %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <div class="fw-semibold">{{ cfg.name }}</div>
+                      <div class="text-muted small">Visibility: {{ cfg.visibility }}</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <form method="post" action="{% url 'blocks_v2:rename_pivot_config' spec_id cfg.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" onclick="return MagPivot.rename(event, '{{ cfg.id }}', '{{ cfg.name|escapejs }}')">Rename</button>
+                      </form>
+                      <form method="post" action="{% url 'blocks_v2:make_default_pivot_config' spec_id cfg.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default %}disabled{% endif %}>Make Default</button>
+                      </form>
+                      <form method="post" action="{% url 'blocks_v2:duplicate_pivot_config' spec_id cfg.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
+                      </form>
+                      <form method="post" action="{% url 'blocks_v2:delete_pivot_config' spec_id cfg.id %}" onsubmit="return confirm('Delete pivot {{ cfg.name }}?')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                      </form>
+                    </div>
+                  </li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted small">No saved pivot settings yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card h-100">
+        <div class="card-header">Shared Pivot Settings</div>
+        <div class="card-body">
+          {% if pivot_configs %}
+            <ul class="list-group list-group-flush">
+              {% for cfg in pivot_configs %}
+                {% if cfg.visibility == 'public' %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <div class="fw-semibold">{{ cfg.name }}</div>
+                      <div class="text-muted small">Created by {{ cfg.user.get_full_name|default:cfg.user.username }}</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <form method="post" action="{% url 'blocks_v2:make_default_pivot_config' spec_id cfg.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default and cfg.visibility == 'public' %}disabled{% endif %}>Make Default</button>
+                      </form>
+                      {% if request.user.is_staff %}
+                      <form method="post" action="{% url 'blocks_v2:delete_pivot_config' spec_id cfg.id %}" onsubmit="return confirm('Delete pivot {{ cfg.name }}?')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                      </form>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted small">No shared pivot settings yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const searchInput = document.getElementById('fieldSearch');
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          const term = (this.value || '').trim().toLowerCase();
+          document.querySelectorAll('#fieldsList li[data-key]').forEach(function (li) {
+            const label = (li.textContent || '').toLowerCase();
+            const key = (li.dataset.key || '').toLowerCase();
+            li.style.display = (label.includes(term) || key.includes(term)) ? '' : 'none';
+          });
+        });
+      }
+
+      const API = {
+        move(selectId, delta) {
+          const select = document.getElementById(selectId);
+          if (!select) return;
+          const selected = Array.from(select.selectedOptions);
+          if (!selected.length) return;
+          const options = Array.from(select.options);
+          selected.forEach(function (opt) {
+            const index = options.indexOf(opt);
+            const newIndex = index + delta;
+            if (newIndex < 0 || newIndex >= options.length) return;
+            select.removeChild(opt);
+            if (delta > 0) {
+              select.insertBefore(opt, options[newIndex + 1] || null);
+            } else {
+              select.insertBefore(opt, options[newIndex]);
+            }
+            options.splice(index, 1);
+            options.splice(newIndex, 0, opt);
+          });
+        },
+        addMeasure() {
+          const list = document.getElementById('measureList');
+          const empty = list?.querySelector('[data-empty-measure]');
+          if (empty) empty.remove();
+          const wrapper = document.createElement('div');
+          wrapper.className = 'border rounded p-2 mb-2';
+          wrapper.setAttribute('data-measure', '');
+          wrapper.innerHTML = API._template();
+          list?.appendChild(wrapper);
+        },
+        removeMeasure(btn) {
+          const block = btn.closest('[data-measure]');
+          if (block) block.remove();
+          const list = document.getElementById('measureList');
+          if (list && !list.querySelector('[data-measure]')) {
+            const empty = document.createElement('div');
+            empty.className = 'border rounded p-2 text-muted';
+            empty.setAttribute('data-empty-measure', '');
+            empty.textContent = 'No measures yet. Use "Add Measure".';
+            list.appendChild(empty);
+          }
+        },
+        rename(evt, cfgId, current) {
+          const btn = evt.target;
+          const form = btn.closest('form');
+          const name = prompt('New name', current || '');
+          if (!name) return false;
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = 'name';
+          hidden.value = name;
+          form.appendChild(hidden);
+          return true;
+        },
+        save() {
+          const rows = API._collect('rowsSelect');
+          const cols = API._collect('colsSelect');
+          const measures = [];
+          document.querySelectorAll('#measureList [data-measure]').forEach(function (block) {
+            const field = block.querySelector('[data-measure-field]')?.value;
+            const agg = block.querySelector('[data-measure-agg]')?.value || 'sum';
+            const label = block.querySelector('[data-measure-label]')?.value.trim();
+            if (field) {
+              const entry = { source: field, agg: agg };
+              if (label) { entry.label = label; }
+              measures.push(entry);
+            }
+          });
+          if (!measures.length) {
+            alert('Please add at least one measure.');
+            return;
+          }
+          const schema = { rows: rows, cols: cols, measures: measures };
+          const hidden = document.getElementById('pivotSchemaJson');
+          if (hidden) { hidden.value = JSON.stringify(schema); }
+          document.getElementById('pivotConfigForm')?.submit();
+        },
+        _template() {
+          let fieldOptions = '';
+          {% for field in available_fields %}
+          fieldOptions += '<option value="{{ field.key }}">{{ field.label|escapejs }} ({{ field.key|escapejs }})</option>';
+          {% endfor %}
+          let aggOptions = '';
+          {% for value, label in measure_agg_choices %}
+          aggOptions += '<option value="{{ value }}">{{ label }}</option>';
+          {% endfor %}
+          return '<div class="row g-2 align-items-end">\
+            <div class="col-md-5">\
+              <label class="form-label mb-0">Field</label>\
+              <select class="form-select" data-measure-field>' + fieldOptions + '</select>\
+            </div>\
+            <div class="col-md-3">\
+              <label class="form-label mb-0">Aggregation</label>\
+              <select class="form-select" data-measure-agg>' + aggOptions + '</select>\
+            </div>\
+            <div class="col-md-3">\
+              <label class="form-label mb-0">Label</label>\
+              <input type="text" class="form-control" data-measure-label placeholder="Optional label">\
+            </div>\
+            <div class="col-md-1 text-end">\
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="MagPivot.removeMeasure(this)">&times;</button>\
+            </div>\
+          </div>';
+        },
+        _collect(selectId) {
+          const select = document.getElementById(selectId);
+          if (!select) return [];
+          return Array.from(select.options)
+            .filter(function (opt) { return opt.selected; })
+            .map(function (opt) { return { source: opt.value, label: opt.textContent }; });
+        }
+      };
+
+      window.MagPivot = API;
+      if (!document.querySelector('#measureList [data-measure]')) {
+        API.addMeasure();
+      }
+    })();
+  </script>
+{% endblock %}

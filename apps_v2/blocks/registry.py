@@ -63,6 +63,14 @@ def _validate_spec(spec: BlockSpec) -> None:
         depth = getattr(spec, "column_max_depth", 0)
         if not isinstance(depth, int) or depth < 0:
             raise ValueError(f"column_max_depth must be >= 0 for {spec.id}")
+    elif spec.kind == "pivot":
+        services = spec.services or None
+        if not services:
+            raise ValueError(f"Pivot spec {spec.id} must provide services")
+        if not getattr(services, "pivot_engine", None):
+            raise ValueError(f"Pivot spec {spec.id} is missing pivot_engine")
+        if getattr(spec, "model", None) is None:
+            raise ValueError(f"Pivot spec {spec.id} must declare a model")
 
 
 def register(spec: BlockSpec) -> None:

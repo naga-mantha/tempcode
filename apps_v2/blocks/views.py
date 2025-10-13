@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.urls import reverse
 
 from apps_v2.blocks.controller import BlockController
 from apps_v2.blocks.registry import get_registry
@@ -13,7 +14,7 @@ from django.core.cache import cache
 from django.views.decorators.http import require_POST
 from django.middleware.csrf import get_token
 import json
-from apps_v2.blocks.configs import get_block_for_spec
+from apps_v2.blocks.configs import get_block_for_spec, list_pivot_configs, choose_active_pivot_config
 from apps_v2.blocks.options import merge_table_options
 from apps_v2.blocks.services.field_catalog import build_field_catalog
 from apps_v2.blocks.services.model_table import prune_filter_schema, prune_filter_values
@@ -55,6 +56,8 @@ def render_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     template = spec.template
     if spec.kind == "table":
         template = "v2/blocks/table/table_card.html"
+    elif spec.kind == "pivot":
+        template = "v2/blocks/pivot/pivot_card.html"
     return render(request, template, ctx)
 
 
@@ -994,6 +997,274 @@ def make_default_table_config(request: HttpRequest, spec_id: str, config_id: int
     return HttpResponse(status=204)
 
 
+
+
+
+@login_required
+def manage_pivot_configs(request: HttpRequest, spec_id: str) -> HttpResponse:
+    load_specs()
+    reg = get_registry()
+    spec = reg.get(spec_id)
+    if not spec or spec.kind != "pivot":
+        raise Http404("Unknown pivot spec")
+    services = spec.services or None
+    if not services:
+        raise Http404("Spec has no services")
+    model = getattr(spec, "model", None)
+    if model is None:
+        raise Http404("Pivot spec missing model")
+
+    policy = PolicyService()
+    depth = int(getattr(spec, "column_max_depth", 0) or 0)
+    available_fields = build_field_catalog(model, user=request.user, policy=policy, max_depth=depth)
+
+    block = get_block_for_spec(spec_id)
+    pivot_configs = list(list_pivot_configs(block, request.user))
+
+    raw_cfg_param = request.GET.get("pivot_config_id")
+    cfg_param = (raw_cfg_param or "").strip()
+    cfg_id = None
+    active_pivot = None
+    if cfg_param:
+        try:
+            cfg_id = int(cfg_param)
+        except ValueError:
+            cfg_id = None
+        if cfg_id is not None:
+            active_pivot = choose_active_pivot_config(block, request.user, cfg_id)
+
+    schema = dict(active_pivot.schema or {}) if active_pivot else {}
+    rows_selected = [str(entry.get("source")) for entry in schema.get("rows", []) if isinstance(entry, dict) and entry.get("source")]
+    cols_selected = [str(entry.get("source")) for entry in schema.get("cols", []) if isinstance(entry, dict) and entry.get("source")]
+    measures = []
+    for entry in schema.get("measures", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        src = entry.get("source")
+        if not src:
+            continue
+        measures.append({
+            "source": str(src),
+            "agg": (entry.get("agg") or "sum").lower(),
+            "label": entry.get("label") or "",
+        })
+
+    context = {
+        "spec": spec,
+        "spec_id": spec_id,
+        "available_fields": available_fields,
+        "pivot_configs": pivot_configs,
+        "active_pivot": active_pivot,
+        "active_pivot_config_id": getattr(active_pivot, "id", None),
+        "rows_selected": rows_selected,
+        "cols_selected": cols_selected,
+        "measures": measures,
+        "measure_agg_choices": [("sum", "Sum"), ("count", "Count"), ("avg", "Average"), ("min", "Min"), ("max", "Max")],
+    }
+    return render(request, "v2/blocks/pivot/manage.html", context)
+
+
+@login_required
+@require_POST
+def save_pivot_config(request: HttpRequest, spec_id: str) -> HttpResponse:
+    load_specs()
+    spec = get_registry().get(spec_id)
+    if not spec or spec.kind != "pivot":
+        raise Http404("Unknown pivot spec")
+    block = get_block_for_spec(spec_id)
+    from apps.blocks.models.pivot_config import PivotConfig
+
+    policy = PolicyService()
+    model = getattr(spec, "model", None)
+    depth = int(getattr(spec, "column_max_depth", 0) or 0)
+    field_catalog: dict[str, dict] = {}
+    if model is not None:
+        try:
+            catalog = build_field_catalog(model, user=request.user, policy=policy, max_depth=depth)
+        except Exception:
+            catalog = []
+        field_catalog = {str(entry.get("key")): entry for entry in catalog if isinstance(entry, dict) and entry.get("key")}
+
+    name = (request.POST.get("name") or "").strip() or "Untitled Pivot"
+    visibility = (request.POST.get("visibility") or PivotConfig.VISIBILITY_PRIVATE).lower()
+    if visibility not in {PivotConfig.VISIBILITY_PRIVATE, PivotConfig.VISIBILITY_PUBLIC}:
+        visibility = PivotConfig.VISIBILITY_PRIVATE
+    if visibility == PivotConfig.VISIBILITY_PUBLIC and not request.user.is_staff:
+        visibility = PivotConfig.VISIBILITY_PRIVATE
+    is_default = request.POST.get("is_default") in {"on", "true", "1"}
+
+    import json
+    try:
+        raw_schema = json.loads(request.POST.get("schema_json") or "{}")
+    except Exception:
+        raw_schema = {}
+
+    def clean_dims(items):
+        cleaned: list[dict[str, str]] = []
+        for entry in items or []:
+            if not isinstance(entry, dict):
+                continue
+            src = (entry.get("source") or "").strip()
+            if not src:
+                continue
+            data: dict[str, str] = {"source": src}
+            label = (entry.get("label") or "").strip()
+            if label:
+                data["label"] = label
+            bucket = (entry.get("bucket") or "").strip()
+            if bucket:
+                data["bucket"] = bucket.lower()
+            cleaned.append(data)
+        return cleaned
+
+    allowed_aggs = {"sum", "count", "avg", "min", "max"}
+    numeric_types = {"number"}
+    ordered_types = {"number", "date", "datetime", "time"}
+
+    def coerce_agg(field_key: str, requested: str) -> str:
+        info = field_catalog.get(field_key) or {}
+        ftype = str(info.get("type") or "text").lower()
+        agg = requested if requested in allowed_aggs else "sum"
+        if agg in {"sum", "avg"} and ftype not in numeric_types:
+            return "count"
+        if agg in {"min", "max"} and ftype not in ordered_types:
+            return "count"
+        return agg
+
+    cleaned_measures = []
+    for entry in raw_schema.get("measures", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        src = (entry.get("source") or "").strip()
+        if not src:
+            continue
+        requested = (entry.get("agg") or "sum").lower()
+        agg = coerce_agg(src, requested)
+        data = {"source": src, "agg": agg}
+        label = (entry.get("label") or "").strip()
+        if label:
+            data["label"] = label
+        cleaned_measures.append(data)
+
+    if not cleaned_measures:
+        return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+
+    schema = {
+        "rows": clean_dims(raw_schema.get("rows")),
+        "cols": clean_dims(raw_schema.get("cols")),
+        "measures": cleaned_measures,
+    }
+
+    obj, _ = PivotConfig.objects.update_or_create(
+        block=block,
+        user=request.user,
+        name=name,
+        defaults={
+            "schema": schema,
+            "visibility": visibility,
+            "is_default": False,
+        },
+    )
+
+    if is_default:
+        if obj.visibility == PivotConfig.VISIBILITY_PUBLIC and request.user.is_staff:
+            PivotConfig.objects.filter(block=block, visibility=PivotConfig.VISIBILITY_PUBLIC).exclude(pk=obj.pk).update(is_default=False)
+            obj.is_default = True
+        else:
+            PivotConfig.objects.filter(block=block, user=request.user, visibility=PivotConfig.VISIBILITY_PRIVATE).exclude(pk=obj.pk).update(is_default=False)
+            obj.is_default = True
+            obj.visibility = PivotConfig.VISIBILITY_PRIVATE
+        obj.save(update_fields=["schema", "visibility", "is_default"])
+    else:
+        obj.save(update_fields=["schema", "visibility"])
+
+    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
+
+
+@login_required
+@require_POST
+def rename_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.pivot_config import PivotConfig
+    block = get_block_for_spec(spec_id)
+    try:
+        obj = PivotConfig.objects.get(pk=config_id, block=block)
+    except PivotConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    if obj.visibility == PivotConfig.VISIBILITY_PUBLIC and not request.user.is_staff:
+        return HttpResponse(status=403)
+    name = (request.POST.get("name") or "").strip()
+    if not name:
+        return HttpResponse(status=400)
+    if PivotConfig.objects.filter(block=block, user=obj.user, name=name).exclude(pk=obj.pk).exists():
+        return HttpResponse(status=409)
+    obj.name = name
+    obj.save(update_fields=["name"])
+    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
+
+
+@login_required
+@require_POST
+def duplicate_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.pivot_config import PivotConfig
+    block = get_block_for_spec(spec_id)
+    try:
+        obj = PivotConfig.objects.get(pk=config_id, block=block)
+    except PivotConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    base = f"{obj.name} (copy)"
+    name = base
+    suffix = 2
+    while PivotConfig.objects.filter(block=block, user=request.user, name=name).exists():
+        name = f"{base} {suffix}"
+        suffix += 1
+    PivotConfig.objects.create(
+        block=block,
+        user=request.user,
+        name=name,
+        schema=obj.schema,
+        visibility=PivotConfig.VISIBILITY_PRIVATE,
+        is_default=False,
+    )
+    return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+
+
+@login_required
+@require_POST
+def delete_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.pivot_config import PivotConfig
+    block = get_block_for_spec(spec_id)
+    try:
+        obj = PivotConfig.objects.get(pk=config_id, block=block)
+    except PivotConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    if obj.visibility == PivotConfig.VISIBILITY_PUBLIC and not request.user.is_staff:
+        return HttpResponse(status=403)
+    if obj.visibility == PivotConfig.VISIBILITY_PRIVATE and obj.user_id != request.user.id:
+        return HttpResponse(status=403)
+    obj.delete()
+    return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+
+
+@login_required
+@require_POST
+def make_default_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
+    from apps.blocks.models.pivot_config import PivotConfig
+    block = get_block_for_spec(spec_id)
+    try:
+        obj = PivotConfig.objects.get(pk=config_id, block=block)
+    except PivotConfig.DoesNotExist:
+        return HttpResponse(status=404)
+    if obj.visibility == PivotConfig.VISIBILITY_PUBLIC:
+        if not request.user.is_staff:
+            return HttpResponse(status=403)
+        PivotConfig.objects.filter(block=block, visibility=PivotConfig.VISIBILITY_PUBLIC).exclude(pk=obj.pk).update(is_default=False)
+    else:
+        if obj.user_id != request.user.id:
+            return HttpResponse(status=403)
+        PivotConfig.objects.filter(block=block, user=request.user, visibility=PivotConfig.VISIBILITY_PRIVATE).exclude(pk=obj.pk).update(is_default=False)
+    obj.is_default = True
+    obj.save(update_fields=["is_default"])
+    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
 # Removed toggle_visibility endpoint per updated UX (visibility changes not supported here)
 
 
@@ -1148,4 +1419,5 @@ def save_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpRespon
         parsed = {}
     BlockFilterLayoutTemplate.objects.update_or_create(block=block, defaults={"layout": parsed})
     return HttpResponse(status=204)
+
 
