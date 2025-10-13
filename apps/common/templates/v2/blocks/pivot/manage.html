@@ -99,38 +99,71 @@
         </div>
 
         <div class="card mb-3">
+
           <div class="card-header">Rows</div>
+
           <div class="card-body">
-            <select multiple size="8" class="form-select" id="rowsSelect">
+
+            <div class="form-text">Check fields to include as rows, then drag to control their order.</div>
+
+            <ul class="list-group small" data-rows-list>
+
               {% for field in available_fields %}
-                <option value="{{ field.key }}" {% if field.key in rows_selected %}selected{% endif %}>{{ field.label }} ({{ field.key }})</option>
+
+              <li class="list-group-item d-flex align-items-center justify-content-between" data-key="{{ field.key }}" data-label="{{ field.label }}">
+
+                <div class="form-check">
+
+                  <input class="form-check-input" type="checkbox" id="row-{{ forloop.counter0 }}" {% if field.key in rows_selected %}checked{% endif %}>
+
+                  <label class="form-check-label" for="row-{{ forloop.counter0 }}">{{ field.label }} <small class="text-muted">({{ field.key }})</small></label>
+
+                </div>
+
+                <span class="bi bi-grip-vertical text-muted js-drag-handle"></span>
+
+              </li>
+
               {% endfor %}
-            </select>
-            <div class="form-text">Hold Ctrl / Cmd to select multiple rows. Use the arrows to reorder.</div>
-            <div class="mt-2 d-flex gap-2">
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('rowsSelect', -1)">?</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('rowsSelect', 1)">?</button>
-            </div>
+
+            </ul>
+
           </div>
-        </div>
 
         <div class="card mb-3">
+
           <div class="card-header">Columns</div>
+
           <div class="card-body">
-            <select multiple size="5" class="form-select" id="colsSelect">
+
+            <div class="form-text">Optional: check fields to pivot across columns, drag to set order.</div>
+
+            <ul class="list-group small" data-cols-list>
+
               {% for field in available_fields %}
-                <option value="{{ field.key }}" {% if field.key in cols_selected %}selected{% endif %}>{{ field.label }} ({{ field.key }})</option>
+
+              <li class="list-group-item d-flex align-items-center justify-content-between" data-key="{{ field.key }}" data-label="{{ field.label }}">
+
+                <div class="form-check">
+
+                  <input class="form-check-input" type="checkbox" id="col-{{ forloop.counter0 }}" {% if field.key in cols_selected %}checked{% endif %}>
+
+                  <label class="form-check-label" for="col-{{ forloop.counter0 }}">{{ field.label }} <small class="text-muted">({{ field.key }})</small></label>
+
+                </div>
+
+                <span class="bi bi-grip-vertical text-muted js-drag-handle"></span>
+
+              </li>
+
               {% endfor %}
-            </select>
-            <div class="form-text">Optional: choose fields to pivot across columns.</div>
-            <div class="mt-2 d-flex gap-2">
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('colsSelect', -1)">?</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="MagPivot.move('colsSelect', 1)">?</button>
-            </div>
+
+            </ul>
+
           </div>
+
         </div>
 
-        <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center">
             <span>Measures</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="MagPivot.addMeasure()">Add Measure</button>
@@ -272,27 +305,141 @@
         });
       }
 
+      const rowListSelector = '[data-rows-list]';
+
+      const colListSelector = '[data-cols-list]';
+
+
+
+      function reorderList(selector, order) {
+
+        if (!Array.isArray(order) || !order.length) {
+
+          return;
+
+        }
+
+        const container = document.querySelector(selector);
+
+        if (!container) {
+
+          return;
+
+        }
+
+        const items = Array.from(container.querySelectorAll('li[data-key]'));
+
+        const orderMap = {};
+
+        order.forEach(function(key, idx) { orderMap[key] = idx; });
+
+        items.sort(function(a, b) {
+
+          const ai = Object.prototype.hasOwnProperty.call(orderMap, a.dataset.key) ? orderMap[a.dataset.key] : Number.MAX_SAFE_INTEGER;
+
+          const bi = Object.prototype.hasOwnProperty.call(orderMap, b.dataset.key) ? orderMap[b.dataset.key] : Number.MAX_SAFE_INTEGER;
+
+          if (ai === bi) {
+
+            return (a.dataset.key || '').localeCompare(b.dataset.key || '');
+
+          }
+
+          return ai - bi;
+
+        });
+
+        items.forEach(function(item) { container.appendChild(item); });
+
+      }
+
+
+
+      function syncList(selector) {
+
+        const container = document.querySelector(selector);
+
+        if (!container) {
+
+          return;
+
+        }
+
+        container.querySelectorAll('li[data-key]').forEach(function(li) {
+
+          const checkbox = li.querySelector('input[type="checkbox"]');
+
+          const checked = !!(checkbox && checkbox.checked);
+
+          li.classList.toggle('list-group-item-primary', checked);
+
+        });
+
+      }
+
+
+
+      const rowOrder = {{ rows_selected|tojson }};
+
+      reorderList(rowListSelector, rowOrder);
+
+      const colOrder = {{ cols_selected|tojson }};
+
+      reorderList(colListSelector, colOrder);
+
+
+
+      syncList(rowListSelector);
+
+      syncList(colListSelector);
+
+
+
+      document.querySelectorAll(rowListSelector + ' input[type="checkbox"]').forEach(function(cb) {
+
+        cb.addEventListener('change', function() { syncList(rowListSelector); });
+
+      });
+
+      document.querySelectorAll(colListSelector + ' input[type="checkbox"]').forEach(function(cb) {
+
+        cb.addEventListener('change', function() { syncList(colListSelector); });
+
+      });
+
+
+
+      try {
+
+        if (window.Sortable) {
+
+          const rowListEl = document.querySelector(rowListSelector);
+
+          if (rowListEl) {
+
+            new Sortable(rowListEl, { animation: 150, handle: '.js-drag-handle' });
+
+          }
+
+          const colListEl = document.querySelector(colListSelector);
+
+          if (colListEl) {
+
+            new Sortable(colListEl, { animation: 150, handle: '.js-drag-handle' });
+
+          }
+
+        }
+
+      } catch (err) {
+
+        console.warn('Sortable init failed', err);
+
+      }
+
+
+
       const API = {
-        move(selectId, delta) {
-          const select = document.getElementById(selectId);
-          if (!select) return;
-          const selected = Array.from(select.selectedOptions);
-          if (!selected.length) return;
-          const options = Array.from(select.options);
-          selected.forEach(function (opt) {
-            const index = options.indexOf(opt);
-            const newIndex = index + delta;
-            if (newIndex < 0 || newIndex >= options.length) return;
-            select.removeChild(opt);
-            if (delta > 0) {
-              select.insertBefore(opt, options[newIndex + 1] || null);
-            } else {
-              select.insertBefore(opt, options[newIndex]);
-            }
-            options.splice(index, 1);
-            options.splice(newIndex, 0, opt);
-          });
-        },
         addMeasure() {
           const list = document.getElementById('measureList');
           const empty = list?.querySelector('[data-empty-measure]');
@@ -328,8 +475,8 @@
           return true;
         },
         save() {
-          const rows = API._collect('rowsSelect');
-          const cols = API._collect('colsSelect');
+          const rows = API._collectList('[data-rows-list]');
+          const cols = API._collectList('[data-cols-list]');
           const measures = [];
           document.querySelectorAll('#measureList [data-measure]').forEach(function (block) {
             const field = block.querySelector('[data-measure-field]')?.value;
@@ -377,12 +524,19 @@
             </div>\
           </div>';
         },
-        _collect(selectId) {
-          const select = document.getElementById(selectId);
-          if (!select) return [];
-          return Array.from(select.options)
-            .filter(function (opt) { return opt.selected; })
-            .map(function (opt) { return { source: opt.value, label: opt.textContent }; });
+        _collectList(selector) {
+          const container = document.querySelector(selector);
+          if (!container) return [];
+          const items = Array.from(container.querySelectorAll('li[data-key]'));
+          const results = [];
+          items.forEach(function (li) {
+            const checkbox = li.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked) {
+              const label = li.dataset.label || (checkbox.nextElementSibling ? checkbox.nextElementSibling.textContent.trim() : li.dataset.key);
+              results.push({ source: li.dataset.key, label: label });
+            }
+          });
+          return results;
         }
       };
 
