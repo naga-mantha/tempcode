@@ -210,20 +210,54 @@ class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchema
         blocks_list = []
         for lb in self.layout.blocks.select_related("block").order_by("position", "id"):
             block_impl = block_registry.get(lb.block.code)
+            html_fallback = None
             if not block_impl:
-                # If the block is unregistered, show a compact warning card
-                blocks_list.append({
-                    "x": getattr(lb, "x", 0) or 0,
-                    "y": getattr(lb, "y", 0) or 0,
-                    "w": getattr(lb, "w", 4) or 4,
-                    "h": getattr(lb, "h", 2) or 2,
-                    "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
-                    "block_name": lb.block.name,
-                    "id": lb.id,
-                    "wrapper_class": "card p-2",
-                    "is_spacer": False,
-                })
-                continue
+                # Try V2 fallback renderer when a v1 implementation is not registered
+                try:
+                    from apps_v2.blocks.register import load_specs
+                    from apps_v2.blocks.registry import get_registry
+                    from apps_v2.blocks.controller import BlockController
+                    from apps_v2.policy.service import PolicyService as _V2Policy
+                    load_specs()
+                    reg = get_registry()
+                    spec = reg.get(lb.block.code)
+                    if spec is not None:
+                        ctx_v2 = BlockController(spec, _V2Policy()).build_context(self.request, dom_ns=f"lb{lb.id}")
+                        tmpl = spec.template
+                        if getattr(spec, "kind", "") == "table":
+                            tmpl = "v2/blocks/table/table_card.html"
+                        elif getattr(spec, "kind", "") == "pivot":
+                            tmpl = "v2/blocks/pivot/pivot_card.html"
+                        html_fallback = render_to_string(tmpl, ctx_v2, request=self.request)
+                except Exception:
+                    html_fallback = None
+                if html_fallback is None:
+                    # If the block is unregistered, show a compact warning card
+                    blocks_list.append({
+                        "x": getattr(lb, "x", 0) or 0,
+                        "y": getattr(lb, "y", 0) or 0,
+                        "w": getattr(lb, "w", 4) or 4,
+                        "h": getattr(lb, "h", 2) or 2,
+                        "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
+                        "block_name": lb.block.name,
+                        "id": lb.id,
+                        "wrapper_class": "card p-2",
+                        "is_spacer": False,
+                    })
+                    continue
+                else:
+                    blocks_list.append({
+                        "x": getattr(lb, "x", 0) or 0,
+                        "y": getattr(lb, "y", 0) or 0,
+                        "w": getattr(lb, "w", 4) or 4,
+                        "h": getattr(lb, "h", 2) or 2,
+                        "html": html_fallback,
+                        "block_name": lb.block.name,
+                        "id": lb.id,
+                        "wrapper_class": "card p-2",
+                        "is_spacer": False,
+                    })
+                    continue
             # Build a per-block namespaced GET overlay from selected layout filters
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
             qd = build_namespaced_get(self.request, ns=ns, values=selected_filter_values or {})
@@ -395,17 +429,99 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
         for lb in self.qs:
             block_impl = block_registry.get(lb.block.code)
             if not block_impl:
-                blocks_list.append({
-                    "id": lb.id,
-                    "x": lb.x or 0,
-                    "y": lb.y or 0,
-                    "w": lb.w or 4,
-                    "h": lb.h or 2,
-                    "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
-                    "title": getattr(lb, "title", ""),
-                    "note": getattr(lb, "note", ""),
-                })
-                continue
+                # Try a v2 renderer fallback so v2 blocks can be previewed in v1 editor
+                html_v2 = None
+                try:
+                    from apps_v2.blocks.register import load_specs
+                    from apps_v2.blocks.registry import get_registry
+                    from apps_v2.blocks.controller import BlockController
+                    from apps_v2.policy.service import PolicyService as _V2Policy
+                    from apps_v2.blocks.configs import (
+                        get_block_for_spec as _v2_get_block,
+                        list_pivot_configs as _v2_list_pivots,
+                        choose_active_pivot_config as _v2_choose_pivot,
+                    )
+                    # Defensive: ensure pivot module is imported so registry contains it
+                    try:
+                        if 'pivot' in (lb.block.code or ''):
+                            from apps_v2.blocks.pivots.items_pivot import ItemsPivotSpec as _EnsurePivot  # noqa: F401
+                    except Exception:
+                        pass
+                    load_specs()
+                    reg = get_registry()
+                    spec = reg.get(lb.block.code)
+                    if spec is not None:
+                        # If it's a pivot, ensure an explicit active config id is present
+                        proxied_request = request
+                        if getattr(spec, "kind", "") == "pivot":
+                            try:
+                                block_row = _v2_get_block(spec.id)
+                                pv_list = list(_v2_list_pivots(block_row, request.user))
+                                active_pv = _v2_choose_pivot(block_row, request.user, None)
+                                if active_pv:
+                                    from django.http import QueryDict
+                                    q = request.GET.copy() if hasattr(request.GET, 'copy') else QueryDict(mutable=True)
+                                    q = q.copy()  # ensure mutable
+                                    q['pivot_config_id'] = str(getattr(active_pv, 'id'))
+                                    class _ReqProxy:
+                                        def __init__(self, base, get):
+                                            self._base = base
+                                            self.GET = get
+                                        def __getattr__(self, name):
+                                            return getattr(self._base, name)
+                                    proxied_request = _ReqProxy(request, q)
+                            except Exception:
+                                proxied_request = request
+                        ctx_v2 = BlockController(spec, _V2Policy()).build_context(proxied_request, dom_ns=f"lb{lb.id}")
+                        tmpl = spec.template
+                        if getattr(spec, "kind", "") == "table":
+                            tmpl = "v2/blocks/table/table_card.html"
+                        elif getattr(spec, "kind", "") == "pivot":
+                            tmpl = "v2/blocks/pivot/pivot_card.html"
+                        html_v2 = render_to_string(tmpl, ctx_v2, request=request)
+                except Exception as exc:
+                    # As a safe fallback, render a friendly pivot placeholder
+                    try:
+                        if 'pivot' in (lb.block.code or ''):
+                            spec_id = lb.block.code
+                            manage_url = reverse('blocks_v2:manage_pivot_configs', args=[spec_id])
+                            html_v2 = (
+                                "<div class='card p-2'>"
+                                "<div class='alert alert-info p-2 m-0'>"
+                                "Pivot block is available but has no active config or failed to render. "
+                                f"<a href='{manage_url}' target='_blank'>Manage Pivot</a>"
+                                "</div></div>"
+                            )
+                        else:
+                            html_v2 = None
+                    except Exception:
+                        html_v2 = None
+                if html_v2 is None:
+                    blocks_list.append({
+                        "id": lb.id,
+                        "x": lb.x or 0,
+                        "y": lb.y or 0,
+                        "w": lb.w or 4,
+                        "h": lb.h or 2,
+                        "html": f"<div class='alert alert-warning p-2 m-0'>Block '{lb.block.code}' not available.</div>",
+                        "title": getattr(lb, "title", ""),
+                        "note": getattr(lb, "note", ""),
+                    })
+                    continue
+                else:
+                    blocks_list.append({
+                        "id": lb.id,
+                        "x": lb.x or 0,
+                        "y": lb.y or 0,
+                        "w": lb.w or 4,
+                        "h": lb.h or 2,
+                        "html": html_v2,
+                        "title": getattr(lb, "title", ""),
+                        "note": getattr(lb, "note", ""),
+                        "wrapper_class": ("card p-2"),
+                        "is_spacer": False,
+                    })
+                    continue
             ns = f"{getattr(block_impl, 'block_name', lb.block.code)}__{lb.id}__filters."
             qd = build_namespaced_get(request, ns=ns, values=selected_filter_values or {})
             qd["embedded"] = "1"
@@ -704,9 +820,16 @@ class LayoutBlockAddView(LoginRequiredMixin, LayoutAccessMixin, View):
             block_obj = Block.objects.get(code=block_code)
         except Block.DoesNotExist:
             return JsonResponse({"ok": False, "error": "Invalid block."}, status=400)
-        # Ensure the block is registered/available
+        # Ensure the block is available: v1 registry or v2 spec
         if not block_registry.get(block_obj.code):
-            return JsonResponse({"ok": False, "error": "Block not available."}, status=400)
+            try:
+                from apps_v2.blocks.register import load_specs
+                from apps_v2.blocks.registry import get_registry
+                load_specs()
+                if block_obj.code not in get_registry():
+                    return JsonResponse({"ok": False, "error": "Block not available."}, status=400)
+            except Exception:
+                return JsonResponse({"ok": False, "error": "Block not available."}, status=400)
         # Append at the visual bottom based on current y+h
         from django.db.models import F, IntegerField, Value, ExpressionWrapper
         qs = LayoutBlock.objects.filter(layout=layout).annotate(

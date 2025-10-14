@@ -1,0 +1,133 @@
+﻿{% extends "base.html" %}
+{% load dict_extras static %}
+
+{% block title %}<title>Design - {{ layout.name }}</title>{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'layout_v2:layout_detail_v2' username=layout.user.username slug=layout.slug %}">Back</a>
+      <form id="addBlockForm" method="post" action="{% url 'layout_v2:layout_block_add_v2' username=layout.user.username slug=layout.slug %}" class="d-inline-flex align-items-end gap-2">
+        {% csrf_token %}
+        <label class="form-label mb-0">Add Block</label>
+        <select name="spec_id" class="form-select form-select-sm w-auto">
+          {% for s in available_specs %}
+            <option value="{{ s.id }}">{{ s.name }} ({{ s.kind }})</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Add</button>
+      </form>
+    </div>
+    {# Removed: v2 auto-saves on drag/resize, like v1 #}
+  </div>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
+  <div class="grid-stack" id="gridDesigner"></div>
+</div>
+
+<div id="blockHtmlStore" style="display:none">
+  {% for b in blocks %}
+    <div id="block-html-{{ b.id }}" data-spec="{{ b.code|default:'' }}">{{ b.html|safe }}</div>
+  {% endfor %}
+</div>
+
+<template id="gridItemTemplate">
+  <div class="grid-stack-item" data-gs-id="">
+    <div class="grid-stack-item-content position-relative">
+      <div class="position-absolute top-0 end-0 p-1 d-flex gap-1" style="z-index:2;">
+        <button type="button" class="btn btn-sm btn-outline-danger js-delete">Delete</button>
+      </div>
+      <div class="js-html"></div>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  {% load static %}
+  <script src="{% static 'common/js/v2-table-filters.js' %}"></script>
+  <script type="application/json" id="designData">{% autoescape off %}{{ blocks_meta|tojson }}{% endautoescape %}</script>
+  <script src="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js"></script>
+  <script>
+    (function(){
+      const gridEl = document.getElementById('gridDesigner');
+      const tmpl = document.getElementById('gridItemTemplate');
+      let items = [];
+      try { items = JSON.parse(document.getElementById('designData').textContent || '[]'); } catch(e) { items = []; }
+      const data = {
+        items: items,
+        urls: {
+          save: "{% url 'layout_v2:layout_grid_update_v2' username=layout.user.username slug=layout.slug %}",
+          del: function(id){ return "{% url 'layout_v2:layout_block_delete_v2' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/'); }
+        }
+      };
+      const grid = GridStack.init({ float: false, staticGrid: false, cellHeight: 136, margin: 8 }, gridEl);
+
+      // CSRF helper (use the token already on the page via the Add form)
+      function getCsrfToken(){
+        const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return (el && el.value) || '';
+      }
+      const csrftoken = getCsrfToken();
+
+      // Auto-save grid on change (like v1)
+      function saveGrid(){
+        const items = []; const nodes = grid.engine.nodes || [];
+        nodes.forEach(function(node){
+          const el=node.el; const id = el && el.dataset && el.dataset.gsId ? el.dataset.gsId : (node.id || '');
+          if (!id) return; items.push({ id:id, x:node.x, y:node.y, w:node.w, h:node.h });
+        });
+        fetch(data.urls.save, { method:'POST', headers:{ 'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRFToken': csrftoken }, body: JSON.stringify({ items: items }) }).catch(function(){});
+      }
+      let saveDebounce;
+      grid.on('change', function(){ clearTimeout(saveDebounce); saveDebounce = setTimeout(saveGrid, 120); });
+
+      // v2 design has no inline editor (match v1)
+
+      function normalizeCardForDesign(root){
+        try {
+          // Force card and table area to stretch to tile height in the designer
+          const card = root.querySelector('.js-html .card');
+          if (card) { card.style.height = '100%'; }
+          const body = root.querySelector('.js-html .card-body');
+          if (body) { body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.height = '100%'; }
+          const tableEl = root.querySelector('.js-html [id$="-table"]');
+          if (tableEl) { tableEl.style.height = '100%'; tableEl.style.minHeight = '0'; }
+        } catch (e) { /* ignore */ }
+      }
+
+      function addItem(it){
+        const n = document.importNode(tmpl.content, true);
+        const root = n.querySelector('.grid-stack-item');
+        root.dataset.gsId = String(it.id);
+        const htmlWrap = n.querySelector('.js-html');
+        try { const src = document.getElementById('block-html-' + String(it.id)); htmlWrap.innerHTML = src ? src.innerHTML : ''; } catch(e) { htmlWrap.innerHTML = ''; }
+        grid.addWidget(root, {x: it.x||0, y: it.y||0, w: it.w||4, h: it.h||2, id: String(it.id)});
+        normalizeCardForDesign(root);
+        // No inline editor opening on click
+        root.querySelector('.js-delete')?.addEventListener('click', function(){
+          if (!confirm('Delete this block?')) return;
+          fetch(data.urls.del(it.id), { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':(document.querySelector('input[name="csrfmiddlewaretoken"]')||{}).value||''} })
+            .then(r => { if (r.ok){ grid.removeWidget(root); } else { alert('Delete failed'); } });
+        });
+      }
+      (data.items||[]).forEach(addItem);
+
+      // No explicit save button; everything persists automatically
+    })();
+  </script>
+  <style>
+    .grid-stack{ min-height: 70vh; }
+    /* Make embedded cards match tile height and keep resizer at bottom-right */
+    #gridDesigner .grid-stack-item-content{ height:100%; display:flex; }
+    #gridDesigner .grid-stack-item-content{ overflow: hidden; padding: 0; }
+    #gridDesigner .grid-stack-item-content .js-html .card{ height:100%; }
+    #gridDesigner .grid-stack-item-content .js-html .card{ margin: 0; }
+    #gridDesigner .grid-stack-item-content .js-html .card-body{ height:100%; display:flex; flex-direction:column; }
+    #gridDesigner .grid-stack-item-content .js-html [id$='-table']{ height:100% !important; min-height:0; }
+    #gridDesigner .grid-stack-item{ min-height: 0; }
+    #gridDesigner .js-html > *{ height:100%; }
+  </style>
+{% endblock %}

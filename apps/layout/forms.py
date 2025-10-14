@@ -72,23 +72,62 @@ class AddBlockForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Limit selectable blocks to those registered in the runtime registry.
-        valid_codes = list(block_registry.all().keys())
+        # Limit selectable blocks to runtime v1 registry PLUS v2 specs.
         field = self.fields["block"]
-        qs = Block.objects.filter(code__in=valid_codes)
-        field.queryset = qs
         field.widget.attrs.update({"class": "form-select"})
-        # Build sorted choices by (app_name, block name) for display
-        blocks = list(qs)
+
+        # v1 registered block codes
+        v1_codes = list(block_registry.all().keys())
+        v1_qs = Block.objects.filter(code__in=v1_codes)
+
+        # v2 specs → ensure Block rows exist, collect codes
+        try:
+            from apps_v2.blocks.register import load_specs
+            from apps_v2.blocks.registry import get_registry
+            from apps_v2.blocks.configs import get_block_for_spec
+            load_specs()
+            reg = get_registry()
+            v2_objs = []
+            for code, spec in reg.items():
+                try:
+                    obj = get_block_for_spec(code)
+                    # set friendly name on first sync (if empty)
+                    if not obj.name:
+                        obj.name = getattr(spec, "name", code)
+                        obj.save(update_fields=["name"])  # best-effort
+                    v2_objs.append(obj)
+                except Exception:
+                    continue
+        except Exception:
+            v2_objs = []
+
+        # Combined queryset for ModelChoiceField
+        all_objs = list(v1_qs) + list(v2_objs)
+        # De-duplicate by code
+        seen = set()
+        unique_objs = []
+        for o in all_objs:
+            if o.code in seen:
+                continue
+            seen.add(o.code)
+            unique_objs.append(o)
+        field.queryset = Block.objects.filter(code__in=[o.code for o in unique_objs])
+
+        # Build display choices: group v1 by app, label v2 with prefix
         def _app(obj: Block) -> str:
             meta = block_registry.metadata(obj.code) or {}
             return (meta.get("app_name") or "").strip()
-        blocks.sort(key=lambda b: (_app(b).lower(), (b.name or "").lower()))
-        # ModelChoiceField uses to_field_name='code', so values must be block.code
-        # Prepend an empty placeholder so the first real option isn't preselected.
-        field.widget.choices = [("", "-- Select a block --")] + [
-            (b.code, f"{_app(b)}>{b.name}") for b in blocks
-        ]
+        v1_list = [o for o in unique_objs if o.code in v1_codes]
+        v2_list = [o for o in unique_objs if o.code not in v1_codes]
+        v1_list.sort(key=lambda b: (_app(b).lower(), (b.name or "").lower()))
+        v2_list.sort(key=lambda b: (b.name or b.code).lower())
+
+        choices = [("", "-- Select a block --")]
+        # v1 choices
+        choices.extend((b.code, f"{_app(b) or 'V1'}>{b.name}") for b in v1_list)
+        # v2 choices, clearly labeled
+        choices.extend((b.code, f"V2>{b.name}") for b in v2_list)
+        field.widget.choices = choices
 
     # No responsive fields on add; all inherit by default
 

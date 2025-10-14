@@ -1,0 +1,65 @@
+<div id="savedLayoutFilters">
+  <div class="card">
+    <div class="card-header">Saved Filters</div>
+    <div class="card-body">
+      {% if filter_configs %}
+        <ul class="list-group">
+          {% for cfg in filter_configs %}
+            {% if cfg.user_id == request.user.id %}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                  <span class="me-2">{{ cfg.name }}</span>
+                  {% if cfg.is_default %}<span class="badge text-bg-secondary">default</span>{% endif %}
+                  <span class="badge text-bg-light border ms-2">{{ cfg.visibility }}</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <form method="post" action="{% url 'layout_v2:layout_make_default_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        class="d-inline"
+                        hx-post="{% url 'layout_v2:layout_make_default_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        hx-target="#savedLayoutFilters" hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default %}disabled{% endif %}>Make Default</button>
+                  </form>
+                  <form method="post" action="{% url 'layout_v2:layout_duplicate_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        class="d-inline"
+                        hx-post="{% url 'layout_v2:layout_duplicate_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        hx-target="#savedLayoutFilters" hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
+                  </form>
+                  <form method="post" action="{% url 'layout_v2:layout_delete_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        class="d-inline" onsubmit="return confirm('Delete filter {{ cfg.name }}?')"
+                        hx-post="{% url 'layout_v2:layout_delete_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                        hx-target="#savedLayoutFilters" hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+              <div class="mt-2">
+                <form method="post" action="{% url 'layout_v2:layout_rename_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                      class="row g-2 align-items-end"
+                      hx-post="{% url 'layout_v2:layout_rename_filter_v2' username=layout.user.username slug=layout.slug config_id=cfg.id %}"
+                      hx-target="#savedLayoutFilters" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <div class="col-auto">
+                    <label class="form-label small">New name</label>
+                    <input type="text" name="name" class="form-control form-control-sm" value="{{ cfg.name }}">
+                  </div>
+                  <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">Rename</button>
+                  </div>
+                </form>
+              </div>
+            </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="text-muted small">No saved filters yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+

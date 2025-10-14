@@ -27,10 +27,11 @@ class BlockController:
     spec: BlockSpec
     policy: PolicyService
 
-    def build_context(self, request: HttpRequest) -> Dict[str, Any]:
+    def build_context(self, request: HttpRequest, dom_ns: str | None = None) -> Dict[str, Any]:
         services = self.spec.services or None
         if not services:
-            dom_base = f"v2-{self.spec.id.replace('.', '-')}"
+            base = f"v2-{self.spec.id.replace('.', '-')}"
+            dom_base = f"{base}-{dom_ns}" if dom_ns else base
             return {
                 "title": self.spec.name,
                 "spec_id": self.spec.id,
@@ -225,7 +226,8 @@ class BlockController:
                 ser = services.serializer()
             rows = list(ser.serialize_rows(qs, columns, user=request.user, policy=self.policy))
 
-        dom_base = f"v2-{self.spec.id.replace('.', '-')}"
+        base = f"v2-{self.spec.id.replace('.', '-')}"
+        dom_base = f"{base}-{dom_ns}" if dom_ns else base
         refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
         data_url = reverse("blocks_v2:data_spec", args=[self.spec.id])
         export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
@@ -429,7 +431,8 @@ class BlockController:
         excel_download_options = dict(download_options.get("excel") or {})
         pdf_download_options = dict(download_options.get("pdf") or {})
 
-        dom_base = f"v2-{self.spec.id.replace('.', '-')}"
+        base = f"v2-{self.spec.id.replace('.', '-')}"
+        dom_base = f"{base}-{dom_ns}" if dom_ns else base
         refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
         export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
 
