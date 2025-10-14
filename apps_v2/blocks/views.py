@@ -932,6 +932,7 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
         "selected": selected_meta,
         "table_configs": table_configs,
         "active_table_config_id": getattr(active_cfg, "id", None),
+        "active_table_config": active_cfg,
     }
     return render(request, "v2/blocks/table/manage_columns.html", ctx)
 

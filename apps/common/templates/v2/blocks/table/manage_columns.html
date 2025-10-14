@@ -91,18 +91,18 @@
             <div class="row g-2">
               <div class="col-md-4">
                 <label class="form-label">Name</label>
-                <input type="text" name="name" class="form-control" required>
+                <input type="text" name="name" class="form-control" value="{{ active_table_config.name|default:'' }}" required>
               </div>
               <div class="col-md-3">
                 <label class="form-label">Visibility</label>
                 <select name="visibility" class="form-select">
-                  <option value="private">Private</option>
-                  <option value="public">Public</option>
+                  <option value="private" {% if active_table_config and active_table_config.visibility == "private" %}selected{% endif %}>Private</option>
+                  <option value="public" {% if active_table_config and active_table_config.visibility == "public" %}selected{% endif %}>Public</option>
                 </select>
               </div>
               <div class="col-md-3 d-flex align-items-end">
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="is_default" id="mkDefault">
+                  <input class="form-check-input" type="checkbox" name="is_default" id="mkDefault" {% if active_table_config and active_table_config.is_default %}checked{% endif %}>
                   <label class="form-check-label" for="mkDefault">Make default</label>
                 </div>
               </div>
@@ -170,8 +170,8 @@
                       <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
                     </form>
                     <form method="post" action="{% url 'blocks_v2:delete_table_config' spec_id cfg.id %}"
-                          class="d-inline js-reload-on-success" onsubmit="return confirm('Delete view {{ cfg.name }}?')"
-                          hx-post="{% url 'blocks_v2:delete_table_config' spec_id cfg.id %}" hx-swap="none">
+                          class="d-inline js-reload-on-success"
+                          hx-post="{% url 'blocks_v2:delete_table_config' spec_id cfg.id %}" hx-swap="none" hx-confirm="Delete view {{ cfg.name }}?">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>

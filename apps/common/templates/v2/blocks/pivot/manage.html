@@ -209,7 +209,7 @@
   </form>
 
   <div class="row g-3 mt-3">
-    <div class="col-xl-6">
+    <div class="col-12">
       <div class="card h-100">
         <div class="card-header">My Pivot Settings</div>
         <div class="card-body">
@@ -250,39 +250,6 @@
         </div>
       </div>
     </div>
-    <div class="col-xl-6">
-      <div class="card h-100">
-        <div class="card-header">Shared Pivot Settings</div>
-        <div class="card-body">
-          {% if pivot_configs %}
-            <ul class="list-group list-group-flush">
-              {% for cfg in pivot_configs %}
-                {% if cfg.visibility == 'public' %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <div class="fw-semibold">{{ cfg.name }}</div>
-                      <div class="text-muted small">Created by {{ cfg.user.get_full_name|default:cfg.user.username }}</div>
-                    </div>
-                    <div class="d-flex gap-2">
-                      <form method="post" action="{% url 'blocks_v2:make_default_pivot_config' spec_id cfg.id %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default and cfg.visibility == 'public' %}disabled{% endif %}>Make Default</button>
-                      </form>
-                      {% if request.user.is_staff %}
-                      <form method="post" action="{% url 'blocks_v2:delete_pivot_config' spec_id cfg.id %}" onsubmit="return confirm('Delete pivot {{ cfg.name }}?')">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                      </form>
-                      {% endif %}
-                    </div>
-                  </li>
-                {% endif %}
-              {% endfor %}
-            </ul>
-          {% else %}
-            <div class="text-muted small">No shared pivot settings yet.</div>
-          {% endif %}
-        </div>
       </div>
     </div>
   </div>
@@ -417,7 +384,7 @@
 
           if (rowListEl) {
 
-            new Sortable(rowListEl, { animation: 150, handle: '.js-drag-handle' });
+            new Sortable(rowListEl, { animation: 150 });
 
           }
 
@@ -425,7 +392,7 @@
 
           if (colListEl) {
 
-            new Sortable(colListEl, { animation: 150, handle: '.js-drag-handle' });
+            new Sortable(colListEl, { animation: 150 });
 
           }
 
