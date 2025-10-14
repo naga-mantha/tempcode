@@ -300,13 +300,25 @@ class BlockController:
                 policy=self.policy,
             )
         if filter_schema_list:
+            # Build mapping and attach AJAX choices URLs for selects, same as tables
+            try:
+                from django.urls import reverse as _reverse
+            except Exception:
+                _reverse = None
             for entry in filter_schema_list:
                 if not isinstance(entry, dict):
                     continue
                 key = entry.get("key")
                 if not key:
                     continue
-                filter_schema[str(key)] = dict(entry)
+                e = dict(entry)
+                typ = e.get("type")
+                if typ in {"select", "multiselect"} and _reverse:
+                    try:
+                        e["choices_url"] = _reverse("blocks_v2:choices_spec", args=[self.spec.id, key])
+                    except Exception:
+                        pass
+                filter_schema[str(key)] = e
 
         filter_keys = list(filter_schema.keys()) if filter_schema else []
         allowed_filter_keys = filter_keys
@@ -322,13 +334,13 @@ class BlockController:
 
         block_row = get_block_for_spec(self.spec.id)
         filter_configs = list(list_filter_configs(block_row, request.user))
-        had_cfg_param = "filter_config_id" in request.GET
         cfg_id = request.GET.get("filter_config_id")
         try:
             cfg_id_int = int(cfg_id) if cfg_id else None
         except ValueError:
             cfg_id_int = None
-        active_filter_cfg = choose_active_filter_config(block_row, request.user, cfg_id_int) if had_cfg_param else None
+        # Mirror table behavior: if no param, fall back to user's default/public default/first
+        active_filter_cfg = choose_active_filter_config(block_row, request.user, cfg_id_int)
 
         filter_layout = None
         try:

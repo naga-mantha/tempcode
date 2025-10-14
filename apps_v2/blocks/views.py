@@ -576,6 +576,8 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         "spec_id": spec_id,
         "filter_configs": filter_configs,
         "active_filter_config_id": getattr(active_cfg, "id", None),
+        "active_filter_name": getattr(active_cfg, "name", "") if active_cfg else "",
+        "active_filter_is_default": bool(getattr(active_cfg, "is_default", False)) if active_cfg else False,
         # Filter schema + layout for inline create form
         "filter_schema": filter_schema,
         "filter_layout": filter_layout,
