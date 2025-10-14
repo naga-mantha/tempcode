@@ -32,11 +32,11 @@
       </form>
       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
       {% if spec_id == 'v2.items.table' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_items' %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_items' %}">Table Link</a>
       {% elif spec_id == 'v2.layouts.table' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_layouts' %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_layouts' %}">Table Link</a>
       {% else %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Table Link</a>
       {% endif %}
     </div>
   </div>
@@ -47,7 +47,7 @@
     </div>
 
     <div class="col-md-5">
-      <form id="v2ManageFilterForm" hx-post="{% url 'blocks_v2:save_filter_config' spec_id %}" hx-swap="none">
+      <form id="v2ManageFilterForm" hx-post="{% url 'blocks:save_filter_config' spec_id %}" hx-swap="none">
         {% csrf_token %}
         <div class="card">
           <div class="card-header">Save Filter</div>
@@ -82,9 +82,9 @@
           <div class="card-header">Filter Layout</div>
           <div class="card-body">
             <p class="text-muted small mb-2">Arrange which filter fields appear and their order.</p>
-            <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filter_layout' spec_id %}">Manage My Filter Layout</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_filter_layout' spec_id %}">Manage My Filter Layout</a>
             {% if request.user.is_staff %}
-              <a class="btn btn-sm btn-outline-secondary ms-2" href="{% url 'blocks_v2:manage_filter_layout_default' spec_id %}">Manage Default Layout</a>
+              <a class="btn btn-sm btn-outline-secondary ms-2" href="{% url 'blocks:manage_filter_layout_default' spec_id %}">Manage Default Layout</a>
             {% endif %}
           </div>
         </div>

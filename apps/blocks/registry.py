@@ -1,79 +1,104 @@
-"""Central registry for block implementations."""
+from __future__ import annotations
 
-from .base import BaseBlock
+from typing import Dict, Iterable, Sequence, Any
+import logging
 
+from django.template import loader
 
-class BlockRegistry:
-    """Store block implementations by identifier.
+from .specs import BlockSpec
+from apps.blocks.options import ALLOWED_OPTIONS as TABLE_ALLOWED_OPTIONS
 
-    The registry tracks registered blocks and prevents duplicate
-    registrations.  Consumers can look up a block by its identifier or
-    iterate over all registered blocks.  Alongside each block instance the
-    registry keeps metadata such as supported features.
-    """
-
-    def __init__(self):
-        self._blocks = {}
-        self._metadata = {}
-
-    def register(self, block_id, block_instance):
-        """Register ``block_instance`` under ``block_id``.
-
-        Raises ``ValueError`` if ``block_id`` is already present in the
-        registry or ``TypeError`` if the instance is not a ``BaseBlock``
-        subclass.
-        """
-
-        if not isinstance(block_instance, BaseBlock):
-            raise TypeError("block_instance must subclass BaseBlock")
-        if block_id in self._blocks:
-            raise ValueError(f"Block '{block_id}' is already registered")
-        self._blocks[block_id] = block_instance
-        # Derive app name at registration time for reliable labeling later
-        # Resolve app name once by matching the block class module
-        from django.apps import apps as django_apps
-        module = getattr(block_instance.__class__, "__module__", "")
-        cfg = None
-        for candidate in django_apps.get_app_configs():
-            mod_name = getattr(candidate.module, "__name__", "")
-            if module.startswith(mod_name):
-                cfg = candidate
-                break
-        app_label = cfg.label if cfg else None
-        app_name = (getattr(cfg, "verbose_name", None) or app_label) if cfg else None
-
-        self._metadata[block_id] = {
-            "supported_features": getattr(block_instance, "supported_features", []),
-            "class": block_instance.__class__.__name__,
-            "app_name": app_name,
-            "app_label": app_label,
-        }
-
-    def get(self, block_id):
-        """Return the block registered under ``block_id`` if any."""
-
-        entry = self._blocks.get(block_id)
-        return entry
-
-    def metadata(self, block_id):
-        """Return metadata for ``block_id`` if present."""
-
-        return self._metadata.get(block_id, {})
-
-    def all(self):
-        """Return a copy of the internal registry mapping ids to instances."""
-
-        return dict(self._blocks)
-
-    def all_metadata(self):
-        """Return metadata for all registered blocks."""
-
-        return dict(self._metadata)
+log = logging.getLogger(__name__)
 
 
-# Global registry instance used throughout the project.
-block_registry = BlockRegistry()
+_REGISTRY: Dict[str, BlockSpec] = {}
 
 
-__all__ = ["BlockRegistry", "block_registry"]
+ALLOWED_KINDS = {"table", "pivot", "chart", "content"}
+ALLOWED_FEATURES = {"filters", "column_config", "export", "inline_edit", "drilldown"}
+
+
+def _validate_spec(spec: BlockSpec) -> None:
+    # Kind
+    if spec.kind not in ALLOWED_KINDS:
+        raise ValueError(f"Invalid BlockSpec.kind '{spec.kind}' for {spec.id}")
+    # Template exists
+    if not spec.template:
+        raise ValueError(f"BlockSpec.template is required for {spec.id}")
+    try:
+        loader.get_template(spec.template)
+    except Exception as e:
+        raise ValueError(f"Template not found for {spec.id}: {spec.template}") from e
+    # Supported features sanity
+    feats: Sequence[str] = list(spec.supported_features or ())
+    unknown = [f for f in feats if f not in ALLOWED_FEATURES]
+    if unknown:
+        raise ValueError(f"Unsupported features in {spec.id}: {unknown}")
+    # Table options allowlist
+    opts = getattr(spec, "table_options", None) or {}
+    bad = [k for k in opts.keys() if k not in TABLE_ALLOWED_OPTIONS]
+    if bad:
+        raise ValueError(f"Unsupported table_options in {spec.id}: {bad}")
+    # Service presence for tables
+    if spec.kind == "table":
+        services = spec.services or None
+        if not services:
+            raise ValueError(f"Table spec {spec.id} must provide services")
+        if not getattr(services, "column_resolver", None):
+            raise ValueError(f"Table spec {spec.id} is missing column_resolver")
+        if not getattr(services, "query_builder", None):
+            raise ValueError(f"Table spec {spec.id} is missing query_builder")
+        if not getattr(services, "serializer", None):
+            raise ValueError(f"Table spec {spec.id} is missing serializer")
+        # If using generic Model* services, ensure model is provided
+        try:
+            from apps.blocks.services.model_table import ModelColumnResolver, ModelQueryBuilder
+            if services.column_resolver in {ModelColumnResolver} or services.query_builder in {ModelQueryBuilder}:
+                if getattr(spec, "model", None) is None:
+                    raise ValueError(f"Table spec {spec.id} uses Model* services but has no model")
+        except Exception:
+            # If import fails, skip this specific check
+            pass
+        # Depth should be >= 0
+        depth = getattr(spec, "column_max_depth", 0)
+        if not isinstance(depth, int) or depth < 0:
+            raise ValueError(f"column_max_depth must be >= 0 for {spec.id}")
+    elif spec.kind == "pivot":
+        services = spec.services or None
+        if not services:
+            raise ValueError(f"Pivot spec {spec.id} must provide services")
+        if not getattr(services, "pivot_engine", None):
+            raise ValueError(f"Pivot spec {spec.id} is missing pivot_engine")
+        if getattr(spec, "model", None) is None:
+            raise ValueError(f"Pivot spec {spec.id} must declare a model")
+
+
+def register(spec: BlockSpec) -> None:
+    if spec.id in _REGISTRY:
+        raise ValueError(f"Duplicate BlockSpec id: {spec.id}")
+    _validate_spec(spec)
+    _REGISTRY[spec.id] = spec
+
+
+def get_registry() -> Dict[str, BlockSpec]:
+    return dict(_REGISTRY)
+
+
+# Compatibility shim for legacy v1-style registrars that expect a
+# `block_registry` object with a `register(code, block)` method.
+# In the v2 system, specs are the source of truth; we no-op legacy
+# registrations to avoid import crashes during AppConfig.ready hooks.
+class _LegacyBlockRegistry:
+    def __init__(self) -> None:
+        self._data: Dict[str, Any] = {}
+
+    def register(self, code: str, block: Any) -> None:
+        # Accept and store, but do not surface into v2 registry.
+        try:
+            self._data[str(code)] = block
+        except Exception:
+            pass
+
+
+block_registry = _LegacyBlockRegistry()
 

@@ -7,8 +7,8 @@
 <div class="container-fluid py-2">
   <div class="d-flex justify-content-between align-items-center mb-2">
     <div class="d-flex align-items-center gap-2">
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'layout_v2:layout_detail_v2' username=layout.user.username slug=layout.slug %}">Back</a>
-      <form id="addBlockForm" method="post" action="{% url 'layout_v2:layout_block_add_v2' username=layout.user.username slug=layout.slug %}" class="d-inline-flex align-items-end gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}">Back</a>
+      <form id="addBlockForm" method="post" action="{% url 'layout:layout_block_add' username=layout.user.username slug=layout.slug %}" class="d-inline-flex align-items-end gap-2">
         {% csrf_token %}
         <label class="form-label mb-0">Add Block</label>
         <select name="spec_id" class="form-select form-select-sm w-auto">
@@ -59,8 +59,8 @@
       const data = {
         items: items,
         urls: {
-          save: "{% url 'layout_v2:layout_grid_update_v2' username=layout.user.username slug=layout.slug %}",
-          del: function(id){ return "{% url 'layout_v2:layout_block_delete_v2' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/'); }
+          save: "{% url 'layout:layout_grid_update' username=layout.user.username slug=layout.slug %}",
+          del: function(id){ return "{% url 'layout:layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/'); }
         }
       };
       const grid = GridStack.init({ float: false, staticGrid: false, cellHeight: 136, margin: 8 }, gridEl);
@@ -123,11 +123,20 @@
     /* Make embedded cards match tile height and keep resizer at bottom-right */
     #gridDesigner .grid-stack-item-content{ height:100%; display:flex; }
     #gridDesigner .grid-stack-item-content{ overflow: hidden; padding: 0; }
+    #gridDesigner .grid-stack-item{ overflow: hidden; }
     #gridDesigner .grid-stack-item-content .js-html .card{ height:100%; }
     #gridDesigner .grid-stack-item-content .js-html .card{ margin: 0; }
     #gridDesigner .grid-stack-item-content .js-html .card-body{ height:100%; display:flex; flex-direction:column; }
     #gridDesigner .grid-stack-item-content .js-html [id$='-table']{ height:100% !important; min-height:0; }
     #gridDesigner .grid-stack-item{ min-height: 0; }
     #gridDesigner .js-html > *{ height:100%; }
+    /* Nudge Gridstack resize handle inside the tile for both legacy and v10 classes */
+    #gridDesigner .grid-stack-item .ui-resizable-se,
+    #gridDesigner .grid-stack-item .ui-resizable-handle,
+    #gridDesigner .grid-stack-item .gs-resize-handle,
+    #gridDesigner .grid-stack-item .gs-resize-handle-both{
+      right: 4px !important;
+      bottom: 4px !important;
+    }
   </style>
 {% endblock %}

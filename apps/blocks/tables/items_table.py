@@ -7,21 +7,21 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from apps.common.models.items import Item
-from apps_v2.blocks.specs import BlockSpec, Services
+from apps.blocks.specs import BlockSpec, Services
 from apps.common.filters.schemas import text_filter, multiselect_filter
 from apps.common.filters.item_groups import item_group_choices
 from apps.common.filters.item_types import item_type_choices
 from apps.common.filters.items import item_choices
-from apps_v2.policy.service import PolicyService
-from apps_v2.blocks.controller import BlockController
-from apps_v2.blocks.services.model_table import (
+from apps.policy.service import PolicyService
+from apps.blocks.controller import BlockController
+from apps.blocks.services.model_table import (
     SchemaFilterResolver,
     ModelQueryBuilder,
     ModelColumnResolver,
     ModelSerializer,
 )
-from apps_v2.blocks.services.export_options import DefaultExportOptions
-from apps_v2.blocks.services.model_table import ModelQueryBuilder as BaseQueryBuilder
+from apps.blocks.services.export_options import DefaultExportOptions
+from apps.blocks.services.model_table import ModelQueryBuilder as BaseQueryBuilder
 
 # This class is used to pre-filter the queryset if needed. For ex: Open PO only
 class ActiveItemsQueryBuilder(BaseQueryBuilder):

@@ -43,7 +43,7 @@
           <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0"> <!--  Menu Container -->
               <li class="nav-item">
-                <a class="nav-link active" aria-current="page" href="{% url 'layout_list' %}">MAG360</a>
+                <a class="nav-link active" aria-current="page" href="{% url 'layout:layout_list' %}">MAG360</a>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="#" role="button" data-bs-toggle="offcanvas" data-bs-target="#layoutSidebar" aria-controls="layoutSidebar" title="Sidebar">
@@ -77,8 +77,8 @@
           </button>
           <div id="sidebarLayoutSec" class="collapse mt-2 js-collapse">
             <div class="list-group list-group-flush mb-3">
-              <a class="list-group-item list-group-item-action" href="{% url 'layout_create' %}">Create Layout</a>
-              <a class="list-group-item list-group-item-action" href="{% url 'layout_list' %}">Layout List</a>
+              <a class="list-group-item list-group-item-action" href="{% url 'layout:layout_create' %}">Create Layout</a>
+              <a class="list-group-item list-group-item-action" href="{% url 'layout:layout_list' %}">Layout List</a>
             </div>
           </div>
         </div>
@@ -94,7 +94,7 @@
               <div class="list-group list-group-flush mb-3">
                 {% for l in group.list %}
                   <a class="list-group-item list-group-item-action text-dark {% if layout and l.id == layout.id %}active{% endif %}"
-                     href="{% url 'layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
+                     href="{% url 'layout:layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
                 {% endfor %}
               </div>
             {% endfor %}
@@ -116,7 +116,7 @@
               <div class="list-group list-group-flush mb-3">
                 {% for l in group.list %}
                   <a class="list-group-item list-group-item-action text-dark {% if layout and l.id == layout.id %}active{% endif %}"
-                     href="{% url 'layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
+                     href="{% url 'layout:layout_detail' username=l.user.username slug=l.slug %}">{{ l.name }}</a>
                 {% endfor %}
               </div>
             {% endfor %}

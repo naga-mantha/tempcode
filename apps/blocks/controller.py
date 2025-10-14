@@ -6,12 +6,12 @@ from typing import Any, Dict, Mapping, List
 from django.http import HttpRequest
 from django.urls import reverse
 
-from apps_v2.blocks.specs import BlockSpec
-from apps_v2.policy.service import PolicyService
-from apps_v2.blocks.options import merge_table_options
-from apps_v2.blocks.services.model_table import prune_filter_schema, prune_filter_values
-from apps_v2.blocks.services.pivot_table import DefaultPivotEngine
-from apps_v2.blocks.configs import (
+from apps.blocks.specs import BlockSpec
+from apps.policy.service import PolicyService
+from apps.blocks.options import merge_table_options
+from apps.blocks.services.model_table import prune_filter_schema, prune_filter_values
+from apps.blocks.services.pivot_table import DefaultPivotEngine
+from apps.blocks.configs import (
     get_block_for_spec,
     list_table_configs,
     choose_active_table_config,
@@ -38,12 +38,12 @@ class BlockController:
                 "dom_id": dom_base,
                 "dom_table_id": f"{dom_base}-table",
                 "dom_wrapper_id": f"{dom_base}-card",
-                "refresh_url": reverse("blocks_v2:render_spec", args=[self.spec.id]),
-                "data_url": reverse("blocks_v2:data_spec", args=[self.spec.id]),
+                "refresh_url": reverse("blocks:render_spec", args=[self.spec.id]),
+                "data_url": reverse("blocks:data_spec", args=[self.spec.id]),
             }
 
         if self.spec.kind == "pivot":
-            return self._build_pivot_context(request, services)
+            return self._build_pivot_context(request, services, dom_ns=dom_ns)
 
         # Resolve filters
         filters: Mapping[str, Any]
@@ -115,7 +115,7 @@ class BlockController:
                     typ = entry.get("type")
                     if typ in {"select", "multiselect"}:
                         try:
-                            entry["choices_url"] = reverse("blocks_v2:choices_spec", args=[self.spec.id, key])
+                            entry["choices_url"] = reverse("blocks:choices_spec", args=[self.spec.id, key])
                         except Exception:
                             pass
                     filter_schema[str(key)] = entry
@@ -228,9 +228,9 @@ class BlockController:
 
         base = f"v2-{self.spec.id.replace('.', '-')}"
         dom_base = f"{base}-{dom_ns}" if dom_ns else base
-        refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
-        data_url = reverse("blocks_v2:data_spec", args=[self.spec.id])
-        export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
+        refresh_url = reverse("blocks:render_spec", args=[self.spec.id])
+        data_url = reverse("blocks:data_spec", args=[self.spec.id])
+        export_url = reverse("blocks:export_spec", args=[self.spec.id, "csv"])
         download_options = getattr(self.spec, "download_options", {}) or {}
         excel_download_options = dict(download_options.get("excel") or {})
         pdf_download_options = dict(download_options.get("pdf") or {})
@@ -280,7 +280,7 @@ class BlockController:
             "frontend_config": frontend_config,
         }
 
-    def _build_pivot_context(self, request: HttpRequest, services) -> Dict[str, Any]:
+    def _build_pivot_context(self, request: HttpRequest, services, dom_ns: str | None = None) -> Dict[str, Any]:
         filter_schema_list: List[Dict[str, Any]] = []
         filter_schema: Dict[str, Any] = {}
         filters: Mapping[str, Any] = {}
@@ -317,7 +317,7 @@ class BlockController:
                 typ = e.get("type")
                 if typ in {"select", "multiselect"} and _reverse:
                     try:
-                        e["choices_url"] = _reverse("blocks_v2:choices_spec", args=[self.spec.id, key])
+                        e["choices_url"] = _reverse("blocks:choices_spec", args=[self.spec.id, key])
                     except Exception:
                         pass
                 filter_schema[str(key)] = e
@@ -433,8 +433,8 @@ class BlockController:
 
         base = f"v2-{self.spec.id.replace('.', '-')}"
         dom_base = f"{base}-{dom_ns}" if dom_ns else base
-        refresh_url = reverse("blocks_v2:render_spec", args=[self.spec.id])
-        export_url = reverse("blocks_v2:export_spec", args=[self.spec.id, "csv"])
+        refresh_url = reverse("blocks:render_spec", args=[self.spec.id])
+        export_url = reverse("blocks:export_spec", args=[self.spec.id, "csv"])
 
         frontend_config = {
             "domId": dom_base,

@@ -3,8 +3,8 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand
 
 from apps.blocks.models.block import Block
-from apps_v2.blocks.registry import get_registry
-from apps_v2.blocks.register import load_specs
+from apps.blocks.registry import get_registry
+from apps.blocks.register import load_specs
 
 
 class Command(BaseCommand):

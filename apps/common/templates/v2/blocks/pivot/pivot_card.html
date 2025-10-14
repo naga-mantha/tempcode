@@ -28,11 +28,11 @@
           </optgroup>
         {% endif %}
       </select>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_pivot_configs' spec_id %}">Pivot Settings</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_pivot_configs' spec_id %}">Pivot Settings</a>
       {% if spec_id == 'v2.items.pivot' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:pivot_items' %}">Pivot Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:pivot_items' %}">Pivot Link</a>
       {% else %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Pivot Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
       {% endif %}
       <span class="mx-1 text-muted">&mdash;</span>
       <label class="mb-0 small text-muted">Filter</label>
@@ -55,7 +55,7 @@
           </optgroup>
         {% endif %}
       </select>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:manage_filters' spec_id %}">Filter Settings</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_filters' spec_id %}">Filter Settings</a>
       <span class="mx-1 text-muted">&mdash;</span>
       <div class="btn-group" role="group" aria-label="Exports">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-v2-export-excel data-dom-id="{{ dom_id }}">Export Excel</button>

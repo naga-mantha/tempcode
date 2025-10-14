@@ -12,15 +12,15 @@ from apps.common.filters.items import item_choices
 from apps.common.filters.item_groups import item_group_choices
 from apps.common.filters.item_types import item_type_choices
 
-from apps_v2.blocks.specs import BlockSpec, Services
-from apps_v2.blocks.controller import BlockController
-from apps_v2.blocks.services.model_table import (
+from apps.blocks.specs import BlockSpec, Services
+from apps.blocks.controller import BlockController
+from apps.blocks.services.model_table import (
     SchemaFilterResolver,
     ModelQueryBuilder,
     ModelColumnResolver,
 )
-from apps_v2.blocks.services.pivot_table import DefaultPivotEngine
-from apps_v2.policy.service import PolicyService
+from apps.blocks.services.pivot_table import DefaultPivotEngine
+from apps.policy.service import PolicyService
 
 
 @dataclass(frozen=True)

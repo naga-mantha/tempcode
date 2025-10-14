@@ -1,1 +1,2 @@
-"""Service layer for block related operations."""
+"""Service interfaces for V2 blocks."""
+

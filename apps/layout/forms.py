@@ -82,9 +82,9 @@ class AddBlockForm(forms.ModelForm):
 
         # v2 specs → ensure Block rows exist, collect codes
         try:
-            from apps_v2.blocks.register import load_specs
-            from apps_v2.blocks.registry import get_registry
-            from apps_v2.blocks.configs import get_block_for_spec
+            from apps.blocks.register import load_specs
+            from apps.blocks.registry import get_registry
+            from apps.blocks.configs import get_block_for_spec
             load_specs()
             reg = get_registry()
             v2_objs = []

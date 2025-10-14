@@ -41,11 +41,11 @@
       </form>
       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
       {% if spec_id == 'v2.items.table' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_items' %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_items' %}">Table Link</a>
       {% elif spec_id == 'v2.layouts.table' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:table_layouts' %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_layouts' %}">Table Link</a>
       {% else %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks_v2:render_spec' spec_id %}">Table Link</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Table Link</a>
       {% endif %}
     </div>
   </div>
@@ -86,7 +86,7 @@
       <div class="card">
         <div class="card-header">Save View</div>
         <div class="card-body">
-          <form id="saveManageForm" hx-post="{% url 'blocks_v2:save_table_config' spec_id %}" hx-swap="none">
+          <form id="saveManageForm" hx-post="{% url 'blocks:save_table_config' spec_id %}" hx-swap="none">
             {% csrf_token %}
             <div class="row g-2">
               <div class="col-md-4">
@@ -150,28 +150,28 @@
                     <span class="badge text-bg-light border ms-2">{{ cfg.visibility }}</span>
                   </span>
                   <span class="btn-group">
-                    <form method="post" action="{% url 'blocks_v2:rename_table_config' spec_id cfg.id %}"
+                    <form method="post" action="{% url 'blocks:rename_table_config' spec_id cfg.id %}"
                           class="d-inline js-reload-on-success" onsubmit="return renameCfg{{ cfg.id }}()"
-                          hx-post="{% url 'blocks_v2:rename_table_config' spec_id cfg.id %}" hx-swap="none">
+                          hx-post="{% url 'blocks:rename_table_config' spec_id cfg.id %}" hx-swap="none">
                       {% csrf_token %}
                       <input type="hidden" name="name" id="rn{{ cfg.id }}">
                       <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
                     </form>
-                    <form method="post" action="{% url 'blocks_v2:make_default_table_config' spec_id cfg.id %}"
+                    <form method="post" action="{% url 'blocks:make_default_table_config' spec_id cfg.id %}"
                           class="d-inline js-reload-on-success"
-                          hx-post="{% url 'blocks_v2:make_default_table_config' spec_id cfg.id %}" hx-swap="none">
+                          hx-post="{% url 'blocks:make_default_table_config' spec_id cfg.id %}" hx-swap="none">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default %}disabled{% endif %}>Make Default</button>
                     </form>
-                    <form method="post" action="{% url 'blocks_v2:duplicate_table_config' spec_id cfg.id %}"
+                    <form method="post" action="{% url 'blocks:duplicate_table_config' spec_id cfg.id %}"
                           class="d-inline js-reload-on-success"
-                          hx-post="{% url 'blocks_v2:duplicate_table_config' spec_id cfg.id %}" hx-swap="none">
+                          hx-post="{% url 'blocks:duplicate_table_config' spec_id cfg.id %}" hx-swap="none">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
                     </form>
-                    <form method="post" action="{% url 'blocks_v2:delete_table_config' spec_id cfg.id %}"
+                    <form method="post" action="{% url 'blocks:delete_table_config' spec_id cfg.id %}"
                           class="d-inline js-reload-on-success"
-                          hx-post="{% url 'blocks_v2:delete_table_config' spec_id cfg.id %}" hx-swap="none" hx-confirm="Delete view {{ cfg.name }}?">
+                          hx-post="{% url 'blocks:delete_table_config' spec_id cfg.id %}" hx-swap="none" hx-confirm="Delete view {{ cfg.name }}?">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>

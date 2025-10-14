@@ -5,19 +5,19 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 
-from apps_v2.blocks.controller import BlockController
-from apps_v2.blocks.registry import get_registry
-from apps_v2.blocks.register import load_specs
-from apps_v2.policy.service import PolicyService
+from apps.blocks.controller import BlockController
+from apps.blocks.registry import get_registry
+from apps.blocks.register import load_specs
+from apps.policy.service import PolicyService
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.views.decorators.http import require_POST
 from django.middleware.csrf import get_token
 import json
-from apps_v2.blocks.configs import get_block_for_spec, list_pivot_configs, choose_active_pivot_config
-from apps_v2.blocks.options import merge_table_options
-from apps_v2.blocks.services.field_catalog import build_field_catalog
-from apps_v2.blocks.services.model_table import prune_filter_schema, prune_filter_values
+from apps.blocks.configs import get_block_for_spec, list_pivot_configs, choose_active_pivot_config
+from apps.blocks.options import merge_table_options
+from apps.blocks.services.field_catalog import build_field_catalog
+from apps.blocks.services.model_table import prune_filter_schema, prune_filter_values
 from io import StringIO, BytesIO
 import csv
 from django.http import HttpResponse
@@ -107,7 +107,7 @@ def data_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
             raw_cleared = []
         allowed_filter_set = {str(k) for k in allowed_filter_keys}
         cleared_filter_keys = {str(k) for k in raw_cleared if str(k) in allowed_filter_set}
-    from apps_v2.blocks.configs import get_block_for_spec, choose_active_filter_config
+    from apps.blocks.configs import get_block_for_spec, choose_active_filter_config
     block_row = get_block_for_spec(spec_id)
     filt_cfg_id = request.GET.get("filter_config_id")
     try:
@@ -465,7 +465,7 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     )
     # For HTMX requests, return updated Saved Filters partial so the page can refresh without full reload
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import list_filter_configs
+        from apps.blocks.configs import list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         ctx = {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}
@@ -487,7 +487,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
     if not spec:
         raise Http404("Unknown block spec")
     policy = PolicyService()
-    from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs, choose_active_filter_config
+    from apps.blocks.configs import get_block_for_spec, list_filter_configs, choose_active_filter_config
     block = get_block_for_spec(spec_id)
     # Load all user-visible filter configs
     filter_configs = list(list_filter_configs(block, request.user))
@@ -538,7 +538,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         typ = entry.get("type")
         if typ in {"select", "multiselect"}:
             try:
-                entry["choices_url"] = reverse("blocks_v2:choices_spec", args=[spec_id, key])
+                entry["choices_url"] = reverse("blocks:choices_spec", args=[spec_id, key])
             except Exception:
                 pass
         filter_schema[key] = entry
@@ -591,7 +591,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
 def rename_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> HttpResponse:
     # Guard: if not POST, just bounce back to Manage Filters (avoid 405 confusion)
     if request.method != "POST":
-        return redirect("blocks_v2:manage_filters", spec_id=spec_id)
+        return redirect("blocks:manage_filters", spec_id=spec_id)
 
     from apps.blocks.models.block_filter_config import BlockFilterConfig
     try:
@@ -604,7 +604,7 @@ def rename_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> 
     obj.name = new_name
     obj.save(update_fields=["name"])
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        from apps.blocks.configs import get_block_for_spec, list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
@@ -631,7 +631,7 @@ def duplicate_filter_config(request: HttpRequest, spec_id: str, config_id: int) 
     )
     copy.save()
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        from apps.blocks.configs import get_block_for_spec, list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
@@ -650,7 +650,7 @@ def delete_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> 
         return HttpResponse(status=404)
     obj.delete()
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        from apps.blocks.configs import get_block_for_spec, list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
@@ -670,7 +670,7 @@ def make_default_filter_config(request: HttpRequest, spec_id: str, config_id: in
     obj.is_default = True
     obj.save(update_fields=["is_default"])  # model enforces single default
     if request.headers.get("HX-Request") or request.META.get("HTTP_HX_REQUEST"):
-        from apps_v2.blocks.configs import get_block_for_spec, list_filter_configs
+        from apps.blocks.configs import get_block_for_spec, list_filter_configs
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
@@ -749,7 +749,7 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
         pass
 
     # View config ordering
-    from apps_v2.blocks.configs import get_block_for_spec, choose_active_table_config
+    from apps.blocks.configs import get_block_for_spec, choose_active_table_config
     block_row = get_block_for_spec(spec_id)
     cfg_id = request.GET.get("config_id")
     try:
@@ -764,7 +764,7 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
         columns = [key_to_col[k] for k in ordered if k in key_to_col]
 
     # Optional ExportOptions hook: allow spec to transform columns before serialization
-    from apps_v2.blocks.services.export_options import DefaultExportOptions
+    from apps.blocks.services.export_options import DefaultExportOptions
     try:
         exopts = services.export_options(spec) if getattr(services, "export_options", None) else DefaultExportOptions()
     except TypeError:
@@ -888,7 +888,7 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
     key_to_meta = {c.get("key"): c for c in available_cols}
 
     # Active view selection
-    from apps_v2.blocks.configs import get_block_for_spec, list_table_configs, choose_active_table_config
+    from apps.blocks.configs import get_block_for_spec, list_table_configs, choose_active_table_config
     block_row = get_block_for_spec(spec_id)
     had_cfg_param = "config_id" in request.GET
     cfg_id = request.GET.get("config_id")
@@ -1150,7 +1150,7 @@ def save_pivot_config(request: HttpRequest, spec_id: str) -> HttpResponse:
         cleaned_measures.append(data)
 
     if not cleaned_measures:
-        return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+        return redirect('blocks:manage_pivot_configs', spec_id=spec_id)
 
     schema = {
         "rows": clean_dims(raw_schema.get("rows")),
@@ -1181,7 +1181,7 @@ def save_pivot_config(request: HttpRequest, spec_id: str) -> HttpResponse:
     else:
         obj.save(update_fields=["schema", "visibility"])
 
-    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
+    return redirect(f"{reverse('blocks:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
 
 
 @login_required
@@ -1202,7 +1202,7 @@ def rename_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> H
         return HttpResponse(status=409)
     obj.name = name
     obj.save(update_fields=["name"])
-    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
+    return redirect(f"{reverse('blocks:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
 
 
 @login_required
@@ -1228,7 +1228,7 @@ def duplicate_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -
         visibility=PivotConfig.VISIBILITY_PRIVATE,
         is_default=False,
     )
-    return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+    return redirect('blocks:manage_pivot_configs', spec_id=spec_id)
 
 
 @login_required
@@ -1245,7 +1245,7 @@ def delete_pivot_config(request: HttpRequest, spec_id: str, config_id: int) -> H
     if obj.visibility == PivotConfig.VISIBILITY_PRIVATE and obj.user_id != request.user.id:
         return HttpResponse(status=403)
     obj.delete()
-    return redirect('blocks_v2:manage_pivot_configs', spec_id=spec_id)
+    return redirect('blocks:manage_pivot_configs', spec_id=spec_id)
 
 
 @login_required
@@ -1267,7 +1267,7 @@ def make_default_pivot_config(request: HttpRequest, spec_id: str, config_id: int
         PivotConfig.objects.filter(block=block, user=request.user, visibility=PivotConfig.VISIBILITY_PRIVATE).exclude(pk=obj.pk).update(is_default=False)
     obj.is_default = True
     obj.save(update_fields=["is_default"])
-    return redirect(f"{reverse('blocks_v2:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
+    return redirect(f"{reverse('blocks:manage_pivot_configs', args=[spec_id])}?pivot_config_id={obj.id}")
 # Removed toggle_visibility endpoint per updated UX (visibility changes not supported here)
 
 
@@ -1314,7 +1314,7 @@ def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
             "type": str(f.get("type") or "text"),
         })
     # Load saved user layout or fallback to admin default
-    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.configs import get_block_for_spec
     from apps.blocks.models.block_filter_layout import BlockFilterLayout
     from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
     block = get_block_for_spec(spec_id)
@@ -1375,7 +1375,7 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
             "label": str(f.get("label") or key),
             "type": str(f.get("type") or "text"),
         })
-    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.configs import get_block_for_spec
     from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
     block = get_block_for_spec(spec_id)
     tpl = BlockFilterLayoutTemplate.objects.filter(block=block).first()
@@ -1394,7 +1394,7 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
 @require_POST
 def save_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
     """Save per-user Filter Layout for a spec (V2)."""
-    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.configs import get_block_for_spec
     from apps.blocks.models.block_filter_layout import BlockFilterLayout
     block = get_block_for_spec(spec_id)
     text = request.POST.get("layout") or "{}"
@@ -1412,7 +1412,7 @@ def save_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpRespon
     """Save default Filter Layout (admin-only) for a spec (V2)."""
     if not request.user.is_staff:
         return HttpResponse(status=403)
-    from apps_v2.blocks.configs import get_block_for_spec
+    from apps.blocks.configs import get_block_for_spec
     from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
     block = get_block_for_spec(spec_id)
     text = request.POST.get("layout") or "{}"

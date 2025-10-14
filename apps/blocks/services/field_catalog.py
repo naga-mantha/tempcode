@@ -4,7 +4,7 @@ from typing import Iterable, List, Optional, Sequence, Set, Tuple, Dict
 
 from django.db import models
 
-from apps_v2.policy.service import PolicyService
+from apps.policy.service import PolicyService
 try:
     from apps.blocks.models.field_display_rule import FieldDisplayRule
 except Exception:  # pragma: no cover

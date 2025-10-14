@@ -6,8 +6,8 @@ from typing import Any, Dict, Iterable, Mapping, Sequence, Optional, Tuple, List
 from django.db import models
 
 from .base import FilterResolver as BaseFilterResolver, QueryBuilder as BaseQueryBuilder, ColumnResolver as BaseColumnResolver, Serializer as BaseSerializer
-from apps_v2.policy.service import PolicyService
-from apps_v2.blocks.services.field_catalog import build_field_catalog
+from apps.policy.service import PolicyService
+from apps.blocks.services.field_catalog import build_field_catalog
 
 
 def _resolve_date_token(s: str, *, as_datetime: bool = False):

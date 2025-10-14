@@ -5,11 +5,11 @@ from typing import Iterable, Tuple
 from django.core.management.base import BaseCommand, CommandParser
 
 from apps.blocks.models.table_config import BlockTableConfig
-from apps_v2.blocks.register import load_specs
-from apps_v2.blocks.registry import get_registry
-from apps_v2.blocks.configs import get_block_for_spec
-from apps_v2.blocks.services.field_catalog import build_field_catalog
-from apps_v2.policy.service import PolicyService
+from apps.blocks.register import load_specs
+from apps.blocks.registry import get_registry
+from apps.blocks.configs import get_block_for_spec
+from apps.blocks.services.field_catalog import build_field_catalog
+from apps.policy.service import PolicyService
 
 
 class Command(BaseCommand):

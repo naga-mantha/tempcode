@@ -1,78 +1,49 @@
+from __future__ import annotations
+
 from django.urls import path
-from apps.blocks.views import table as table_views
-from apps.blocks.views import chart as chart_views
-from apps.blocks.views import pivot as pivot_views
-from apps.blocks.views.pivot_config import PivotConfigView
-from apps.blocks.views.pivot_filter_config import PivotFilterConfigView
-from apps.blocks.views.repeater_config import RepeaterConfigView
-from apps.blocks.views import repeater as repeater_views
-from apps.blocks.views.inline_edit import InlineEditView
-from apps.blocks.views.column_config import ColumnConfigView
-from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
-from apps.blocks.views.filter_choices import FilterChoicesView
-from apps.blocks.views.filter_layout import FilterLayoutView, AdminFilterLayoutView
+
+from . import views
+
+app_name = "blocks"
+from apps.blocks.tables.layouts_table import render_layouts_table
+from apps.blocks.tables.items_table import render_items_table
+from apps.blocks.pivots.items_pivot import render_items_pivot
+
+
+app_name = "blocks"
 
 urlpatterns = [
-    path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
-    path("table/<str:block_name>/edit/", InlineEditView.as_view(), name="inline_edit"),
-    path("table/<str:block_name>/columns/", ColumnConfigView.as_view(), name="column_config_view"),
-    path(
-        "table/<str:block_name>/filters/",
-        FilterConfigView.as_view(),
-        name="table_filter_config",
-    ),
-    path(
-        "table/<str:block_name>/filters/<int:config_id>/delete/",
-        table_views.filter_delete_view,
-        name="table_filter_delete",
-    ),
-    path("chart/<str:block_name>/", chart_views.render_chart_block, name="render_chart_block"),
-    path(
-        "chart/<str:block_name>/filters/",
-        ChartFilterConfigView.as_view(),
-        name="chart_filter_config",
-    ),
-    path(
-        "chart/<str:block_name>/filters/<int:config_id>/delete/",
-        chart_views.filter_delete_view,
-        name="chart_filter_delete",
-    ),
-    path(
-        "filter-options/<str:block_name>/<str:key>/",
-        FilterChoicesView.as_view(),
-        name="block_filter_choices",
-    ),
-    path("pivot/<str:block_name>/", pivot_views.render_pivot_block, name="render_pivot_block"),
-    path(
-        "pivot/<str:block_name>/settings/",
-        PivotConfigView.as_view(),
-        name="pivot_config_view",
-    ),
-    path(
-        "pivot/<str:block_name>/filters/",
-        PivotFilterConfigView.as_view(),
-        name="pivot_filter_config",
-    ),
-    # Repeater settings
-    path(
-        "repeater/<str:block_name>/settings/",
-        RepeaterConfigView.as_view(),
-        name="repeater_config_view",
-    ),
-    path(
-        "repeater/<str:block_name>/",
-        repeater_views.render_repeater_block,
-        name="render_repeater_block",
-    ),
-    # Filter layout (per-user)
-    path(
-        "filter-layout/<str:block_name>/",
-        FilterLayoutView.as_view(),
-        name="filter_layout_view",
-    ),
-    path(
-        "filter-layout-template/<str:block_name>/",
-        AdminFilterLayoutView.as_view(),
-        name="admin_filter_layout_view",
-    ),
+    path("hello", views.hello, name="hello"),
+    path("render/<str:spec_id>", views.render_spec, name="render_spec"),
+    path("data/<str:spec_id>", views.data_spec, name="data_spec"),
+    path("choices/<str:spec_id>/<str:field>", views.choices_spec, name="choices_spec"),
+    path("export/<str:spec_id>.<str:fmt>", views.export_spec, name="export_spec"),
+    path("config/save/<str:spec_id>", views.save_table_config, name="save_table_config"),
+    # Manage Filters
+    path("manage-filters/<str:spec_id>", views.manage_filters, name="manage_filters"),
+    path("filter/rename/<str:spec_id>/<int:config_id>", views.rename_filter_config, name="rename_filter_config"),
+    path("filter/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_filter_config, name="duplicate_filter_config"),
+    path("filter/delete/<str:spec_id>/<int:config_id>", views.delete_filter_config, name="delete_filter_config"),
+    path("filter/make_default/<str:spec_id>/<int:config_id>", views.make_default_filter_config, name="make_default_filter_config"),
+    path("config/rename/<str:spec_id>/<int:config_id>", views.rename_table_config, name="rename_table_config"),
+    path("config/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_table_config, name="duplicate_table_config"),
+    path("config/delete/<str:spec_id>/<int:config_id>", views.delete_table_config, name="delete_table_config"),
+    path("config/make_default/<str:spec_id>/<int:config_id>", views.make_default_table_config, name="make_default_table_config"),
+    path("filter/save/<str:spec_id>", views.save_filter_config, name="save_filter_config"),
+    # Filter Layout (V2-native)
+    path("filter-layout/<str:spec_id>", views.manage_filter_layout, name="manage_filter_layout"),
+    path("filter-layout/default/<str:spec_id>", views.manage_filter_layout_default, name="manage_filter_layout_default"),
+    path("filter-layout/save/<str:spec_id>", views.save_filter_layout, name="save_filter_layout"),
+    path("filter-layout/save-default/<str:spec_id>", views.save_filter_layout_default, name="save_filter_layout_default"),
+    path("manage/<str:spec_id>", views.manage_columns, name="manage_columns"),
+    path("pivot/manage/<str:spec_id>", views.manage_pivot_configs, name="manage_pivot_configs"),
+    path("pivot/save/<str:spec_id>", views.save_pivot_config, name="save_pivot_config"),
+    path("pivot/rename/<str:spec_id>/<int:config_id>", views.rename_pivot_config, name="rename_pivot_config"),
+    path("pivot/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_pivot_config, name="duplicate_pivot_config"),
+    path("pivot/delete/<str:spec_id>/<int:config_id>", views.delete_pivot_config, name="delete_pivot_config"),
+    path("pivot/make_default/<str:spec_id>/<int:config_id>", views.make_default_pivot_config, name="make_default_pivot_config"),
+    # Demo table block (V2)
+    path("table/layouts", render_layouts_table, name="table_layouts"),
+    path("table/items", render_items_table, name="table_items"),
+    path("pivot/items", render_items_pivot, name="pivot_items"),
 ]
