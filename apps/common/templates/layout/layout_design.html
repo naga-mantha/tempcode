@@ -35,7 +35,7 @@
 <template id="gridItemTemplate">
   <div class="grid-stack-item" data-gs-id="">
     <div class="grid-stack-item-content position-relative">
-      <div class="position-absolute top-0 end-0 p-1 d-flex gap-1" style="z-index:2;">
+      <div class="layout-tile-controls d-flex gap-1">
         <button type="button" class="btn btn-sm btn-outline-danger js-delete">Delete</button>
       </div>
       <div class="js-html"></div>
@@ -90,7 +90,7 @@
         float: false,
         staticGrid: false,
         cellHeight: 136,
-        margin: 8,
+        margin: 15,
         animate: true,
         disableOneColumnMode: true,
         draggable: { handle: '.grid-stack-item-content', scroll: true },
@@ -357,15 +357,29 @@
   <style>
     .grid-stack{ min-height: 70vh; }
     /* Make embedded cards match tile height and keep resizer at bottom-right */
-    #gridDesigner .grid-stack-item-content{ height:100%; display:flex; width:100%; }
-    #gridDesigner .grid-stack-item-content{ overflow: hidden; padding: 0; }
-    #gridDesigner .grid-stack-item{ overflow: hidden; }
+    #gridDesigner .grid-stack-item{ overflow: visible; min-height: 0; }
+    #gridDesigner .grid-stack-item-content{ height:100%; display:flex; width:100%; overflow: visible; padding: 0.5rem; box-sizing: border-box; }
     #gridDesigner .grid-stack-item-content .js-html{ flex:1 1 auto; display:flex; flex-direction:column; width:100%; }
     #gridDesigner .grid-stack-item-content .js-html .card{ height:100%; width:100%; }
     #gridDesigner .grid-stack-item-content .js-html .card{ margin: 0; }
     #gridDesigner .grid-stack-item-content .js-html .card-body{ height:100%; display:flex; flex-direction:column; }
     #gridDesigner .grid-stack-item-content .js-html [id$='-table']{ height:100% !important; min-height:0; }
-    #gridDesigner .grid-stack-item{ min-height: 0; }
+    #gridDesigner .layout-tile-controls{
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.35rem;
+      border-radius: 999px;
+      background-color: rgba(248, 249, 250, 0.95);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    }
+    #gridDesigner .layout-tile-controls .btn{
+      white-space: nowrap;
+    }
     #gridDesigner .js-html > *{ height:100%; width:100%; flex: 1 1 auto; }
     /* Nudge Gridstack resize handle inside the tile for both legacy and v10 classes */
     #gridDesigner .grid-stack-item .ui-resizable-se,
