@@ -66,6 +66,7 @@ def _serialize_layout_block(
         "title": lb.title or (lb.block.name if lb and lb.block else ""),
         "code": lb.block.code if lb and lb.block else "",
         "note": lb.note or "",
+        "is_spacer": bool(getattr(lb, "is_spacer", False)),
         "html": html,
     }
 
@@ -155,26 +156,12 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
         layout_filter_schema = {}
 
     # Build block HTML server-side (cards)
+    blocks: List[Dict[str, Any]] = []
     rendered_blocks: List[Dict[str, Any]] = []
     for lb in LayoutBlock.objects.filter(layout=layout).order_by("position", "id"):
-        block: Block = lb.block
-        spec = reg.get(block.code)
-        if not spec:
-            html = render_to_string(
-                "components/instructions.html",
-                {"title": block.name or block.code, "lines": ["Unknown block spec."]},
-                request=request,
-            )
-            rendered_blocks.append({"id": lb.id, "html": html})
-            continue
-        ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
-        template = spec.template
-        if spec.kind == "table":
-            template = "blocks/table/table_card.html"
-        elif spec.kind == "pivot":
-            template = "blocks/pivot/pivot_card.html"
-        html = render_to_string(template, ctx, request=request)
-        rendered_blocks.append({"id": lb.id, "html": html})
+        data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+        blocks.append(data)
+        rendered_blocks.append({"id": data["id"], "html": data.get("html", "")})
 
     active_badges: List[Dict[str, str]] = []
     try:
@@ -194,6 +181,7 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
     ctx: Dict[str, Any] = {
         "layout": layout,
         **_group_layouts_for_sidebar(request.user),
+        "blocks": blocks,
         "rendered_blocks": rendered_blocks,
         "layout_filter_configs": layout_filter_configs,
         "active_layout_filter_config_id": getattr(active_layout_cfg, "id", None),
