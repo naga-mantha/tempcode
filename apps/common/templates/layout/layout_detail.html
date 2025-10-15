@@ -130,15 +130,33 @@
     </div>
   </div>
 
-  <div class="row g-3">
-    {% for b in rendered_blocks %}
-      <div class="col-12">
-        {{ b.html|safe }}
-      </div>
-    {% empty %}
-      <div class="col-12 text-muted">No blocks in this layout.</div>
-    {% endfor %}
-  </div>
+  {% if blocks %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
+    <div class="grid-stack" id="layoutGrid" data-gs-static="true">
+      {% for b in blocks %}
+        <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}">
+          <div class="grid-stack-item-content {% if not b.is_spacer %}card p-2{% endif %}">
+            {{ b.html|safe }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert alert-info mb-0">No blocks in this layout.</div>
+  {% endif %}
+  <style>
+    #layoutGrid { width: 100%; max-width: 100%; min-height: 60vh; }
+    #layoutGrid .grid-stack-item { overflow: visible; min-height: 0; }
+    #layoutGrid .grid-stack-item-content { display: flex; width: 100%; height: 100%; overflow: visible; box-sizing: border-box; }
+    #layoutGrid .grid-stack-item-content > .js-layout-block-root { display: flex; flex-direction: column; min-height: 100%; position: relative; width: 100%; }
+    #layoutGrid .grid-stack-item-content > div[id^="chart-"] { flex: 1 1 auto; }
+    #layoutGrid .grid-stack-item-content .js-layout-block-root > div[id^="chart-"] { flex: 1 1 auto; }
+    #layoutGrid .grid-stack-item-content .js-layout-block-root > div[id^="table-"] { flex: 1 1 auto; }
+    #layoutGrid .grid-stack-item-content .card { width: 100%; height: 100%; margin: 0; display: flex; flex-direction: column; }
+    #layoutGrid .grid-stack-item-content .card .card-body { flex: 1 1 auto; display: flex; flex-direction: column; }
+    #layoutGrid .grid-stack-item-content [class^="col-"],
+    #layoutGrid .grid-stack-item-content [class*=" col-"] { width: auto !important; max-width: none !important; }
+  </style>
 </div>
 {% endblock %}
 
@@ -146,6 +164,14 @@
   {{ block.super }}
   {% load static %}
   <script src="{% static 'common/js/table-filters.js' %}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const gridEl = document.getElementById('layoutGrid');
+      if (!gridEl || typeof GridStack === 'undefined') { return; }
+      GridStack.init({ float: false, staticGrid: true, cellHeight: 136, margin: 15 }, gridEl);
+    });
+  </script>
   <script>
     (function initV2BlocksOnLayout(){
       if (!window.v2TableFilters) { return; }

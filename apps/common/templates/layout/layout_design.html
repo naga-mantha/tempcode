@@ -11,12 +11,12 @@
       <form id="addBlockForm" method="post" action="{% url 'layout:layout_block_add' username=layout.user.username slug=layout.slug %}" class="d-inline-flex align-items-end gap-2">
         {% csrf_token %}
         <label class="form-label mb-0">Add Block</label>
-        <select name="spec_id" class="form-select form-select-sm w-auto">
+        <select name="spec_id" class="form-select form-select-sm w-auto" autocomplete="off">
+          <option value="">Select a block…</option>
           {% for s in available_specs %}
-            <option value="{{ s.id }}">{{ s.name }} ({{ s.kind }})</option>
+            <option value="{{ s.id }}">{{ s.name }}{% if s.kind %} ({{ s.kind }}){% endif %}</option>
           {% endfor %}
         </select>
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Add</button>
       </form>
     </div>
     {# Removed: v2 auto-saves on drag/resize, like v1 #}
@@ -35,7 +35,7 @@
 <template id="gridItemTemplate">
   <div class="grid-stack-item" data-gs-id="">
     <div class="grid-stack-item-content position-relative">
-      <div class="position-absolute top-0 end-0 p-1 d-flex gap-1" style="z-index:2;">
+      <div class="layout-tile-controls d-flex gap-1">
         <button type="button" class="btn btn-sm btn-outline-danger js-delete">Delete</button>
       </div>
       <div class="js-html"></div>
@@ -54,82 +54,333 @@
     (function(){
       const gridEl = document.getElementById('gridDesigner');
       const tmpl = document.getElementById('gridItemTemplate');
+      const dataEl = document.getElementById('designData');
+      if (!gridEl || !tmpl || typeof GridStack === 'undefined') {
+        return;
+      }
+
       let items = [];
-      try { items = JSON.parse(document.getElementById('designData').textContent || '[]'); } catch(e) { items = []; }
-      const data = {
-        items: items,
-        urls: {
-          save: "{% url 'layout:layout_grid_update' username=layout.user.username slug=layout.slug %}",
-          del: function(id){ return "{% url 'layout:layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/'); }
+      try {
+        items = JSON.parse((dataEl && dataEl.textContent) || '[]');
+      } catch (err) {
+        items = [];
+      }
+
+      const htmlCache = new Map();
+      const htmlStore = document.getElementById('blockHtmlStore');
+      if (htmlStore) {
+        htmlStore.querySelectorAll('[id^="block-html-"]').forEach(function(node){
+          const key = node.id.replace('block-html-', '');
+          htmlCache.set(key, node.innerHTML);
+        });
+      }
+
+      const urls = {
+        save: "{% url 'layout:layout_grid_update' username=layout.user.username slug=layout.slug %}",
+        add: "{% url 'layout:layout_block_add' username=layout.user.username slug=layout.slug %}",
+        del: function(id) {
+          return "{% url 'layout:layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
+        },
+        render: function(id) {
+          return "{% url 'layout:layout_block_render' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
         }
       };
-      const grid = GridStack.init({ float: false, staticGrid: false, cellHeight: 136, margin: 8 }, gridEl);
 
-      // CSRF helper (use the token already on the page via the Add form)
+      const grid = GridStack.init({
+        float: false,
+        staticGrid: false,
+        cellHeight: 136,
+        margin: 15,
+        animate: true,
+        disableOneColumnMode: true,
+        draggable: { handle: '.grid-stack-item-content', scroll: true },
+        resizable: { handles: 'e, se, s' }
+      }, gridEl);
+      gridEl.classList.add('grid-stack-animate');
+
       function getCsrfToken(){
-        const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const form = document.getElementById('addBlockForm');
+        const el = form ? form.querySelector('input[name="csrfmiddlewaretoken"]') : document.querySelector('input[name="csrfmiddlewaretoken"]');
         return (el && el.value) || '';
       }
       const csrftoken = getCsrfToken();
 
-      // Auto-save grid on change (like v1)
-      function saveGrid(){
-        const items = []; const nodes = grid.engine.nodes || [];
-        nodes.forEach(function(node){
-          const el=node.el; const id = el && el.dataset && el.dataset.gsId ? el.dataset.gsId : (node.id || '');
-          if (!id) return; items.push({ id:id, x:node.x, y:node.y, w:node.w, h:node.h });
-        });
-        fetch(data.urls.save, { method:'POST', headers:{ 'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRFToken': csrftoken }, body: JSON.stringify({ items: items }) }).catch(function(){});
+      function showToast(message, variant) {
+        const id = 'layout-toast-container';
+        let container = document.getElementById(id);
+        if (!container) {
+          container = document.createElement('div');
+          container.id = id;
+          container.style.position = 'fixed';
+          container.style.right = '16px';
+          container.style.bottom = '16px';
+          container.style.zIndex = '1080';
+          container.style.display = 'flex';
+          container.style.flexDirection = 'column';
+          container.style.gap = '8px';
+          document.body.appendChild(container);
+        }
+        const el = document.createElement('div');
+        el.textContent = message || 'An error occurred';
+        el.style.padding = '10px 14px';
+        el.style.borderRadius = '4px';
+        el.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+        el.style.color = '#fff';
+        el.style.fontSize = '14px';
+        el.style.opacity = '0';
+        el.style.transition = 'opacity .2s ease';
+        el.style.background = variant === 'success' ? '#198754' : variant === 'warning' ? '#fd7e14' : '#dc3545';
+        container.appendChild(el);
+        requestAnimationFrame(function(){ el.style.opacity = '1'; });
+        setTimeout(function(){
+          el.style.opacity = '0';
+          setTimeout(function(){ el.remove(); }, 200);
+        }, 3200);
       }
-      let saveDebounce;
-      grid.on('change', function(){ clearTimeout(saveDebounce); saveDebounce = setTimeout(saveGrid, 120); });
 
-      // v2 design has no inline editor (match v1)
+      function executeScripts(scope){
+        if (!scope || !scope.querySelectorAll) { return; }
+        scope.querySelectorAll('script').forEach(function(oldScript){
+          const replacement = document.createElement('script');
+          for (const attr of oldScript.attributes || []) {
+            replacement.setAttribute(attr.name, attr.value);
+          }
+          replacement.text = oldScript.text || oldScript.textContent || '';
+          oldScript.replaceWith(replacement);
+        });
+      }
+
+      function hydrateBlock(wrapper, id){
+        if (!wrapper || !id) { return; }
+        fetch(urls.render(id), {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        }).then(function(resp){
+          if (!resp.ok) { throw new Error('Failed to load block'); }
+          return resp.json().catch(function(){ return {}; });
+        }).then(function(payload){
+          if (!payload || typeof payload.html !== 'string') { return; }
+          htmlCache.set(String(id), payload.html);
+          wrapper.innerHTML = payload.html;
+          executeScripts(wrapper);
+          const root = wrapper.closest('.grid-stack-item');
+          normalizeCardForDesign(root);
+        }).catch(function(){ /* ignore hydration errors */ });
+      }
+
+      function saveGrid(){
+        const payload = [];
+        const nodes = (grid && grid.engine && grid.engine.nodes) || [];
+        nodes.forEach(function(node){
+          const nodeEl = node.el || null;
+          const id = nodeEl && nodeEl.dataset ? nodeEl.dataset.gsId : node.id;
+          if (!id) { return; }
+          payload.push({ id: String(id), x: node.x, y: node.y, w: node.w, h: node.h });
+        });
+        fetch(urls.save, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrftoken,
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ items: payload })
+        }).catch(function(){ /* ignore */ });
+      }
+
+      let saveDebounce;
+      grid.on('change', function(){
+        clearTimeout(saveDebounce);
+        saveDebounce = setTimeout(saveGrid, 150);
+      });
 
       function normalizeCardForDesign(root){
+        if (!root) { return; }
         try {
-          // Force card and table area to stretch to tile height in the designer
+          const htmlRoot = root.querySelector('.js-html');
+          if (htmlRoot) {
+            htmlRoot.style.display = 'flex';
+            htmlRoot.style.flexDirection = 'column';
+            htmlRoot.style.width = '100%';
+          }
           const card = root.querySelector('.js-html .card');
-          if (card) { card.style.height = '100%'; }
+          if (card) {
+            card.style.height = '100%';
+            card.style.width = '100%';
+          }
           const body = root.querySelector('.js-html .card-body');
-          if (body) { body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.height = '100%'; }
+          if (body) {
+            body.style.display = 'flex';
+            body.style.flexDirection = 'column';
+            body.style.height = '100%';
+          }
           const tableEl = root.querySelector('.js-html [id$="-table"]');
-          if (tableEl) { tableEl.style.height = '100%'; tableEl.style.minHeight = '0'; }
-        } catch (e) { /* ignore */ }
+          if (tableEl) {
+            tableEl.style.height = '100%';
+            tableEl.style.minHeight = '0';
+          }
+        } catch (err) {
+          /* ignore */
+        }
       }
 
-      function addItem(it){
-        const n = document.importNode(tmpl.content, true);
-        const root = n.querySelector('.grid-stack-item');
-        root.dataset.gsId = String(it.id);
-        const htmlWrap = n.querySelector('.js-html');
-        try { const src = document.getElementById('block-html-' + String(it.id)); htmlWrap.innerHTML = src ? src.innerHTML : ''; } catch(e) { htmlWrap.innerHTML = ''; }
-        grid.addWidget(root, {x: it.x||0, y: it.y||0, w: it.w||4, h: it.h||2, id: String(it.id)});
-        normalizeCardForDesign(root);
-        // No inline editor opening on click
-        root.querySelector('.js-delete')?.addEventListener('click', function(){
-          if (!confirm('Delete this block?')) return;
-          fetch(data.urls.del(it.id), { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':(document.querySelector('input[name="csrfmiddlewaretoken"]')||{}).value||''} })
-            .then(r => { if (r.ok){ grid.removeWidget(root); } else { alert('Delete failed'); } });
+      function attachDeleteHandler(root, id){
+        if (!root) { return; }
+        const btn = root.querySelector('.js-delete');
+        if (!btn) { return; }
+        btn.addEventListener('click', function(){
+          if (!confirm('Delete this block?')) { return; }
+          fetch(urls.del(id), {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRFToken': csrftoken,
+              'Accept': 'application/json'
+            }
+          }).then(function(resp){
+            if (resp.ok) {
+              grid.removeWidget(root);
+              showToast('Block removed', 'success');
+              saveGrid();
+            } else {
+              showToast('Delete failed', 'error');
+            }
+          }).catch(function(){
+            showToast('Delete failed', 'error');
+          });
         });
       }
-      (data.items||[]).forEach(addItem);
 
-      // No explicit save button; everything persists automatically
+      function resolveHtml(id, fallback){
+        if (typeof fallback === 'string' && fallback.length) {
+          htmlCache.set(String(id), fallback);
+          return fallback;
+        }
+        const cached = htmlCache.get(String(id));
+        return typeof cached === 'string' ? cached : '';
+      }
+
+      function addItem(item, opts){
+        if (!item) { return null; }
+        opts = opts || {};
+        const root = tmpl.content.firstElementChild.cloneNode(true);
+        root.dataset.gsId = String(item.id);
+        const htmlWrap = root.querySelector('.js-html');
+        const html = resolveHtml(item.id, item.html);
+        if (htmlWrap) {
+          if (typeof html === 'string' && html.length) {
+            htmlWrap.innerHTML = html;
+            executeScripts(htmlWrap);
+            htmlCache.set(String(item.id), html);
+          } else {
+            htmlWrap.innerHTML = '<div class="text-muted small">No preview available</div>';
+          }
+        }
+        const added = grid.addWidget(root, {
+          x: Number.isFinite(item.x) ? item.x : 0,
+          y: Number.isFinite(item.y) ? item.y : 0,
+          w: Number.isFinite(item.w) ? item.w : 4,
+          h: Number.isFinite(item.h) ? item.h : 2,
+          id: String(item.id)
+        });
+        const element = added && added.el ? added.el : (added instanceof HTMLElement ? added : root);
+        normalizeCardForDesign(element);
+        attachDeleteHandler(element, item.id);
+        const shouldHydrate = Object.prototype.hasOwnProperty.call(opts, 'hydrate') ? opts.hydrate : !(typeof html === 'string' && html.length);
+        if (shouldHydrate && htmlWrap) {
+          hydrateBlock(htmlWrap, item.id);
+        }
+        if (opts && opts.focus && element && element.scrollIntoView) {
+          requestAnimationFrame(function(){ element.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        }
+        return element;
+      }
+
+      if (typeof grid.batchUpdate === 'function') {
+        grid.batchUpdate();
+      }
+      (items || []).forEach(function(it){
+        addItem(it, { hydrate: false });
+      });
+      if (typeof grid.commit === 'function') {
+        grid.commit();
+      }
+
+      const addForm = document.getElementById('addBlockForm');
+      if (addForm) {
+        addForm.addEventListener('submit', function(evt){ evt.preventDefault(); });
+        const select = addForm.querySelector('select[name="spec_id"]');
+        if (select) {
+          select.addEventListener('change', function(){
+            const specId = this.value;
+            if (!specId) { return; }
+            const self = this;
+            self.disabled = true;
+            addForm.classList.add('is-loading');
+            fetch(urls.add, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrftoken,
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({ spec_id: specId })
+            }).then(function(resp){
+              return resp.json().catch(function(){ return {}; }).then(function(payload){
+                if (!resp.ok || !payload.ok || !payload.block) {
+                  const errMsg = payload.error || 'Failed to add block.';
+                  throw new Error(errMsg);
+                }
+                return payload.block;
+              });
+            }).then(function(block){
+              addItem(block, { focus: true, hydrate: true });
+              showToast('Block added', 'success');
+              saveGrid();
+            }).catch(function(err){
+              const msg = err && err.message ? err.message : 'Failed to add block.';
+              showToast(msg, 'error');
+            }).finally(function(){
+              addForm.classList.remove('is-loading');
+              self.disabled = false;
+              self.value = '';
+            });
+          });
+        }
+      }
     })();
   </script>
   <style>
     .grid-stack{ min-height: 70vh; }
     /* Make embedded cards match tile height and keep resizer at bottom-right */
-    #gridDesigner .grid-stack-item-content{ height:100%; display:flex; }
-    #gridDesigner .grid-stack-item-content{ overflow: hidden; padding: 0; }
-    #gridDesigner .grid-stack-item{ overflow: hidden; }
-    #gridDesigner .grid-stack-item-content .js-html .card{ height:100%; }
+    #gridDesigner .grid-stack-item{ overflow: visible; min-height: 0; }
+    #gridDesigner .grid-stack-item-content{ height:100%; display:flex; width:100%; overflow: visible; padding: 0.5rem; box-sizing: border-box; }
+    #gridDesigner .grid-stack-item-content .js-html{ flex:1 1 auto; display:flex; flex-direction:column; width:100%; }
+    #gridDesigner .grid-stack-item-content .js-html .card{ height:100%; width:100%; }
     #gridDesigner .grid-stack-item-content .js-html .card{ margin: 0; }
     #gridDesigner .grid-stack-item-content .js-html .card-body{ height:100%; display:flex; flex-direction:column; }
     #gridDesigner .grid-stack-item-content .js-html [id$='-table']{ height:100% !important; min-height:0; }
-    #gridDesigner .grid-stack-item{ min-height: 0; }
-    #gridDesigner .js-html > *{ height:100%; }
+    #gridDesigner .layout-tile-controls{
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.35rem;
+      border-radius: 999px;
+      background-color: rgba(248, 249, 250, 0.95);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    }
+    #gridDesigner .layout-tile-controls .btn{
+      white-space: nowrap;
+    }
+    #gridDesigner .js-html > *{ height:100%; width:100%; flex: 1 1 auto; }
     /* Nudge Gridstack resize handle inside the tile for both legacy and v10 classes */
     #gridDesigner .grid-stack-item .ui-resizable-se,
     #gridDesigner .grid-stack-item .ui-resizable-handle,
@@ -137,6 +388,28 @@
     #gridDesigner .grid-stack-item .gs-resize-handle-both{
       right: 4px !important;
       bottom: 4px !important;
+    }
+    #addBlockForm.is-loading{
+      position: relative;
+    }
+    #addBlockForm.is-loading select{
+      pointer-events: none;
+      opacity: 0.65;
+    }
+    #addBlockForm.is-loading::after{
+      content: '';
+      position: absolute;
+      right: -18px;
+      bottom: 6px;
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: rgba(0,0,0,0.55);
+      animation: layout-spin 0.6s linear infinite;
+    }
+    @keyframes layout-spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 {% endblock %}
