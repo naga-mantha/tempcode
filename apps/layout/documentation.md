@@ -9,7 +9,7 @@ Key Concepts
 
 - Layout: A named dashboard owned by a user, optionally public. Identified by user + slug. Contains many LayoutBlocks.
 - LayoutBlock: A placement of a Block within a Layout. Ordered linearly (position); rendered in a single Bootstrap row with col-XX widths (Bootstrap handles wrapping).
-  - Per-instance defaults: Each LayoutBlock can optionally set a default Block filter and a default Block column configuration ("view") by name. This lets duplicate blocks on the same layout start with different saved presets for filters and columns. These defaults resolve against the viewing user’s saved configs.
+  - Per-instance defaults: Each LayoutBlock can optionally set a default Block filter and a default Block setting (saved view/preset) by name. This lets duplicate blocks on the same layout start with different saved presets for filters and block-specific settings. These defaults resolve against the viewing user’s saved configs.
 - LayoutFilterConfig: Saved filter presets at the layout level for a user. Has the same default/constraints semantics as table filters.
 
 Models (apps/layout/models.py)
@@ -21,7 +21,7 @@ Models (apps/layout/models.py)
 
 - LayoutBlock
   - Fields: layout (FK), block (FK to apps.blocks.models.Block), position (int, absolute order), base `col` (int, Bootstrap span: 1,2,3,4,6,12; default 12), optional responsive overrides: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`.
-  - Optional preferences per instance: `preferred_filter_name`, `preferred_column_config_name` (used to select the viewer’s saved Block filter/view by name for that block instance).
+- Optional preferences per instance: `preferred_filter_name`, `preferred_setting_name` (used to select the viewer’s saved Block filter/setting by name for that block instance).
   - Meta: ordering by (position, id).
   - Notes: We removed row/width/height; wrapping handled by Bootstrap.
   - Responsive cols: When a breakpoint value is set, we emit `col-{breakpoint}-{n}` (e.g., `col-sm-6`, `col-xxl-4`) in addition to the base `col-{col}`. If left blank, it inherits from the next smaller breakpoint.
@@ -38,8 +38,8 @@ Forms (apps/layout/forms.py)
 
 - LayoutForm: Create layout (fields: name, visibility; visibility hidden for non-staff).
 - AddBlockForm: Add block to layout (field: `block` only). All widths default to inherit (base remains 12 by default). User adjusts widths later on the edit page.
-- LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`), title/note, and a per-block "Default Block Filter" selector backed by your saved block filters for that block. Base `col` remains at its model value and is not edited in the UI.
-  - Also includes a per-block "Default Columns/View" selector backed by your saved column configurations (views) for that block. This lets duplicate blocks start with different column sets.
+  - LayoutBlockForm: Edit responsive widths (fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`), title/note, and a per-block "Default Block Filter" selector backed by your saved block filters for that block. Base `col` remains at its model value and is not edited in the UI.
+    - Also includes a per-block "Default Block Setting" selector backed by your saved block settings/configurations for that block. This lets duplicate blocks start with different presets.
 - LayoutFilterConfigForm: Manage layout filter presets (fields: name, is_default). Filter values are collected from request via FilterResolutionMixin helpers.
 
 Views (apps/layout/views.py)
@@ -57,8 +57,8 @@ Views (apps/layout/views.py)
   - Filter propagation to blocks:
     - For each block instance (LayoutBlock id = LID, block_name = BNAME), a proxy request is built that injects namespaced GET params for each selected filter: `BNAME__LID__filters.<key>`.
     - Blocks (TableBlock/ChartBlock) read instance-scoped filters and thus all instances receive the layout-level filters automatically.
-  - Column/view propagation to blocks:
-    - If a LayoutBlock has a preferred column config name and the viewer has a matching `BlockColumnConfig`, the instance’s namespaced `column_config_id` is injected so that block uses the chosen view by default.
+  - Setting propagation to blocks:
+    - If a LayoutBlock has a `preferred_setting_name` and the viewer has a matching saved configuration (e.g., `BlockTableConfig`), the instance’s namespaced `setting_id`/equivalent is injected so that block uses the chosen preset by default.
   - UI:
     - “Layout Filter” dropdown lists saved presets, with default preselected.
     - “Filter Conditions” collapsible renders dynamic filter fields for live overrides (non-persistent) using `components/filter_fields.html`.
@@ -74,10 +74,10 @@ Views (apps/layout/views.py)
     - Title and Note fields.
     - Default Block Filter dropdown listing your saved Block filters (by name) for that specific block, with a “Manage filters” link.
       Selecting one makes that filter the default for this instance only. Leave blank to inherit the block’s default.
-    - Default Columns/View dropdown listing your saved column configurations for that block (if applicable), with a “Manage views” link. Leave blank to inherit the block’s default view.
+    - Default Block Setting dropdown listing your saved block settings/presets for that block (if applicable), with a “Manage settings” link. Leave blank to inherit the block’s default.
     - Five dropdowns for `sm`, `md`, `lg`, `xl`, `xxl` responsive widths (labels above the fields). Changing any control auto-saves.
   - Card layout:
-    - Row 1: Title | Default Block Filter | Default Column View
+    - Row 1: Title | Default Block Filter | Default Block Setting
     - Row 2: Small | Medium | Large | Extra Large | Extra Extra Large
     - Row 3: Notes
   - Drag/drop ordering: powered by SortableJS using the card drag handle. Reordering auto-saves via AJAX to `/reorder/` without a page postback.
@@ -113,11 +113,11 @@ Templates (apps/layout/templates/layout/)
 
 - layout_list.html: Lists layouts and includes the create form.
 - layout_detail.html: Renders layout header, Layout Filter dropdown, live Filter Conditions (collapsible), and block grid.
-- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop grid of cards for ordering, per-block default filter selection, and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for changes.
-  - Also includes per-block default column/view selection and “Manage filters/views” links when supported.
- - _layout_rows.html: Partial used to render the card items; returned by AJAX add. Intentionally does not render formset ORDER/DELETE fields because ordering and deletion are AJAX-only.
- - layout_filter_config.html: Saved filters management UI, similar to table filter config.
- - layout_confirm_delete.html: Simple delete confirmation.
+- layout_edit.html: Combined Add Block card (block picker only, AJAX add) + drag/drop grid of cards for ordering, per-block default filter/setting selection, and responsive width edits (sm/md/lg/xl/xxl). Displays “auto-saves” for changes.
+    - Includes “Manage filters/settings” links when supported.
+- _layout_rows.html: Partial used to render the card items; returned by AJAX add. Intentionally does not render formset ORDER/DELETE fields because ordering and deletion are AJAX-only.
+- layout_filter_config.html: Saved filters management UI, similar to table filter config.
+- layout_confirm_delete.html: Simple delete confirmation.
 
 Admin (apps/layout/admin.py)
 
@@ -132,7 +132,7 @@ Filter Mechanics
 - Blocks: On block creation — for all existing users. On new user creation — for all existing blocks.
 - Live overrides: Provided via GET under `filters.<key>`; merged with saved values using FilterResolutionMixin._collect_filters.
 - Propagation to blocks (filters): For each block, the merged values are namespaced and injected into the block’s GET (`{block_name}__{layout_block_id}__filters.<key>`). Blocks consume these instance-scoped filters and render accordingly.
-- Propagation to blocks (columns/views): If a LayoutBlock sets `preferred_column_config_name` and the viewer has a matching `BlockColumnConfig`, the namespaced `{block_name}__{layout_block_id}__column_config_id` is injected so that instance uses the chosen column view by default.
+- Propagation to blocks (settings): If a LayoutBlock sets `preferred_setting_name` and the viewer has a matching saved configuration (e.g., `BlockTableConfig`), the namespaced selection is injected so that instance uses the chosen setting by default.
  - Single-default invariant is enforced at the database level to avoid race conditions under concurrent updates.
 
 Text Rendering
@@ -184,7 +184,7 @@ AJAX Endpoints
 - Reorder: POST JSON to /layouts/<username>/<slug>/reorder/ with {"ordered_ids": [..]}.
 - Update block: POST JSON to /layouts/<username>/<slug>/block/<id>/update/ with any of:
   - `title`, `note`
-  - `preferred_filter_name`, `preferred_column_config_name`
+- `preferred_filter_name`, `preferred_setting_name`
   - responsive fields: `col_sm`, `col_md`, `col_lg`, `col_xl`, `col_xxl`
 - Delete block: POST to /layouts/<username>/<slug>/block/<id>/delete/.
 - Add block: POST JSON to /layouts/<username>/<slug>/block/add/ with {"block": "<code>"}.

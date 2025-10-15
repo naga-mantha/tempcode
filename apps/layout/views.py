@@ -67,6 +67,8 @@ def _serialize_layout_block(
         "code": lb.block.code if lb and lb.block else "",
         "note": lb.note or "",
         "is_spacer": bool(getattr(lb, "is_spacer", False)),
+        "preferred_filter_name": getattr(lb, "preferred_filter_name", "") or "",
+        "preferred_setting_name": getattr(lb, "preferred_setting_name", "") or "",
         "html": html,
     }
 
@@ -350,6 +352,8 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
             "title": data.get("title", ""),
             "note": data.get("note", ""),
             "code": data.get("code", ""),
+            "preferred_filter_name": data.get("preferred_filter_name", ""),
+            "preferred_setting_name": data.get("preferred_setting_name", ""),
         })
     # Available specs (V2)
     available_specs = []
@@ -517,29 +521,45 @@ def layout_block_update_v2(request: HttpRequest, username: str, slug: str, lb_id
     note = (request.POST.get("note") or "").strip()
     try:
         import json as _json
-        settings = _json.loads(request.POST.get("settings_json") or "null")
+
+        settings_payload = _json.loads(request.POST.get("settings_json") or "null")
     except Exception:
-        settings = None
-    # Optional defaults for table/pivot
-    pref_cols = (request.POST.get("preferred_column_config_name") or "").strip()
-    pref_filt = (request.POST.get("preferred_filter_name") or "").strip()
-    pref_pivot = (request.POST.get("preferred_pivot_name") or "").strip()
+        settings_payload = None
+    # Optional defaults for per-block selections
+    pref_setting_raw = request.POST.get("preferred_setting_name")
+    pref_filter_raw = request.POST.get("preferred_filter_name")
+    pref_pivot_raw = request.POST.get("preferred_pivot_name")
+    pref_setting = (pref_setting_raw or "").strip() if pref_setting_raw is not None else None
+    pref_filter = (pref_filter_raw or "").strip() if pref_filter_raw is not None else None
+    pref_pivot = (pref_pivot_raw or "").strip() if pref_pivot_raw is not None else None
     lb.title = title
     lb.note = note
-    if isinstance(settings, dict):
-        lb.settings = settings
-    if pref_cols:
-        lb.preferred_column_config_name = pref_cols
-    if pref_filt:
-        lb.preferred_filter_name = pref_filt
-    if pref_pivot:
+    update_fields = ["title", "note"]
+    settings_updated = False
+    if isinstance(settings_payload, dict):
+        lb.settings = settings_payload
+        settings_updated = True
+    if pref_setting_raw is not None:
+        lb.preferred_setting_name = pref_setting or ""
+        update_fields.append("preferred_setting_name")
+    if pref_filter_raw is not None:
+        lb.preferred_filter_name = pref_filter or ""
+        update_fields.append("preferred_filter_name")
+    if pref_pivot_raw is not None:
         try:
-            tmp = dict(lb.settings or {})
-            tmp["preferred_pivot_name"] = pref_pivot
-            lb.settings = tmp
+            base_settings = dict(lb.settings or {}) if isinstance(lb.settings, dict) else {}
+            if pref_pivot:
+                base_settings["preferred_pivot_name"] = pref_pivot
+            else:
+                base_settings.pop("preferred_pivot_name", None)
+            lb.settings = base_settings
+            settings_updated = True
         except Exception:
             pass
-    lb.save(update_fields=["title", "note", "settings", "preferred_column_config_name", "preferred_filter_name"])
+    if settings_updated:
+        if "settings" not in update_fields:
+            update_fields.append("settings")
+    lb.save(update_fields=update_fields)
     return HttpResponse(status=204)
 
 
@@ -561,11 +581,13 @@ def layout_block_configs_v2(request: HttpRequest, username: str, slug: str, lb_i
     kind = getattr(spec, "kind", "") if spec else ""
     data = {
         "kind": kind,
-        "columns": [],
         "filters": [],
+        "settings": [],
+        "columns": [],
         "pivots": [],
         "selected": {
-            "column": getattr(lb, "preferred_column_config_name", "") or "",
+            "setting": getattr(lb, "preferred_setting_name", "") or "",
+            "column": getattr(lb, "preferred_setting_name", "") or "",
             "filter": getattr(lb, "preferred_filter_name", "") or "",
             "pivot": (lb.settings or {}).get("preferred_pivot_name", "") if isinstance(lb.settings, dict) else "",
         },
@@ -583,11 +605,13 @@ def layout_block_configs_v2(request: HttpRequest, username: str, slug: str, lb_i
     except Exception:
         piv = []
     if kind == "table":
+        data["settings"] = tbl
         data["columns"] = tbl
         data["filters"] = fil
     elif kind == "pivot":
         data["filters"] = fil
         data["pivots"] = piv
+        data["settings"] = piv
     else:
         data["filters"] = fil
     import json as _json

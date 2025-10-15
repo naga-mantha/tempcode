@@ -14,7 +14,7 @@ def get_layoutblock_formset():
             "title",
             "note",
             "preferred_filter_name",
-            "preferred_column_config_name",
+            "preferred_setting_name",
         ),
         extra=0,
     )
