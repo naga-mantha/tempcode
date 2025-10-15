@@ -35,7 +35,7 @@ def layout_list(request: HttpRequest) -> HttpResponse:
     ctx: Dict[str, Any] = {
         **_group_layouts_for_sidebar(request.user),
     }
-    return render(request, "v2/layout/layout_list.html", ctx)
+    return render(request, "layout/layout_list.html", ctx)
 
 
 @login_required
@@ -130,9 +130,9 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
         ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
         template = spec.template
         if spec.kind == "table":
-            template = "v2/blocks/table/table_card.html"
+            template = "blocks/table/table_card.html"
         elif spec.kind == "pivot":
-            template = "v2/blocks/pivot/pivot_card.html"
+            template = "blocks/pivot/pivot_card.html"
         html = render_to_string(template, ctx, request=request)
         rendered_blocks.append({"id": lb.id, "html": html})
 
@@ -163,7 +163,7 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
             (lambda out: [out.__setitem__(k[8:] if k.startswith('filters.') else k, v) or None for k,v in (vals or {}).items()] or out)({})
         ))(getattr(active_layout_cfg, "values", {}) or {}),
     }
-    return render(request, "v2/layout/layout_detail.html", ctx)
+    return render(request, "layout/layout_detail.html", ctx)
 
 def ping(_request: HttpRequest) -> HttpResponse:
     return HttpResponse("layouts v2 ok", content_type="text/plain")
@@ -204,7 +204,7 @@ def layout_create(request: HttpRequest) -> HttpResponse:
             },
             **_group_layouts_for_sidebar(request.user),
         }
-        return render(request, "v2/layout/layout_form.html", ctx)
+        return render(request, "layout/layout_form.html", ctx)
 
     ctx: Dict[str, Any] = {
         "mode": "create",
@@ -216,7 +216,7 @@ def layout_create(request: HttpRequest) -> HttpResponse:
         },
         **_group_layouts_for_sidebar(request.user),
     }
-    return render(request, "v2/layout/layout_form.html", ctx)
+    return render(request, "layout/layout_form.html", ctx)
 
 
 @login_required
@@ -317,9 +317,9 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
             ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
             template = spec.template
             if spec.kind == "table":
-                template = "v2/blocks/table/table_card.html"
+                template = "blocks/table/table_card.html"
             elif spec.kind == "pivot":
-                template = "v2/blocks/pivot/pivot_card.html"
+                template = "blocks/pivot/pivot_card.html"
             html = render_to_string(template, ctx, request=request)
         blocks.append({
             "id": lb.id,
@@ -355,7 +355,7 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
         "blocks_meta": blocks_meta,
         "available_specs": available_specs,
     }
-    return render(request, "v2/layout/layout_design.html", ctx)
+    return render(request, "layout/layout_design.html", ctx)
 
 
 @login_required
@@ -458,9 +458,9 @@ def layout_block_render_v2(request: HttpRequest, username: str, slug: str, lb_id
         ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
         template = spec.template
         if spec.kind == "table":
-            template = "v2/blocks/table/table_card.html"
+            template = "blocks/table/table_card.html"
         elif spec.kind == "pivot":
-            template = "v2/blocks/pivot/pivot_card.html"
+            template = "blocks/pivot/pivot_card.html"
         html = render_to_string(template, ctx, request=request)
     import json as _json
     return HttpResponse(_json.dumps({"html": html}), content_type="application/json")
@@ -572,7 +572,7 @@ def manage_layout_filters(request: HttpRequest, username: str, slug: str) -> Htt
     ).order_by("_vis_order", "name")
     filter_configs = list(qs)
     ctx: Dict[str, Any] = {"layout": layout, "filter_configs": filter_configs}
-    return render(request, "v2/layout/filter/manage.html", ctx)
+    return render(request, "layout/filter/manage.html", ctx)
 
 
 def _render_saved_filters_partial(request: HttpRequest, layout: Layout) -> HttpResponse:
@@ -587,7 +587,7 @@ def _render_saved_filters_partial(request: HttpRequest, layout: Layout) -> HttpR
             output_field=IntegerField()
         )
     ).order_by("_vis_order", "name")
-    html = render_to_string("v2/layout/filter/_saved_filters.html", {"layout": layout, "filter_configs": list(qs), "request": request}, request=request)
+    html = render_to_string("layout/filter/_saved_filters.html", {"layout": layout, "filter_configs": list(qs), "request": request}, request=request)
     return HttpResponse(html)
 
 
@@ -672,7 +672,7 @@ def layout_edit(request: HttpRequest, username: str, slug: str) -> HttpResponse:
             },
             **_group_layouts_for_sidebar(request.user),
         }
-        return render(request, "v2/layout/layout_form.html", ctx)
+        return render(request, "layout/layout_form.html", ctx)
 
     ctx: Dict[str, Any] = {
         "mode": "edit",
@@ -685,4 +685,4 @@ def layout_edit(request: HttpRequest, username: str, slug: str) -> HttpResponse:
         },
         **_group_layouts_for_sidebar(request.user),
     }
-    return render(request, "v2/layout/layout_form.html", ctx)
+    return render(request, "layout/layout_form.html", ctx)

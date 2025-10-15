@@ -1,6 +1,3 @@
-from apps.blocks.registry import block_registry
-from apps.blocks.models.block_filter_layout import BlockFilterLayout
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
 from apps.layout.models import Layout
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -59,61 +56,8 @@ class LayoutAccessMixin:
         cls.ensure_access(request, layout, action="edit")
 
 
-class LayoutFilterSchemaMixin(FilterResolutionMixin):
-    """Builds a resolved filter schema aggregated from all blocks in a layout."""
+"""Legacy mixins for layouts.
 
-    def _build_filter_schema(self, request):
-        """Aggregate filter schema, limited to fields chosen in per-user BlockFilterLayout.
-
-        For each block on the layout, we fetch the user's BlockFilterLayout and
-        collect the field keys referenced in its sections/rows. Only those keys
-        are included from the block's filter schema for the sidebar. If the user
-        has no layout for a block, that block contributes no fields to the
-        sidebar filters.
-        """
-        def _keys_from_layout_dict(layout_dict):
-            keys = set()
-            if not isinstance(layout_dict, dict):
-                return keys
-            try:
-                for sec in (layout_dict.get("sections") or []):
-                    for row in (sec.get("rows") or []):
-                        for cell in (row or []):
-                            if not isinstance(cell, dict):
-                                continue
-                            k = cell.get("key")
-                            r = cell.get("range")
-                            if k:
-                                keys.add(str(k))
-                            if isinstance(r, (list, tuple)) and len(r) == 2:
-                                keys.add(str(r[0]))
-                                keys.add(str(r[1]))
-            except Exception:
-                return keys
-            return keys
-
-        raw_schema = {}
-        user = request.user
-        # self.layout must be set by the view before calling this method
-        for lb in self.layout.blocks.select_related("block"):
-            block_impl = block_registry.get(lb.block.code)
-            if not (block_impl and hasattr(block_impl, "get_filter_schema")):
-                continue
-            # Fetch user-selected layout for this block
-            try:
-                user_layout = BlockFilterLayout.objects.filter(block=lb.block, user=user).first()
-                allowed_keys = _keys_from_layout_dict(user_layout.layout) if (user_layout and isinstance(user_layout.layout, dict)) else set()
-            except Exception:
-                allowed_keys = set()
-            if not allowed_keys:
-                # No user layout for this block -> contribute nothing
-                continue
-            # Get the block's full schema then filter down to allowed keys
-            try:
-                schema = block_impl.get_filter_schema(request)
-            except TypeError:
-                schema = block_impl.get_filter_schema(user)
-            schema = schema or {}
-            limited = {k: v for k, v in schema.items() if k in allowed_keys}
-            raw_schema.update(limited)
-        return self._resolve_filter_schema(raw_schema, user)
+Only `LayoutAccessMixin` remains in use. The old v1 filter-schema mixin
+depended on deprecated block types and has been removed.
+"""

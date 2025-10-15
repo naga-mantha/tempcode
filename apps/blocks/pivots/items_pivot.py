@@ -26,10 +26,10 @@ from apps.policy.service import PolicyService
 @dataclass(frozen=True)
 class ItemsPivotSpec:
     spec = BlockSpec(
-        id="v2.items.pivot",
+        id="items.pivot",
         name="Items Pivot",
         kind="pivot",
-        template="v2/blocks/pivot/pivot.html",
+        template="blocks/pivot/pivot.html",
         supported_features=("filters", "export"),
         services=Services(
             filter_resolver=SchemaFilterResolver,
@@ -74,5 +74,5 @@ def render_items_pivot(request: HttpRequest) -> HttpResponse:
     controller = BlockController(ItemsPivotSpec.spec, policy)
     ctx = controller.build_context(request)
     ctx["title"] = "Items Pivot (V2)"
-    return render(request, "v2/blocks/pivot/pivot.html", ctx)
+    return render(request, "blocks/pivot/pivot.html", ctx)
 

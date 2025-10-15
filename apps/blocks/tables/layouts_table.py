@@ -29,10 +29,10 @@ This file defines only the spec and the demo render view.
 @dataclass(frozen=True)
 class LayoutsTableSpec:
     spec = BlockSpec(
-        id="v2.layouts.table",
+        id="layouts.table",
         name="Layouts",
         kind="table",
-        template="v2/blocks/table/table.html",
+        template="blocks/table/table.html",
         supported_features=("filters",),
         services=Services(
             filter_resolver=SchemaFilterResolver,
@@ -85,4 +85,4 @@ def render_layouts_table(request: HttpRequest) -> HttpResponse:
     ctx = controller.build_context(request)
     # Customize title for demo clarity
     ctx["title"] = "Layouts (V2 Table)"
-    return render(request, "v2/blocks/table/table.html", ctx)
+    return render(request, "blocks/table/table.html", ctx)

@@ -7,8 +7,5 @@ class ProductionConfig(AppConfig):
     verbose_name = 'Production'
 
     def ready(self):
-        # Explicitly register blocks when the app is ready
-        from apps.blocks.registry import block_registry
-        from apps.production.blocks_registry import register as register_blocks
-
-        register_blocks(block_registry)
+        # Legacy v1 block registry disabled (migrated to specs)
+        return

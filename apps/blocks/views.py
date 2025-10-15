@@ -35,7 +35,7 @@ def hello(request: HttpRequest) -> HttpResponse:
         "title": "Hello Block (V2)",
         "message": "V2 scaffolding is wired — hello from Blocks V2!",
     }
-    return render(request, "v2/blocks/hello.html", ctx)
+    return render(request, "blocks/hello.html", ctx)
 
 
 @login_required
@@ -55,9 +55,9 @@ def render_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     # Choose partial template by kind
     template = spec.template
     if spec.kind == "table":
-        template = "v2/blocks/table/table_card.html"
+        template = "blocks/table/table_card.html"
     elif spec.kind == "pivot":
-        template = "v2/blocks/pivot/pivot_card.html"
+        template = "blocks/pivot/pivot_card.html"
     return render(request, template, ctx)
 
 
@@ -470,7 +470,7 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
         filter_configs = list(list_filter_configs(block_row, request.user))
         ctx = {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}
         from django.template.loader import render_to_string
-        html = render_to_string("v2/blocks/filter/_saved_filters.html", ctx, request=request)
+        html = render_to_string("blocks/filter/_saved_filters.html", ctx, request=request)
         return HttpResponse(html)
     return HttpResponse(status=204)
 
@@ -583,7 +583,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         "filter_layout": filter_layout,
         "initial_values": initial_values,
     }
-    return render(request, "v2/blocks/filter/manage_filters.html", ctx)
+    return render(request, "blocks/filter/manage_filters.html", ctx)
 
 
 @login_required
@@ -608,7 +608,7 @@ def rename_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> 
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
-        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        html = render_to_string("blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
         return HttpResponse(html)
     return HttpResponse(status=204)
 
@@ -635,7 +635,7 @@ def duplicate_filter_config(request: HttpRequest, spec_id: str, config_id: int) 
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
-        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        html = render_to_string("blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
         return HttpResponse(html)
     return HttpResponse(status=204)
 
@@ -654,7 +654,7 @@ def delete_filter_config(request: HttpRequest, spec_id: str, config_id: int) -> 
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
-        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        html = render_to_string("blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
         return HttpResponse(html)
     return HttpResponse(status=204)
 
@@ -674,7 +674,7 @@ def make_default_filter_config(request: HttpRequest, spec_id: str, config_id: in
         block_row = get_block_for_spec(spec_id)
         filter_configs = list(list_filter_configs(block_row, request.user))
         from django.template.loader import render_to_string
-        html = render_to_string("v2/blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
+        html = render_to_string("blocks/filter/_saved_filters.html", {"spec_id": spec_id, "filter_configs": filter_configs, "request": request}, request=request)
         return HttpResponse(html)
     return HttpResponse(status=204)
 
@@ -936,7 +936,7 @@ def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
         "active_table_config_id": getattr(active_cfg, "id", None),
         "active_table_config": active_cfg,
     }
-    return render(request, "v2/blocks/table/manage_columns.html", ctx)
+    return render(request, "blocks/table/manage_columns.html", ctx)
 
 
 @login_required
@@ -1064,7 +1064,7 @@ def manage_pivot_configs(request: HttpRequest, spec_id: str) -> HttpResponse:
         "measures": measures,
         "measure_agg_choices": [("sum", "Sum"), ("count", "Count"), ("avg", "Average"), ("min", "Min"), ("max", "Max")],
     }
-    return render(request, "v2/blocks/pivot/manage.html", context)
+    return render(request, "blocks/pivot/manage.html", context)
 
 
 @login_required
@@ -1332,7 +1332,7 @@ def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
         "layout_json": json.dumps(layout_obj or {}),
         "admin_mode": False,
     }
-    return render(request, "v2/blocks/filter/filter_layout.html", ctx)
+    return render(request, "blocks/filter/filter_layout.html", ctx)
 
 
 @login_required
@@ -1387,7 +1387,7 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
         "layout_json": json.dumps(layout_obj or {}),
         "admin_mode": True,
     }
-    return render(request, "v2/blocks/filter/filter_layout.html", ctx)
+    return render(request, "blocks/filter/filter_layout.html", ctx)
 
 
 @login_required

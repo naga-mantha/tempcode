@@ -1,0 +1,119 @@
+{% load dict_extras %}
+
+<script type="application/json" id="v2-table-config-{{ dom_id }}">
+  {{ frontend_config|tojson }}
+</script>
+
+<div id="{{ dom_wrapper_id }}" class="card shadow-sm" data-v2-table-root="{{ dom_id }}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="fw-semibold">{{ title }}</div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <label class="mb-0 small text-muted">Pivot</label>
+      <select id="pivotCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto">
+        <option value="">(Default)</option>
+        {% if pivot_configs %}
+          <optgroup label="Private pivots">
+            {% for cfg in pivot_configs %}
+              {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_pivot_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Public pivots">
+            {% for cfg in pivot_configs %}
+              {% if cfg.visibility == 'public' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_pivot_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+      </select>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_pivot_configs' spec_id %}">Pivot Settings</a>
+      {% if spec_id == 'items.pivot' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:pivot_items' %}">Pivot Link</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
+      {% endif %}
+      <span class="mx-1 text-muted">&mdash;</span>
+      <label class="mb-0 small text-muted">Filter</label>
+      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" data-v2-filter-select data-dom-id="{{ dom_id }}">
+        <option value="">(None)</option>
+        {% if filter_configs %}
+          <optgroup label="Private filters">
+            {% for cfg in filter_configs %}
+              {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Public filters">
+            {% for cfg in filter_configs %}
+              {% if cfg.visibility == 'public' %}
+                <option value="{{ cfg.id }}" {% if cfg.id == active_filter_config_id %}selected{% endif %}>{{ cfg.name }}{% if cfg.is_default %} (default){% endif %}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+      </select>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_filters' spec_id %}">Filter Settings</a>
+      <span class="mx-1 text-muted">&mdash;</span>
+      <div class="btn-group" role="group" aria-label="Exports">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-v2-export-excel data-dom-id="{{ dom_id }}">Export Excel</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-v2-export-pdf data-dom-id="{{ dom_id }}">Export PDF</button>
+      </div>
+      <span class="text-muted small">V2</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="htmx-indicator spinner-border spinner-border-sm text-secondary" role="status" style="display:none"></div>
+    <form id="v2TableFilterForm-{{ dom_id }}" data-v2-filter-form data-dom-id="{{ dom_id }}">
+      <input type="hidden" name="pivot_config_id" value="{{ active_pivot_config_id|default:'' }}">
+      <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id|default:'' }}">
+      <div class="accordion mb-3" id="accordion-{{ dom_id }}">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading-{{ dom_id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ dom_id }}" aria-expanded="false" aria-controls="collapse-{{ dom_id }}">
+              Filter Conditions
+            </button>
+          </h2>
+          {% include "blocks/filter/_active_badges.html" with badges=active_filter_badges %}
+          <div id="collapse-{{ dom_id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ dom_id }}" data-bs-parent="#accordion-{{ dom_id }}">
+            <div class="accordion-body">
+              {% if filter_schema %}
+                {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=filters filter_layout=filter_layout name_prefix="" id_prefix=dom_id %}
+                <div class="mt-2">
+                  <button type="submit" class="btn btn-sm btn-primary">Apply Filters</button>
+                </div>
+              {% else %}
+                <div class="text-muted small">No filter schema defined.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div id="{{ dom_table_id }}" class="border rounded" style="height: 520px;"></div>
+    <noscript>
+      <div class="text-muted small mt-3">Enable JavaScript to view the interactive pivot.</div>
+    </noscript>
+  </div>
+</div>
+
+<script>
+(function(){
+  const select = document.getElementById('pivotCfgSelect-{{ dom_id }}');
+  if (!select) {
+    return;
+  }
+  select.addEventListener('change', function(){
+    const params = new URLSearchParams(window.location.search || '');
+    if (this.value) {
+      params.set('pivot_config_id', this.value);
+    } else {
+      params.delete('pivot_config_id');
+    }
+    window.location.assign(window.location.pathname + (params.toString() ? ('?' + params.toString()) : ''));
+  });
+})();
+</script>

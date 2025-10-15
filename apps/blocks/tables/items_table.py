@@ -31,10 +31,10 @@ class ActiveItemsQueryBuilder(BaseQueryBuilder):
 @dataclass(frozen=True)
 class ItemsTableSpec:
     spec = BlockSpec(
-        id="v2.items.table",
+        id="items.table",
         name="Items",
         kind="table",
-        template="v2/blocks/table/table.html",
+        template="blocks/table/table.html",
         supported_features=("filters",),
         services=Services(
             filter_resolver=SchemaFilterResolver,
@@ -83,4 +83,4 @@ def render_items_table(request: HttpRequest) -> HttpResponse:
     controller = BlockController(ItemsTableSpec.spec, policy)
     ctx = controller.build_context(request)
     ctx["title"] = "Items (V2 Table)"
-    return render(request, "v2/blocks/table/table.html", ctx)
+    return render(request, "blocks/table/table.html", ctx)

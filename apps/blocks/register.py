@@ -21,7 +21,7 @@ def load_specs() -> None:
                 id="v2.hello",
                 name="Hello Block (V2)",
                 kind="content",
-                template="v2/blocks/hello.html",
+                template="blocks/hello.html",
                 supported_features=(),
                 services=Services(),
                 category="Demo",

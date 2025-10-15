@@ -3,7 +3,6 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Row, Column, Field, HTML
 
 from apps.layout.models import Layout, LayoutBlock
-from apps.blocks.registry import block_registry
 from apps.blocks.models.block import Block
 from apps.layout.constants import GRID_MAX_COL_SPAN, GRID_MAX_ROW_SPAN
 
@@ -72,13 +71,9 @@ class AddBlockForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Limit selectable blocks to runtime v1 registry PLUS v2 specs.
+        # Limit selectable blocks to runtime v2 specs only.
         field = self.fields["block"]
         field.widget.attrs.update({"class": "form-select"})
-
-        # v1 registered block codes
-        v1_codes = list(block_registry.all().keys())
-        v1_qs = Block.objects.filter(code__in=v1_codes)
 
         # v2 specs → ensure Block rows exist, collect codes
         try:
@@ -101,32 +96,19 @@ class AddBlockForm(forms.ModelForm):
         except Exception:
             v2_objs = []
 
-        # Combined queryset for ModelChoiceField
-        all_objs = list(v1_qs) + list(v2_objs)
         # De-duplicate by code
         seen = set()
         unique_objs = []
-        for o in all_objs:
+        for o in v2_objs:
             if o.code in seen:
                 continue
             seen.add(o.code)
             unique_objs.append(o)
         field.queryset = Block.objects.filter(code__in=[o.code for o in unique_objs])
-
-        # Build display choices: group v1 by app, label v2 with prefix
-        def _app(obj: Block) -> str:
-            meta = block_registry.metadata(obj.code) or {}
-            return (meta.get("app_name") or "").strip()
-        v1_list = [o for o in unique_objs if o.code in v1_codes]
-        v2_list = [o for o in unique_objs if o.code not in v1_codes]
-        v1_list.sort(key=lambda b: (_app(b).lower(), (b.name or "").lower()))
-        v2_list.sort(key=lambda b: (b.name or b.code).lower())
-
+        # Build display choices
         choices = [("", "-- Select a block --")]
-        # v1 choices
-        choices.extend((b.code, f"{_app(b) or 'V1'}>{b.name}") for b in v1_list)
-        # v2 choices, clearly labeled
-        choices.extend((b.code, f"V2>{b.name}") for b in v2_list)
+        v2_list = sorted(unique_objs, key=lambda b: (b.name or b.code).lower())
+        choices.extend((b.code, f"{b.name or b.code}") for b in v2_list)
         field.widget.choices = choices
 
     # No responsive fields on add; all inherit by default

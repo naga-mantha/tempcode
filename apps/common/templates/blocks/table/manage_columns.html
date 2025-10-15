@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}<title>Manage Columns — {{ spec.name }}</title>{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  <style>
+    /* Make entire items draggable with visual feedback */
+    #availableList li[data-key],
+    #selectedList li[data-key] { cursor: grab; }
+    #availableList li.sortable-chosen,
+    #selectedList li.sortable-chosen,
+    #availableList li.sortable-drag,
+    #selectedList li.sortable-drag { cursor: grabbing; }
+  </style>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0">Manage Columns – {{ spec.name }}</h5>
+    <div class="d-flex align-items-center gap-2">
+      <label class="mb-0 small text-muted">Load View</label>
+      <form method="get" class="d-inline m-0 p-0">
+        <select name="config_id" class="form-select form-select-sm w-auto"
+                onchange="(function(sel){ if(!sel.value){ sel.setAttribute('data-old-name', sel.getAttribute('name')); sel.removeAttribute('name'); } sel.form.requestSubmit(); })(this)">
+          <option value="">New (default)</option>
+          {% if table_configs %}
+            <optgroup label="Private views">
+              {% for cfg in table_configs %}
+                {% if cfg.user_id == request.user.id and cfg.visibility == 'private' %}
+                  <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Public views">
+              {% for cfg in table_configs %}
+                {% if cfg.visibility == 'public' %}
+                  <option value="{{ cfg.id }}" {% if cfg.id == active_table_config_id %}selected{% endif %}>{{ cfg.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
+      </form>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
+      {% if spec_id == 'items.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_items' %}">Table Link</a>
+      {% elif spec_id == 'layouts.table' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_layouts' %}">Table Link</a>
+      {% else %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Table Link</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <div>Available Fields</div>
+            <div class="d-flex align-items-center gap-2">
+              <input type="search" id="availSearch" class="form-control form-control-sm w-auto" placeholder="Search" oninput="filterAvailable()" onkeyup="filterAvailable()">
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <ul id="availableList" class="list-group small">
+            {% for item in available %}
+            <li class="list-group-item d-flex align-items-center justify-content-between" data-key="{{ item.key }}"{% if item.mandatory %} data-mandatory="1"{% endif %}>
+              <div>
+                <span class="me-2 bi bi-grip-vertical"></span>
+                <span>{{ item.label }}</span>
+                <small class="text-muted ms-2">({{ item.key }})</small>
+              </div>
+              <span>
+                {% if item.mandatory %}<span class="badge bg-warning text-dark me-2">Mandatory</span>{% endif %}
+                <span class="badge text-bg-light border">{{ item.type|default:'text' }}</span>
+              </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">No more fields</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-7">
+      <div class="card">
+        <div class="card-header">Save View</div>
+        <div class="card-body">
+          <form id="saveManageForm" hx-post="{% url 'blocks:save_table_config' spec_id %}" hx-swap="none">
+            {% csrf_token %}
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control" value="{{ active_table_config.name|default:'' }}" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Visibility</label>
+                <select name="visibility" class="form-select">
+                  <option value="private" {% if active_table_config and active_table_config.visibility == "private" %}selected{% endif %}>Private</option>
+                  <option value="public" {% if active_table_config and active_table_config.visibility == "public" %}selected{% endif %}>Public</option>
+                </select>
+              </div>
+              <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="is_default" id="mkDefault" {% if active_table_config and active_table_config.is_default %}checked{% endif %}>
+                  <label class="form-check-label" for="mkDefault">Make default</label>
+                </div>
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <button type="button" class="btn btn-primary" onclick="saveManageColumns()">Save</button>
+              </div>
+            </div>
+            <input type="hidden" name="columns_json" id="manageColsJson">
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">Selected Fields (drag to reorder)</div>
+        <div class="card-body">
+          <ul id="selectedList" class="list-group small">
+            {% for item in selected %}
+            <li class="list-group-item d-flex align-items-center justify-content-between" data-key="{{ item.key }}"{% if item.mandatory %} data-mandatory="1"{% endif %}>
+              <div>
+                <span class="me-2 bi bi-grip-vertical"></span>
+                <span>{{ item.label }}</span>
+                <small class="text-muted ms-2">({{ item.key }})</small>
+              </div>
+              <span>
+                {% if item.mandatory %}<span class="badge bg-warning text-dark me-2">Mandatory</span>{% endif %}
+                <span class="badge text-bg-light border">{{ item.type|default:'text' }}</span>
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">My Views</div>
+        <div class="card-body">
+          {% if table_configs %}
+            <ul class="list-group">
+              {% for cfg in table_configs %}
+                {% if cfg.user_id == request.user.id %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <span>
+                    {{ cfg.name }}
+                    {% if cfg.is_default %}<span class="badge text-bg-secondary ms-2">default</span>{% endif %}
+                    <span class="badge text-bg-light border ms-2">{{ cfg.visibility }}</span>
+                  </span>
+                  <span class="btn-group">
+                    <form method="post" action="{% url 'blocks:rename_table_config' spec_id cfg.id %}"
+                          class="d-inline js-reload-on-success" onsubmit="return renameCfg{{ cfg.id }}()"
+                          hx-post="{% url 'blocks:rename_table_config' spec_id cfg.id %}" hx-swap="none">
+                      {% csrf_token %}
+                      <input type="hidden" name="name" id="rn{{ cfg.id }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
+                    </form>
+                    <form method="post" action="{% url 'blocks:make_default_table_config' spec_id cfg.id %}"
+                          class="d-inline js-reload-on-success"
+                          hx-post="{% url 'blocks:make_default_table_config' spec_id cfg.id %}" hx-swap="none">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default %}disabled{% endif %}>Make Default</button>
+                    </form>
+                    <form method="post" action="{% url 'blocks:duplicate_table_config' spec_id cfg.id %}"
+                          class="d-inline js-reload-on-success"
+                          hx-post="{% url 'blocks:duplicate_table_config' spec_id cfg.id %}" hx-swap="none">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
+                    </form>
+                    <form method="post" action="{% url 'blocks:delete_table_config' spec_id cfg.id %}"
+                          class="d-inline js-reload-on-success"
+                          hx-post="{% url 'blocks:delete_table_config' spec_id cfg.id %}" hx-swap="none" hx-confirm="Delete view {{ cfg.name }}?">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  </span>
+                </li>
+                <script>
+                  function renameCfg{{ cfg.id }}(){
+                    var name = prompt('New name for {{ cfg.name }}:', '{{ cfg.name }}');
+                    if (!name) return false; document.getElementById('rn{{ cfg.id }}').value = name; return true;
+                  }
+                </script>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted small">No saved views yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    // Filter available by search
+    var input = document.getElementById('availSearch');
+    var list = document.getElementById('availableList');
+    // Also expose a global fallback in case the early handler fails
+    window.filterAvailable = function(){
+      try{
+        var q = (document.getElementById('availSearch')?.value || '').toLowerCase();
+        var ul = document.getElementById('availableList');
+        if (!ul) return;
+        ul.querySelectorAll('li[data-key]').forEach(function(li){
+          var text = (li.textContent || '').toLowerCase();
+          var show = (!q || text.indexOf(q) !== -1);
+          if (show) {
+            li.classList.remove('d-none');
+          } else {
+            li.classList.add('d-none');
+          }
+        });
+      }catch(e){}
+    };
+    if (input && list){
+      input.addEventListener('input', window.filterAvailable);
+      input.addEventListener('keyup', window.filterAvailable);
+    }
+
+    // Init SortableJS (assumes bundled in vendor)
+    try {
+      if (window.Sortable) {
+        const groupName = 'cols';
+        window.__v2AvailSort = new Sortable(availableList, {
+          group: { name: groupName, put: function(to, from, dragged){
+            // Do not allow dropping mandatory fields into Available
+            try { return dragged.getAttribute('data-mandatory') !== '1'; } catch(e){ return true; }
+          } },
+          animation: 150,
+          swapThreshold: 0.65
+        });
+        window.__v2SelSort = new Sortable(selectedList, {
+          group: { name: groupName, pull: true, put: true },
+          animation: 150,
+          swapThreshold: 0.65,
+          onMove: function(evt){
+            // Prevent moving mandatory items from Selected -> Available
+            try {
+              if (evt.to === availableList && evt.dragged && evt.dragged.getAttribute('data-mandatory') === '1') {
+                return false;
+              }
+            } catch(e){}
+          }
+        });
+      }
+    } catch (e) { console.warn('Sortable init failed', e); }
+  })();
+
+  function saveManageColumns(){
+    try {
+      var keys = Array.from(document.querySelectorAll('#selectedList li[data-key]')).map(function(li){ return li.getAttribute('data-key'); });
+      document.getElementById('manageColsJson').value = JSON.stringify(keys);
+      document.getElementById('saveManageForm').requestSubmit();
+    } catch (e) { alert('Unable to collect columns'); }
+  }
+
+  document.addEventListener('htmx:afterRequest', function(ev){
+    try {
+      var t = ev.target;
+      if (!t) return;
+      // After saving view columns
+      if (t.id === 'saveManageForm'){
+        const note = document.createElement('div');
+        note.className = 'alert alert-success position-fixed top-0 end-0 m-3';
+        note.textContent = 'Saved';
+        document.body.appendChild(note);
+        setTimeout(function(){ note.remove(); window.location.reload(); }, 800);
+        return;
+      }
+      // After rename/make default/duplicate/delete
+      if (t.classList && t.classList.contains('js-reload-on-success')){
+        if (ev.detail && ev.detail.xhr && ev.detail.xhr.status >= 200 && ev.detail.xhr.status < 300){
+          window.location.reload();
+        }
+      }
+    } catch (e) {}
+  });
+</script>
+{% endblock %}

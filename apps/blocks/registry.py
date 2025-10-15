@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Sequence, Any
+from typing import Dict, Iterable, Sequence
 import logging
 
 from django.template import loader
@@ -84,21 +84,5 @@ def get_registry() -> Dict[str, BlockSpec]:
     return dict(_REGISTRY)
 
 
-# Compatibility shim for legacy v1-style registrars that expect a
-# `block_registry` object with a `register(code, block)` method.
-# In the v2 system, specs are the source of truth; we no-op legacy
-# registrations to avoid import crashes during AppConfig.ready hooks.
-class _LegacyBlockRegistry:
-    def __init__(self) -> None:
-        self._data: Dict[str, Any] = {}
-
-    def register(self, code: str, block: Any) -> None:
-        # Accept and store, but do not surface into v2 registry.
-        try:
-            self._data[str(code)] = block
-        except Exception:
-            pass
-
-
-block_registry = _LegacyBlockRegistry()
+# Legacy block_registry shim removed — v2 registry/specs are canonical.
 
