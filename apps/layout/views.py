@@ -1,24 +1,21 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from django.db import models
 
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import render, get_object_or_404, redirect
+from django.db import models
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 
 from apps.accounts.models.custom_user import CustomUser
-from apps.layout.models import Layout, LayoutBlock
-from apps.blocks.models.block import Block
-
-from apps.blocks.register import load_specs
-from apps.blocks.registry import get_registry
 from apps.blocks.controller import BlockController
-from apps.policy.service import PolicyService
-from apps.blocks.services.model_table import prune_filter_schema
-from apps.blocks.registry import get_registry
+from apps.blocks.models.block import Block
 from apps.blocks.register import load_specs
+from apps.blocks.registry import get_registry
+from apps.blocks.services.model_table import prune_filter_schema
+from apps.layout.models import Layout, LayoutBlock
+from apps.policy.service import PolicyService
 
 
 def _group_layouts_for_sidebar(user) -> Dict[str, List[Layout]]:
@@ -27,6 +24,49 @@ def _group_layouts_for_sidebar(user) -> Dict[str, List[Layout]]:
     return {
         "private_layouts": list(private_qs),
         "public_layouts": list(public_qs),
+    }
+
+
+def _serialize_layout_block(
+    lb: LayoutBlock,
+    request: HttpRequest,
+    registry=None,
+    policy: PolicyService | None = None,
+) -> Dict[str, Any]:
+    """Return a serializable dict (including rendered HTML) for a layout block."""
+
+    reg = registry or get_registry()
+    policy = policy or PolicyService()
+    block_spec = None
+    if lb and lb.block:
+        try:
+            block_spec = reg.get(lb.block.code)
+        except Exception:
+            block_spec = None
+
+    html = "<div class=\"text-muted small\">Unknown block</div>"
+    if block_spec is not None:
+        try:
+            ctx = BlockController(block_spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
+            template = getattr(block_spec, "template", None) or ""
+            if getattr(block_spec, "kind", "") == "table":
+                template = "blocks/table/table_card.html"
+            elif getattr(block_spec, "kind", "") == "pivot":
+                template = "blocks/pivot/pivot_card.html"
+            html = render_to_string(template, ctx, request=request)
+        except Exception:
+            html = "<div class=\"text-muted small\">Unable to render block</div>"
+
+    return {
+        "id": lb.id,
+        "x": lb.x or 0,
+        "y": lb.y or 0,
+        "w": lb.w or 4,
+        "h": lb.h or 2,
+        "title": lb.title or (lb.block.name if lb and lb.block else ""),
+        "code": lb.block.code if lb and lb.block else "",
+        "note": lb.note or "",
+        "html": html,
     }
 
 
@@ -311,35 +351,17 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
     blocks = []
     blocks_meta = []
     for lb in LayoutBlock.objects.filter(layout=layout).order_by("position", "id"):
-        spec = reg.get(lb.block.code) if lb and lb.block else None
-        html = "<div class=\"text-muted small\">Unknown block</div>"
-        if spec:
-            ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
-            template = spec.template
-            if spec.kind == "table":
-                template = "blocks/table/table_card.html"
-            elif spec.kind == "pivot":
-                template = "blocks/pivot/pivot_card.html"
-            html = render_to_string(template, ctx, request=request)
-        blocks.append({
-            "id": lb.id,
-            "x": lb.x or 0,
-            "y": lb.y or 0,
-            "w": lb.w or 4,
-            "h": lb.h or 2,
-            "html": html,
-            "title": lb.title or (lb.block.name if lb.block else ""),
-            "code": lb.block.code if lb and lb.block else "",
-            "note": lb.note or "",
-        })
+        data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+        blocks.append(data)
         blocks_meta.append({
-            "id": lb.id,
-            "x": lb.x or 0,
-            "y": lb.y or 0,
-            "w": lb.w or 4,
-            "h": lb.h or 2,
-            "title": lb.title or (lb.block.name if lb.block else ""),
-            "note": lb.note or "",
+            "id": data["id"],
+            "x": data["x"],
+            "y": data["y"],
+            "w": data["w"],
+            "h": data["h"],
+            "title": data.get("title", ""),
+            "note": data.get("note", ""),
+            "code": data.get("code", ""),
         })
     # Available specs (V2)
     available_specs = []
@@ -410,22 +432,58 @@ def layout_block_add_v2(request: HttpRequest, username: str, slug: str) -> HttpR
     layout = get_object_or_404(Layout, user=user, slug=slug)
     if not (request.user.is_staff or request.user.id == layout.user_id):
         raise Http404()
-    spec_id = (request.POST.get("spec_id") or "").strip()
+    payload: Dict[str, Any] = {}
+    if request.content_type == "application/json":
+        try:
+            import json as _json
+
+            payload = _json.loads(request.body.decode("utf-8") or "{}")
+        except Exception:
+            payload = {}
+    if not payload:
+        payload = request.POST
+
+    spec_id = (payload.get("spec_id") or payload.get("block") or "").strip()
     if not spec_id:
-        return HttpResponse(status=400)
+        return JsonResponse({"ok": False, "error": "Missing block identifier."}, status=400)
+
     from apps.blocks.configs import get_block_for_spec
-    block = get_block_for_spec(spec_id)
-    # Place at next position and default size, append to bottom of current grid
+
+    try:
+        block = get_block_for_spec(spec_id)
+    except Exception:
+        return JsonResponse({"ok": False, "error": "Unknown block."}, status=404)
+
     next_pos = (LayoutBlock.objects.filter(layout=layout).aggregate(m=models.Max("position")).get("m") or 0) + 1
     existing = list(LayoutBlock.objects.filter(layout=layout).values("x", "y", "h"))
     try:
-        bottom_y = max(int((e.get("y") or 0)) + int((e.get("h") or 1)) for e in existing) if existing else 0
+        bottom_y = (
+            max(int((e.get("y") or 0)) + int((e.get("h") or 1)) for e in existing)
+            if existing
+            else 0
+        )
     except Exception:
         bottom_y = 0
-    lb = LayoutBlock.objects.create(layout=layout, block=block, position=next_pos, x=0, y=bottom_y, w=4, h=2)
-    from django.urls import reverse
-    from django.shortcuts import redirect
-    return redirect("layout:layout_design", username=layout.user.username, slug=layout.slug)
+
+    lb = LayoutBlock.objects.create(
+        layout=layout,
+        block=block,
+        position=next_pos,
+        x=0,
+        y=bottom_y,
+        w=4,
+        h=2,
+    )
+
+    load_specs()
+    reg = get_registry()
+    policy = PolicyService()
+    data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+
+    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest" and request.content_type != "application/json":
+        return redirect("layout:layout_design", username=layout.user.username, slug=layout.slug)
+
+    return JsonResponse({"ok": True, "block": data})
 
 
 @login_required
@@ -452,18 +510,10 @@ def layout_block_render_v2(request: HttpRequest, username: str, slug: str, lb_id
     load_specs()
     reg = get_registry()
     policy = PolicyService()
-    spec = reg.get(lb.block.code) if lb and lb.block else None
-    html = "<div class=\"text-muted small\">Unknown block</div>"
-    if spec:
-        ctx = BlockController(spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
-        template = spec.template
-        if spec.kind == "table":
-            template = "blocks/table/table_card.html"
-        elif spec.kind == "pivot":
-            template = "blocks/pivot/pivot_card.html"
-        html = render_to_string(template, ctx, request=request)
+    data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
     import json as _json
-    return HttpResponse(_json.dumps({"html": html}), content_type="application/json")
+
+    return HttpResponse(_json.dumps({"html": data.get("html", ""), "block": data}), content_type="application/json")
 
 
 @login_required
