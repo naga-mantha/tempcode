@@ -32,6 +32,8 @@ def _serialize_layout_block(
     request: HttpRequest,
     registry=None,
     policy: PolicyService | None = None,
+    *,
+    allow_request_overrides: bool = True,
 ) -> Dict[str, Any]:
     """Return a serializable dict (including rendered HTML) for a layout block."""
 
@@ -64,6 +66,7 @@ def _serialize_layout_block(
                 preferred_filter_name=pref_filter_name,
                 preferred_setting_name=pref_setting_name,
                 preferred_pivot_name=pref_pivot_name,
+                allow_request_overrides=allow_request_overrides,
             )
             template = getattr(block_spec, "template", None) or ""
             if getattr(block_spec, "kind", "") == "table":
@@ -185,7 +188,22 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
     blocks: List[Dict[str, Any]] = []
     rendered_blocks: List[Dict[str, Any]] = []
     for lb in LayoutBlock.objects.filter(layout=layout).order_by("position", "id"):
-        data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+        pref_filter = (getattr(lb, "preferred_filter_name", "") or "").strip()
+        pref_setting = (getattr(lb, "preferred_setting_name", "") or "").strip()
+        pref_pivot = ""
+        try:
+            if isinstance(lb.settings, dict):
+                pref_pivot = (lb.settings.get("preferred_pivot_name", "") or "").strip()
+        except Exception:
+            pref_pivot = ""
+        allow_overrides = not any([pref_filter, pref_setting, pref_pivot])
+        data = _serialize_layout_block(
+            lb,
+            request,
+            registry=reg,
+            policy=policy,
+            allow_request_overrides=allow_overrides,
+        )
         blocks.append(data)
         rendered_blocks.append({"id": data["id"], "html": data.get("html", "")})
 
@@ -365,7 +383,22 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
     blocks = []
     blocks_meta = []
     for lb in LayoutBlock.objects.filter(layout=layout).order_by("position", "id"):
-        data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+        pref_filter = (getattr(lb, "preferred_filter_name", "") or "").strip()
+        pref_setting = (getattr(lb, "preferred_setting_name", "") or "").strip()
+        pref_pivot = ""
+        try:
+            if isinstance(lb.settings, dict):
+                pref_pivot = (lb.settings.get("preferred_pivot_name", "") or "").strip()
+        except Exception:
+            pref_pivot = ""
+        allow_overrides = not any([pref_filter, pref_setting, pref_pivot])
+        data = _serialize_layout_block(
+            lb,
+            request,
+            registry=reg,
+            policy=policy,
+            allow_request_overrides=allow_overrides,
+        )
         blocks.append(data)
         blocks_meta.append({
             "id": data["id"],
@@ -494,7 +527,13 @@ def layout_block_add_v2(request: HttpRequest, username: str, slug: str) -> HttpR
     load_specs()
     reg = get_registry()
     policy = PolicyService()
-    data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+    data = _serialize_layout_block(
+        lb,
+        request,
+        registry=reg,
+        policy=policy,
+        allow_request_overrides=False,
+    )
 
     if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest" and request.content_type != "application/json":
         return redirect("layout:layout_design", username=layout.user.username, slug=layout.slug)
@@ -526,7 +565,13 @@ def layout_block_render_v2(request: HttpRequest, username: str, slug: str, lb_id
     load_specs()
     reg = get_registry()
     policy = PolicyService()
-    data = _serialize_layout_block(lb, request, registry=reg, policy=policy)
+    data = _serialize_layout_block(
+        lb,
+        request,
+        registry=reg,
+        policy=policy,
+        allow_request_overrides=False,
+    )
     import json as _json
 
     return HttpResponse(_json.dumps({"html": data.get("html", ""), "block": data}), content_type="application/json")

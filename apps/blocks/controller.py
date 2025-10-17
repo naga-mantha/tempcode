@@ -35,6 +35,7 @@ class BlockController:
         preferred_filter_name: str | None = None,
         preferred_setting_name: str | None = None,
         preferred_pivot_name: str | None = None,
+        allow_request_overrides: bool = True,
     ) -> Dict[str, Any]:
         services = self.spec.services or None
         if not services:
@@ -57,10 +58,13 @@ class BlockController:
                 dom_ns=dom_ns,
                 preferred_filter_name=preferred_filter_name,
                 preferred_pivot_name=preferred_pivot_name or preferred_setting_name,
+                allow_request_overrides=allow_request_overrides,
             )
 
         preferred_filter_name = (preferred_filter_name or "").strip()
         preferred_setting_name = (preferred_setting_name or "").strip()
+
+        query_enabled = bool(allow_request_overrides)
 
         # Resolve filters
         filters: Mapping[str, Any]
@@ -101,7 +105,7 @@ class BlockController:
 
         # Saved table configs (per-user) and filter layout
         block_row = get_block_for_spec(self.spec.id)
-        cfg_id = request.GET.get("config_id")
+        cfg_id = request.GET.get("config_id") if query_enabled else None
         try:
             cfg_id_int = int(cfg_id) if cfg_id else None
         except ValueError:
@@ -123,7 +127,7 @@ class BlockController:
                 active_cfg = match
 
         # Saved filter configs (per-user)
-        filt_cfg_id = request.GET.get("filter_config_id")
+        filt_cfg_id = request.GET.get("filter_config_id") if query_enabled else None
         try:
             filt_cfg_id_int = int(filt_cfg_id) if filt_cfg_id else None
         except ValueError:
@@ -169,7 +173,7 @@ class BlockController:
         allowed_filter_keys = filter_keys
         cleared_filter_keys = set()
         try:
-            raw_cleared = request.GET.getlist("filters.__cleared")
+            raw_cleared = request.GET.getlist("filters.__cleared") if query_enabled else []
         except Exception:
             raw_cleared = []
         allowed_filter_set = {str(k) for k in allowed_filter_keys}
@@ -331,12 +335,14 @@ class BlockController:
         *,
         preferred_filter_name: str | None = None,
         preferred_pivot_name: str | None = None,
+        allow_request_overrides: bool = True,
     ) -> Dict[str, Any]:
         preferred_filter_name = (preferred_filter_name or "").strip()
         preferred_pivot_name = (preferred_pivot_name or "").strip()
         filter_schema_list: List[Dict[str, Any]] = []
         filter_schema: Dict[str, Any] = {}
         filters: Mapping[str, Any] = {}
+        query_enabled = bool(allow_request_overrides)
 
         if services.filter_resolver:
             try:
@@ -379,7 +385,7 @@ class BlockController:
         allowed_filter_keys = filter_keys
 
         try:
-            raw_cleared = request.GET.getlist("filters.__cleared")
+            raw_cleared = request.GET.getlist("filters.__cleared") if query_enabled else []
         except Exception:
             raw_cleared = []
         allowed_filter_set = {str(k) for k in allowed_filter_keys}
@@ -389,7 +395,7 @@ class BlockController:
 
         block_row = get_block_for_spec(self.spec.id)
         filter_configs = list(list_filter_configs(block_row, request.user))
-        cfg_id = request.GET.get("filter_config_id")
+        cfg_id = request.GET.get("filter_config_id") if query_enabled else None
         try:
             cfg_id_int = int(cfg_id) if cfg_id else None
         except ValueError:
@@ -438,7 +444,7 @@ class BlockController:
         filters = prune_filter_values(filters, allowed_filter_keys)
 
         pivot_configs = list(list_pivot_configs(block_row, request.user))
-        pivot_cfg_id = request.GET.get("pivot_config_id")
+        pivot_cfg_id = request.GET.get("pivot_config_id") if query_enabled else None
         try:
             pivot_cfg_id_int = int(pivot_cfg_id) if pivot_cfg_id else None
         except ValueError:
