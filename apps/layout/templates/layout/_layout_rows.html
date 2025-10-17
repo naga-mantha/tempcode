@@ -26,11 +26,11 @@
           </div>
         </div>
         <div class="col-12 col-lg-4">
-          <label class="form-label mb-1 small" for="{{ form.preferred_column_config_name.id_for_label }}">Default Column View</label>
+          <label class="form-label mb-1 small" for="{{ form.preferred_setting_name.id_for_label }}">Default Block Setting</label>
           <div class="d-flex align-items-center gap-2">
-            <div class="flex-grow-1">{{ form.preferred_column_config_name }}</div>
+            <div class="flex-grow-1">{{ form.preferred_setting_name }}</div>
             {% if form.manage_columns_url %}
-              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ form.manage_columns_url }}">Manage views</a>
+              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ form.manage_columns_url }}">Manage settings</a>
             {% endif %}
           </div>
         </div>

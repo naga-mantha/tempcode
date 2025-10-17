@@ -150,7 +150,7 @@ class LayoutBlockForm(forms.ModelForm):
             "title",
             "note",
             "preferred_filter_name",
-            "preferred_column_config_name",
+            "preferred_setting_name",
         ]
 
 
