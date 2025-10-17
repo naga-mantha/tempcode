@@ -44,10 +44,27 @@ def _serialize_layout_block(
         except Exception:
             block_spec = None
 
+    pref_filter_name = getattr(lb, "preferred_filter_name", "") or ""
+    pref_setting_name = getattr(lb, "preferred_setting_name", "") or ""
+    pref_pivot_name = ""
+    try:
+        if isinstance(getattr(lb, "settings", None), dict):
+            pref_pivot_name = lb.settings.get("preferred_pivot_name", "") or ""
+    except Exception:
+        pref_pivot_name = ""
+
+    block_kind = getattr(block_spec, "kind", "") if block_spec else ""
+    ctx: Dict[str, Any] | None = None
     html = "<div class=\"text-muted small\">Unknown block</div>"
     if block_spec is not None:
         try:
-            ctx = BlockController(block_spec, policy).build_context(request, dom_ns=f"lb{lb.id}")
+            ctx = BlockController(block_spec, policy).build_context(
+                request,
+                dom_ns=f"lb{lb.id}",
+                preferred_filter_name=pref_filter_name,
+                preferred_setting_name=pref_setting_name,
+                preferred_pivot_name=pref_pivot_name,
+            )
             template = getattr(block_spec, "template", None) or ""
             if getattr(block_spec, "kind", "") == "table":
                 template = "blocks/table/table_card.html"
@@ -56,6 +73,10 @@ def _serialize_layout_block(
             html = render_to_string(template, ctx, request=request)
         except Exception:
             html = "<div class=\"text-muted small\">Unable to render block</div>"
+
+    dom_id = ""
+    if isinstance(ctx, dict):
+        dom_id = str(ctx.get("dom_id") or "")
 
     return {
         "id": lb.id,
@@ -67,8 +88,11 @@ def _serialize_layout_block(
         "code": lb.block.code if lb and lb.block else "",
         "note": lb.note or "",
         "is_spacer": bool(getattr(lb, "is_spacer", False)),
-        "preferred_filter_name": getattr(lb, "preferred_filter_name", "") or "",
-        "preferred_setting_name": getattr(lb, "preferred_setting_name", "") or "",
+        "preferred_filter_name": pref_filter_name,
+        "preferred_setting_name": pref_setting_name,
+        "preferred_pivot_name": pref_pivot_name,
+        "dom_id": dom_id,
+        "kind": block_kind,
         "html": html,
     }
 
@@ -517,8 +541,8 @@ def layout_block_update_v2(request: HttpRequest, username: str, slug: str, lb_id
     if not (request.user.is_staff or request.user.id == layout.user_id):
         raise Http404()
     lb = get_object_or_404(LayoutBlock, layout=layout, id=lb_id)
-    title = (request.POST.get("title") or "").strip()
-    note = (request.POST.get("note") or "").strip()
+    title_raw = request.POST.get("title")
+    note_raw = request.POST.get("note")
     try:
         import json as _json
 
@@ -532,9 +556,13 @@ def layout_block_update_v2(request: HttpRequest, username: str, slug: str, lb_id
     pref_setting = (pref_setting_raw or "").strip() if pref_setting_raw is not None else None
     pref_filter = (pref_filter_raw or "").strip() if pref_filter_raw is not None else None
     pref_pivot = (pref_pivot_raw or "").strip() if pref_pivot_raw is not None else None
-    lb.title = title
-    lb.note = note
-    update_fields = ["title", "note"]
+    update_fields: List[str] = []
+    if title_raw is not None:
+        lb.title = (title_raw or "").strip()
+        update_fields.append("title")
+    if note_raw is not None:
+        lb.note = (note_raw or "").strip()
+        update_fields.append("note")
     settings_updated = False
     if isinstance(settings_payload, dict):
         lb.settings = settings_payload
@@ -559,7 +587,8 @@ def layout_block_update_v2(request: HttpRequest, username: str, slug: str, lb_id
     if settings_updated:
         if "settings" not in update_fields:
             update_fields.append("settings")
-    lb.save(update_fields=update_fields)
+    if update_fields:
+        lb.save(update_fields=update_fields)
     return HttpResponse(status=204)
 
 
