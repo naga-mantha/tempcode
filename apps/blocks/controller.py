@@ -27,7 +27,15 @@ class BlockController:
     spec: BlockSpec
     policy: PolicyService
 
-    def build_context(self, request: HttpRequest, dom_ns: str | None = None) -> Dict[str, Any]:
+    def build_context(
+        self,
+        request: HttpRequest,
+        dom_ns: str | None = None,
+        *,
+        preferred_filter_name: str | None = None,
+        preferred_setting_name: str | None = None,
+        preferred_pivot_name: str | None = None,
+    ) -> Dict[str, Any]:
         services = self.spec.services or None
         if not services:
             base = f"v2-{self.spec.id.replace('.', '-')}"
@@ -43,7 +51,16 @@ class BlockController:
             }
 
         if self.spec.kind == "pivot":
-            return self._build_pivot_context(request, services, dom_ns=dom_ns)
+            return self._build_pivot_context(
+                request,
+                services,
+                dom_ns=dom_ns,
+                preferred_filter_name=preferred_filter_name,
+                preferred_pivot_name=preferred_pivot_name or preferred_setting_name,
+            )
+
+        preferred_filter_name = (preferred_filter_name or "").strip()
+        preferred_setting_name = (preferred_setting_name or "").strip()
 
         # Resolve filters
         filters: Mapping[str, Any]
@@ -91,6 +108,19 @@ class BlockController:
             cfg_id_int = None
         table_configs = list(list_table_configs(block_row, request.user))
         active_cfg = choose_active_table_config(block_row, request.user, cfg_id_int)
+        if not cfg_id_int and preferred_setting_name:
+            normalized = preferred_setting_name.casefold()
+            match = next(
+                (
+                    cfg
+                    for cfg in table_configs
+                    if isinstance(cfg.name, str)
+                    and cfg.name.strip().casefold() == normalized
+                ),
+                None,
+            )
+            if match is not None:
+                active_cfg = match
 
         # Saved filter configs (per-user)
         filt_cfg_id = request.GET.get("filter_config_id")
@@ -100,6 +130,19 @@ class BlockController:
             filt_cfg_id_int = None
         filter_configs = list(list_filter_configs(block_row, request.user))
         active_filter_cfg = choose_active_filter_config(block_row, request.user, filt_cfg_id_int)
+        if not filt_cfg_id_int and preferred_filter_name:
+            normalized_filter = preferred_filter_name.casefold()
+            filter_match = next(
+                (
+                    cfg
+                    for cfg in filter_configs
+                    if isinstance(cfg.name, str)
+                    and cfg.name.strip().casefold() == normalized_filter
+                ),
+                None,
+            )
+            if filter_match is not None:
+                active_filter_cfg = filter_match
 
         # Build filter schema mapping and attach AJAX choices URLs for selects
         if filter_schema_list:
@@ -280,7 +323,17 @@ class BlockController:
             "frontend_config": frontend_config,
         }
 
-    def _build_pivot_context(self, request: HttpRequest, services, dom_ns: str | None = None) -> Dict[str, Any]:
+    def _build_pivot_context(
+        self,
+        request: HttpRequest,
+        services,
+        dom_ns: str | None = None,
+        *,
+        preferred_filter_name: str | None = None,
+        preferred_pivot_name: str | None = None,
+    ) -> Dict[str, Any]:
+        preferred_filter_name = (preferred_filter_name or "").strip()
+        preferred_pivot_name = (preferred_pivot_name or "").strip()
         filter_schema_list: List[Dict[str, Any]] = []
         filter_schema: Dict[str, Any] = {}
         filters: Mapping[str, Any] = {}
@@ -343,6 +396,19 @@ class BlockController:
             cfg_id_int = None
         # Mirror table behavior: if no param, fall back to user's default/public default/first
         active_filter_cfg = choose_active_filter_config(block_row, request.user, cfg_id_int)
+        if not cfg_id_int and preferred_filter_name:
+            normalized_filter = preferred_filter_name.casefold()
+            filter_match = next(
+                (
+                    cfg
+                    for cfg in filter_configs
+                    if isinstance(cfg.name, str)
+                    and cfg.name.strip().casefold() == normalized_filter
+                ),
+                None,
+            )
+            if filter_match is not None:
+                active_filter_cfg = filter_match
 
         filter_layout = None
         try:
@@ -378,6 +444,19 @@ class BlockController:
         except ValueError:
             pivot_cfg_id_int = None
         active_pivot_cfg = choose_active_pivot_config(block_row, request.user, pivot_cfg_id_int)
+        if not pivot_cfg_id_int and preferred_pivot_name:
+            normalized_pivot = preferred_pivot_name.casefold()
+            pivot_match = next(
+                (
+                    cfg
+                    for cfg in pivot_configs
+                    if isinstance(cfg.name, str)
+                    and cfg.name.strip().casefold() == normalized_pivot
+                ),
+                None,
+            )
+            if pivot_match is not None:
+                active_pivot_cfg = pivot_match
 
         engine_cls = getattr(services, "pivot_engine", None) or DefaultPivotEngine
         engine = engine_cls(self.spec, self.policy) if callable(engine_cls) else DefaultPivotEngine(self.spec, self.policy)

@@ -51,11 +51,45 @@
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <div class="grid-stack" id="grid-edit" style="gap:16px 8px; --gs-gutter-rows:16px; --gs-gutter-cols:8px;">
       {% for b in blocks %}
-        <div class="grid-stack-item" gs-x="{{ b.x|default:0 }}" gs-y="{{ b.y|default:0 }}" gs-w="{{ b.w|default:4 }}" gs-h="{{ b.h|default:2 }}" data-id="{{ b.id }}">
+        <div class="grid-stack-item"
+             gs-x="{{ b.x|default:0 }}"
+             gs-y="{{ b.y|default:0 }}"
+             gs-w="{{ b.w|default:4 }}"
+             gs-h="{{ b.h|default:2 }}"
+             data-id="{{ b.id }}"
+             data-block-id="{{ b.id }}"
+             data-dom-id="{{ b.dom_id|default:'' }}"
+             data-block-kind="{{ b.kind|default:'' }}"
+             data-preferred-filter="{{ b.preferred_filter_name|default_if_none:'' }}"
+             data-preferred-setting="{{ b.preferred_setting_name|default_if_none:'' }}">
           <div class="grid-stack-item-content {% if not b.is_spacer %}card p-2{% endif %}">
             <div class="d-flex justify-content-end">
               <button type="button" class="btn btn-sm btn-outline-danger js-del-widget" data-id="{{ b.id }}">Delete</button>
             </div>
+            {% if not b.is_spacer %}
+              <div class="layout-block-pref-panel small bg-light border rounded p-2 mb-2" data-block-prefs data-block-id="{{ b.id }}" data-block-kind="{{ b.kind|default:'' }}">
+                <div class="fw-semibold mb-1">Block defaults</div>
+                <div class="d-flex flex-wrap align-items-center gap-3" data-role="pref-groups">
+                  <div class="d-flex align-items-center gap-2" data-role="filter-group">
+                    <span class="text-muted">Default filter</span>
+                    <select class="form-select form-select-sm js-block-pref-select js-block-pref-filter"
+                            data-placeholder="-- None --"
+                            data-current="{{ b.preferred_filter_name|default_if_none:'' }}">
+                      <option value="">-- None --</option>
+                    </select>
+                  </div>
+                  <div class="d-flex align-items-center gap-2" data-role="setting-group">
+                    <span class="text-muted">Default setting</span>
+                    <select class="form-select form-select-sm js-block-pref-select js-block-pref-setting"
+                            data-placeholder="-- None --"
+                            data-current="{{ b.preferred_setting_name|default_if_none:'' }}">
+                      <option value="">-- None --</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="small mt-2 text-muted d-none" data-role="pref-status"></div>
+              </div>
+            {% endif %}
             {{ b.html|safe }}
           </div>
         </div>
@@ -75,6 +109,7 @@
     const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
     const addUrl = "{% url 'layout_block_add' username=layout.user.username slug=layout.slug %}";
+    const configsUrlTemplate = "{% url 'layout_block_configs' username=layout.user.username slug=layout.slug lb_id=0 %}";
 
     // CSRF helper
     function getCookie(name) {
@@ -300,6 +335,165 @@
           .finally(function(){ sel.disabled = false; sel.value = ''; });
       });
     })();
+
+    // Per-block default filter/setting controls
+    (function(){
+      const prefPanels = container.querySelectorAll('[data-block-prefs]');
+      if (!prefPanels.length) return;
+
+      const configUrl = function(id){
+        return configsUrlTemplate.replace('/0/', '/' + String(id) + '/');
+      };
+      const updateUrl = function(id){
+        return `${updateUrlBase}${id}/update/`;
+      };
+
+      function namesEqual(a, b){
+        return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+      }
+
+      function populateSelect(select, items, current){
+        if (!select) return;
+        const placeholder = select.dataset.placeholder || '-- None --';
+        select.innerHTML = '';
+        const noneOpt = document.createElement('option');
+        noneOpt.value = '';
+        noneOpt.textContent = placeholder;
+        select.appendChild(noneOpt);
+        let matched = false;
+        (items || []).forEach(function(name){
+          if (typeof name !== 'string') return;
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          if (current && namesEqual(name, current)) {
+            opt.selected = true;
+            matched = true;
+          }
+          select.appendChild(opt);
+        });
+        if (current && !matched) {
+          const opt = document.createElement('option');
+          opt.value = current;
+          opt.textContent = `${current} (missing)`;
+          opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.dataset.ready = '1';
+      }
+
+      function toggleGroup(group, hasOptions){
+        if (!group) return;
+        if (hasOptions) {
+          group.classList.remove('d-none');
+        } else {
+          group.classList.add('d-none');
+        }
+      }
+
+      function setStatus(panel, message, variant){
+        const statusEl = panel.querySelector('[data-role="pref-status"]');
+        if (!statusEl) return;
+        if (!message) {
+          statusEl.classList.add('d-none');
+          statusEl.textContent = '';
+          statusEl.classList.remove('text-danger');
+          statusEl.classList.remove('text-success');
+          return;
+        }
+        statusEl.textContent = message;
+        statusEl.classList.remove('d-none');
+        statusEl.classList.toggle('text-danger', variant === 'error');
+        statusEl.classList.toggle('text-success', variant === 'success');
+      }
+
+      prefPanels.forEach(function(panel){
+        const blockId = parseInt(panel.dataset.blockId || '', 10);
+        if (!Number.isFinite(blockId)) {
+          panel.classList.add('d-none');
+          return;
+        }
+        const filterSelect = panel.querySelector('.js-block-pref-filter');
+        const settingSelect = panel.querySelector('.js-block-pref-setting');
+        const currentFilter = filterSelect ? filterSelect.dataset.current || '' : '';
+        const currentSetting = settingSelect ? settingSelect.dataset.current || '' : '';
+        const kind = (panel.dataset.blockKind || '').toLowerCase();
+        if (filterSelect) {
+          filterSelect.disabled = true;
+        }
+        if (settingSelect) {
+          settingSelect.disabled = true;
+        }
+        fetch(configUrl(blockId), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(resp){ if (!resp.ok) throw new Error('Failed to load options'); return resp.json(); })
+          .then(function(data){
+            const filters = (data && Array.isArray(data.filters)) ? data.filters : [];
+            const settings = (data && Array.isArray(data.settings)) ? data.settings : [];
+            const selected = (data && data.selected) || {};
+            if (filterSelect) {
+              const initial = typeof selected.filter === 'string' && selected.filter ? selected.filter : currentFilter;
+              populateSelect(filterSelect, filters, initial);
+              filterSelect.disabled = filters.length === 0;
+              toggleGroup(panel.querySelector('[data-role="filter-group"]'), filters.length > 0);
+            }
+            if (settingSelect) {
+              let initialSetting = currentSetting;
+              if (typeof selected.setting === 'string' && selected.setting) {
+                initialSetting = selected.setting;
+              } else if (kind === 'pivot' && typeof selected.pivot === 'string' && selected.pivot) {
+                initialSetting = selected.pivot;
+              }
+              populateSelect(settingSelect, settings, initialSetting);
+              settingSelect.disabled = settings.length === 0;
+              toggleGroup(panel.querySelector('[data-role="setting-group"]'), settings.length > 0);
+            }
+            if ((!filters || !filters.length) && (!settings || !settings.length)) {
+              panel.classList.add('d-none');
+            }
+            setStatus(panel, '', null);
+          })
+          .catch(function(){
+            setStatus(panel, 'Unable to load block defaults.', 'error');
+            if (filterSelect) { filterSelect.disabled = true; }
+            if (settingSelect) { settingSelect.disabled = true; }
+          });
+      });
+
+      container.addEventListener('change', function(ev){
+        const select = ev.target.closest('.js-block-pref-select');
+        if (!select || select.dataset.ready !== '1') return;
+        const panel = select.closest('[data-block-prefs]');
+        if (!panel) return;
+        const blockId = parseInt(panel.dataset.blockId || '', 10);
+        if (!Number.isFinite(blockId)) return;
+        const filterSelect = panel.querySelector('.js-block-pref-filter');
+        const settingSelect = panel.querySelector('.js-block-pref-setting');
+        const payload = new URLSearchParams();
+        if (filterSelect) {
+          payload.append('preferred_filter_name', filterSelect.value || '');
+        }
+        if (settingSelect) {
+          payload.append('preferred_setting_name', settingSelect.value || '');
+        }
+        setStatus(panel, 'Saving…', null);
+        fetch(updateUrl(blockId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-CSRFToken': csrftoken || '',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: payload.toString(),
+        }).then(function(resp){
+          if (!resp.ok) throw new Error('Failed to save');
+          setStatus(panel, 'Preferences saved.', 'success');
+          showToast('Saved block defaults', 'success');
+        }).catch(function(){
+          setStatus(panel, 'Unable to save defaults.', 'error');
+          showToast('Failed to save block defaults', 'error');
+        });
+      });
+    })();
   });
 </script>
 <style>
@@ -313,6 +507,8 @@
   .grid-stack .grid-stack-item-content .js-layout-block-root > div[id^="table-"] { flex: 1 1 auto; }
   /* Ensure grid container can expand to full width */
   #grid-edit { width: 100%; max-width: 100%; }
+  .layout-block-pref-panel { background-color: #f8f9fa; }
+  .layout-block-pref-panel select { min-width: 140px; }
 </style>
 {% endblock %}
 
