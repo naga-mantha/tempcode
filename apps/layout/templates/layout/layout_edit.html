@@ -106,10 +106,14 @@
     const container = document.getElementById('grid-edit');
     const detailsForm = document.getElementById('layout-details-form');
     const gridSaveUrl = "{% url 'layout_grid_update' username=layout.user.username slug=layout.slug %}";
-    const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
-    const deleteUrlBase = updateUrlBase;
+    const updateUrlTemplate = "{% url 'layout_block_update' username=layout.user.username slug=layout.slug lb_id=0 %}";
+    const deleteUrlTemplate = "{% url 'layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}";
     const addUrl = "{% url 'layout_block_add' username=layout.user.username slug=layout.slug %}";
     const configsUrlTemplate = "{% url 'layout_block_configs' username=layout.user.username slug=layout.slug lb_id=0 %}";
+
+    function buildBlockUrl(template, id) {
+      return template.replace('/0/', '/' + String(id) + '/');
+    }
 
     // CSRF helper
     function getCookie(name) {
@@ -211,7 +215,7 @@
       const id = parseInt(idStr, 10);
       if (isNaN(id) || !confirm('Delete this block from layout?')) return;
       const itemEl = btn.closest('.grid-stack-item');
-      fetch(`${deleteUrlBase}${id}/delete/`, {
+      fetch(buildBlockUrl(deleteUrlTemplate, id), {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-CSRFToken': csrftoken || '', 'Accept': 'application/json' }
@@ -235,8 +239,7 @@
         pending.set(key, t);
       }
       function doUpdate(id, data){
-        const url = `${updateUrlBase}${id}/update/`;
-        fetch(url, {
+        fetch(buildBlockUrl(updateUrlTemplate, id), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
           body: JSON.stringify(data || {})
@@ -342,10 +345,10 @@
       if (!prefPanels.length) return;
 
       const configUrl = function(id){
-        return configsUrlTemplate.replace('/0/', '/' + String(id) + '/');
+        return buildBlockUrl(configsUrlTemplate, id);
       };
       const updateUrl = function(id){
-        return `${updateUrlBase}${id}/update/`;
+        return buildBlockUrl(updateUrlTemplate, id);
       };
 
       function namesEqual(a, b){
