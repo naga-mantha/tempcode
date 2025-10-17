@@ -33,7 +33,7 @@
 </div>
 
 <template id="gridItemTemplate">
-  <div class="grid-stack-item" data-gs-id="">
+  <div class="grid-stack-item" data-gs-id="" data-block-id="" data-block-kind="">
     <div class="grid-stack-item-content position-relative">
       <div class="layout-tile-controls d-flex gap-2 align-items-center">
         <span class="small text-muted js-config-summary">No defaults</span>
@@ -118,20 +118,26 @@
         });
       }
 
+      const baseQuery = window.location.search || '';
+      function buildBlockUrl(template, id) {
+        const path = template.replace('/0/', '/' + String(id) + '/');
+        return baseQuery ? path + baseQuery : path;
+      }
+
       const urls = {
         save: "{% url 'layout:layout_grid_update' username=layout.user.username slug=layout.slug %}",
         add: "{% url 'layout:layout_block_add' username=layout.user.username slug=layout.slug %}",
         del: function(id) {
-          return "{% url 'layout:layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
+          return buildBlockUrl("{% url 'layout:layout_block_delete' username=layout.user.username slug=layout.slug lb_id=0 %}", id);
         },
         render: function(id) {
-          return "{% url 'layout:layout_block_render' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
+          return buildBlockUrl("{% url 'layout:layout_block_render' username=layout.user.username slug=layout.slug lb_id=0 %}", id);
         },
         update: function(id) {
-          return "{% url 'layout:layout_block_update' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
+          return buildBlockUrl("{% url 'layout:layout_block_update' username=layout.user.username slug=layout.slug lb_id=0 %}", id);
         },
         configs: function(id) {
-          return "{% url 'layout:layout_block_configs' username=layout.user.username slug=layout.slug lb_id=0 %}".replace('/0/', '/' + String(id) + '/');
+          return buildBlockUrl("{% url 'layout:layout_block_configs' username=layout.user.username slug=layout.slug lb_id=0 %}", id);
         }
       };
 
@@ -246,7 +252,10 @@
           } else {
             btn.setAttribute('title', 'Configure filter & setting');
           }
+          btn.dataset.blockId = String(id);
         }
+        root.dataset.prefFilter = prefs.filter || '';
+        root.dataset.prefSetting = prefs.setting || '';
       }
 
       function populateSelect(select, options, selectedValue) {
@@ -400,13 +409,22 @@
           const root = wrapper.closest('.grid-stack-item');
           normalizeCardForDesign(root);
           if (payload && payload.block && payload.block.id !== undefined) {
-            const existingPrefs = getBlockPrefs(payload.block.id);
-            setBlockPrefs(payload.block.id, {
+            const blockId = payload.block.id;
+            const existingPrefs = getBlockPrefs(blockId);
+            const nextPrefs = setBlockPrefs(blockId, {
               title: payload.block.title || payload.block.code || existingPrefs.title || '',
               filter: payload.block.preferred_filter_name || existingPrefs.filter || '',
               setting: payload.block.preferred_setting_name || existingPrefs.setting || '',
             });
-            updateConfigSummary(root, payload.block.id);
+            updateConfigSummary(root, blockId);
+            if (root) {
+              root.dataset.blockId = String(blockId);
+              if (payload.block.kind) {
+                root.dataset.blockKind = payload.block.kind;
+              }
+              root.dataset.prefFilter = nextPrefs.filter || '';
+              root.dataset.prefSetting = nextPrefs.setting || '';
+            }
           }
         }).catch(function(){ /* ignore hydration errors */ });
       }
@@ -504,8 +522,10 @@
         if (!root) { return; }
         const btn = root.querySelector('.js-configure');
         if (!btn) { return; }
+        btn.dataset.blockId = String(id);
         btn.addEventListener('click', function(){
-          openConfigModal(id, btn);
+          const targetId = btn.dataset.blockId ? parseInt(btn.dataset.blockId, 10) : id;
+          openConfigModal(targetId, btn);
         });
         updateConfigSummary(root, id);
       }
@@ -558,13 +578,17 @@
           }).then(function(resp){
             if (!resp.ok) { throw new Error('Failed to save preferences'); }
           }).then(function(){
-            setBlockPrefs(currentConfigBlockId, {
+            const nextPrefs = setBlockPrefs(currentConfigBlockId, {
               filter: configFilterSelect ? (configFilterSelect.value || '') : '',
               setting: configSettingSelect ? (configSettingSelect.value || '') : '',
             });
             if (currentConfigButton) {
               const root = currentConfigButton.closest('.grid-stack-item');
               updateConfigSummary(root, currentConfigBlockId);
+              if (root) {
+                root.dataset.prefFilter = nextPrefs.filter || '';
+                root.dataset.prefSetting = nextPrefs.setting || '';
+              }
             }
             showToast('Preferences saved', 'success');
             if (configModal) { configModal.hide(); }
@@ -621,6 +645,12 @@
           id: String(item.id)
         });
         const element = added && added.el ? added.el : (added instanceof HTMLElement ? added : root);
+        if (element) {
+          element.dataset.blockId = String(item.id);
+          element.dataset.blockKind = item.kind || '';
+          element.dataset.prefFilter = (item && item.preferred_filter_name) || '';
+          element.dataset.prefSetting = (item && item.preferred_setting_name) || '';
+        }
         normalizeCardForDesign(element);
         attachDeleteHandler(element, item.id);
         attachConfigureHandler(element, item.id);
