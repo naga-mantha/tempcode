@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -5,7 +6,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0001_initial'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('blocks', '0009_block_category_block_enabled_block_override_display'),
     ]
 
@@ -20,7 +21,7 @@ class Migration(migrations.Migration):
                 ('visibility', models.CharField(choices=[('private', 'Private'), ('public', 'Public')], default='private', max_length=7)),
                 ('is_default', models.BooleanField(default=False)),
                 ('block', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='table_configs', to='blocks.block')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='accounts.customuser')),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
         ),
         migrations.AddConstraint(

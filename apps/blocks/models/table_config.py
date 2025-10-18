@@ -1,6 +1,6 @@
+from django.conf import settings
 from django.db import models, transaction
 
-from apps.accounts.models.custom_user import CustomUser
 from apps.blocks.models.block import Block
 
 
@@ -13,7 +13,7 @@ class BlockTableConfig(models.Model):
     )
 
     block = models.ForeignKey(Block, on_delete=models.CASCADE, related_name="table_configs")
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     columns = models.JSONField(default=list)  # ordered list of keys
     visibility = models.CharField(max_length=7, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE)
