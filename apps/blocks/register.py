@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from importlib import import_module
+from importlib.util import find_spec
+
 from .registry import register, get_registry
 from .specs import BlockSpec, Services
-from apps.blocks.tables.layouts_table import LayoutsTableSpec
-from apps.blocks.tables.items_table import ItemsTableSpec
-from apps.blocks.pivots.items_pivot import ItemsPivotSpec
+
+_OPTIONAL_SPECS = (
+    ("apps.layout.tables.layouts_table", "LayoutsTableSpec"),
+    ("apps.common.tables.items_table", "ItemsTableSpec"),
+    ("apps.common.pivots.items_pivot", "ItemsPivotSpec"),
+)
 
 _LOADED = False
 
@@ -28,10 +34,13 @@ def load_specs() -> None:
                 description="Minimal V2 block to validate mounts and chrome.",
             )
         )
-    if LayoutsTableSpec.spec.id not in reg:
-        register(LayoutsTableSpec.spec)
-    if ItemsTableSpec.spec.id not in reg:
-        register(ItemsTableSpec.spec)
-    if ItemsPivotSpec.spec.id not in reg:
-        register(ItemsPivotSpec.spec)
+    for module_path, attr_name in _OPTIONAL_SPECS:
+        if find_spec(module_path) is None:
+            continue
+        module = import_module(module_path)
+        spec_container = getattr(module, attr_name, None)
+        block_spec = getattr(spec_container, "spec", None)
+        if block_spec is None or block_spec.id in reg:
+            continue
+        register(block_spec)
     _LOADED = True

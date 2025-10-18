@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-blocks-app"
+version = "0.1.0"
+description = "Reusable Django blocks registry and UI components."
+readme = "README.md"
+authors = [
+    { name = "Blocks Maintainers" }
+]
+license = { text = "Proprietary" }
+requires-python = ">=3.9"
+dependencies = [
+    "Django>=3.2"
+]
+
+[project.urls]
+Homepage = "https://github.com/example/django-blocks-app"
+Source = "https://github.com/example/django-blocks-app"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["apps.blocks", "apps.blocks.*"]
+
+[tool.setuptools.package-data]
+"apps.blocks" = [
+    "templates/**/*.html",
+    "static/**/*",
+    "migrations/*.py",
+    "management/commands/*.py"
+]

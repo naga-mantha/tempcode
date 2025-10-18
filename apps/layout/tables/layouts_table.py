@@ -8,7 +8,7 @@ from django.shortcuts import render
 
 from apps.layout.models import Layout
 from apps.blocks.specs import BlockSpec, Services
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 from apps.blocks.controller import BlockController
 from apps.blocks.services.model_table import (
     SchemaFilterResolver,

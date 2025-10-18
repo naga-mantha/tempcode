@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, Mapping, Sequence, Optional, Tuple, List
 from django.db import models
 
 from .base import FilterResolver as BaseFilterResolver, QueryBuilder as BaseQueryBuilder, ColumnResolver as BaseColumnResolver, Serializer as BaseSerializer
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 from apps.blocks.services.field_catalog import build_field_catalog
 
 

@@ -8,7 +8,7 @@ from django.urls import reverse
 from apps.blocks.controller import BlockController
 from apps.blocks.registry import get_registry
 from apps.blocks.register import load_specs
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.views.decorators.http import require_POST

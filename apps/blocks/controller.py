@@ -7,7 +7,7 @@ from django.http import HttpRequest
 from django.urls import reverse
 
 from apps.blocks.specs import BlockSpec
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 from apps.blocks.options import merge_table_options
 from apps.blocks.services.model_table import prune_filter_schema, prune_filter_values
 from apps.blocks.services.pivot_table import DefaultPivotEngine

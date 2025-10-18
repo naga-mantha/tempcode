@@ -9,7 +9,7 @@ from apps.blocks.register import load_specs
 from apps.blocks.registry import get_registry
 from apps.blocks.configs import get_block_for_spec
 from apps.blocks.services.field_catalog import build_field_catalog
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 
 
 class Command(BaseCommand):
