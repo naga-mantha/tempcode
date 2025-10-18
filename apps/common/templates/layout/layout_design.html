@@ -35,11 +35,6 @@
 <template id="gridItemTemplate">
   <div class="grid-stack-item" data-gs-id="" data-block-id="" data-block-kind="">
     <div class="grid-stack-item-content position-relative">
-      <div class="layout-tile-controls d-flex gap-2 align-items-center">
-        <span class="small text-muted js-config-summary">No defaults</span>
-        <button type="button" class="btn btn-sm btn-outline-secondary js-configure">Configure</button>
-        <button type="button" class="btn btn-sm btn-outline-danger js-delete">Delete</button>
-      </div>
       <div class="js-html"></div>
     </div>
   </div>
@@ -765,29 +760,7 @@
     #gridDesigner .grid-stack-item-content .js-html .card{ margin: 0; }
     #gridDesigner .grid-stack-item-content .js-html .card-body{ height:100%; display:flex; flex-direction:column; }
     #gridDesigner .grid-stack-item-content .js-html [id$='-table']{ height:100% !important; min-height:0; }
-    #gridDesigner .layout-tile-controls{
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      padding: 0.25rem 0.35rem;
-      border-radius: 999px;
-      background-color: rgba(248, 249, 250, 0.95);
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
-    }
-    #gridDesigner .layout-tile-controls .btn{
-      white-space: nowrap;
-    }
-    #gridDesigner .layout-tile-controls .js-config-summary{
-      max-width: 220px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    /* Designer overlay removed to mirror table block appearance */
     #gridDesigner .js-html > *{ height:100%; width:100%; flex: 1 1 auto; }
     /* Nudge Gridstack resize handle inside the tile for both legacy and v10 classes */
     #gridDesigner .grid-stack-item .ui-resizable-se,
