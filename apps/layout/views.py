@@ -202,7 +202,8 @@ def layout_detail(request: HttpRequest, username: str, slug: str) -> HttpRespons
             request,
             registry=reg,
             policy=policy,
-            allow_request_overrides=allow_overrides,
+        # In the designer, always allow query overrides so per-instance selects work
+        allow_request_overrides=True,
         )
         blocks.append(data)
         rendered_blocks.append({"id": data["id"], "html": data.get("html", "")})
@@ -532,7 +533,8 @@ def layout_block_add_v2(request: HttpRequest, username: str, slug: str) -> HttpR
         request,
         registry=reg,
         policy=policy,
-        allow_request_overrides=False,
+        # In designer dynamic render, honor query overrides
+        allow_request_overrides=True,
     )
 
     if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest" and request.content_type != "application/json":
@@ -570,7 +572,8 @@ def layout_block_render_v2(request: HttpRequest, username: str, slug: str, lb_id
         request,
         registry=reg,
         policy=policy,
-        allow_request_overrides=False,
+        # When adding, allow query overrides as well
+        allow_request_overrides=True,
     )
     import json as _json
 

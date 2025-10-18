@@ -528,6 +528,42 @@
           openConfigModal(targetId, btn);
         });
         updateConfigSummary(root, id);
+      // Save header \"View\"/\"Filter\" changes to LayoutBlock without blocking navigation
+      (function attachHeaderAutoPersist(){
+        const container = document.getElementById('gridDesigner');
+        if (!container) { return; }
+        container.addEventListener('change', function(ev){
+          const sel = ev.target && ev.target.closest && ev.target.closest('.js-html .card-header select.form-select');
+          if (!sel) { return; }
+          const isFilter = sel.id && sel.id.indexOf('filterCfgSelect-') === 0;
+          const prefField = isFilter ? 'preferred_filter_name' : 'preferred_setting_name';
+          const tile = sel.closest('.grid-stack-item');
+          const idStr = tile && (tile.getAttribute('data-gs-id') || tile.getAttribute('data-block-id'));
+          const lbId = idStr ? parseInt(idStr, 10) : NaN;
+          if (!Number.isFinite(lbId)) { return; }
+          var text = '';
+          try { text = (sel.options && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].text) || ''; } catch (e) { text = ''; }
+          var cleaned = text.replace(/\s*\(default\)\s*$/i, '').trim();
+          const form = new URLSearchParams();
+          form.append(prefField, cleaned);
+          form.append('csrfmiddlewaretoken', csrftoken || '');
+          try {
+            const blob = new Blob([form.toString()], { type: 'application/x-www-form-urlencoded; charset=UTF-8' });
+            if (navigator && typeof navigator.sendBeacon === 'function') {
+              const url = (typeof urls.update === 'function') ? urls.update(lbId) : urls.update;
+              navigator.sendBeacon(url, blob);
+              return;
+            }
+          } catch (_) { /* fallthrough */ }
+          const url2 = (typeof urls.update === 'function') ? urls.update(lbId) : urls.update;
+          fetch(url2, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken },
+            body: form.toString(),
+            keepalive: true,
+          }).catch(function(){ /* ignore */ });
+        });
+      })();
       }
 
       if (configModalEl && configModalEl.addEventListener) {

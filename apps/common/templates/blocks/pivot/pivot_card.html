@@ -108,11 +108,8 @@
   }
   select.addEventListener('change', function(){
     const params = new URLSearchParams(window.location.search || '');
-    if (this.value) {
-      params.set('pivot_config_id', this.value);
-    } else {
-      params.delete('pivot_config_id');
-    }
+    const key = 'pivot_config_id__{{ dom_id }}';
+    if (this.value) { params.set(key, this.value); } else { params.delete(key); }
     window.location.assign(window.location.pathname + (params.toString() ? ('?' + params.toString()) : ''));
   });
 })();

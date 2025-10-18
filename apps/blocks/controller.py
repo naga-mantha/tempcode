@@ -105,7 +105,17 @@ class BlockController:
 
         # Saved table configs (per-user) and filter layout
         block_row = get_block_for_spec(self.spec.id)
-        cfg_id = request.GET.get("config_id") if query_enabled else None
+        # Support per-instance query overrides using namespaced params first.
+        # Client uses the full domId (e.g., v2-items-table-lb80). Accept both domId and dom_ns.
+        base = f"v2-{self.spec.id.replace('.', '-')}"
+        dom_id_full = f"{base}-{dom_ns}" if dom_ns else base
+        cfg_id = None
+        if query_enabled:
+            cfg_id = request.GET.get(f"config_id__{dom_id_full}")
+            if cfg_id is None and dom_ns:
+                cfg_id = request.GET.get(f"config_id__{dom_ns}")
+            if cfg_id is None:
+                cfg_id = request.GET.get("config_id")
         try:
             cfg_id_int = int(cfg_id) if cfg_id else None
         except ValueError:
@@ -126,8 +136,14 @@ class BlockController:
             if match is not None:
                 active_cfg = match
 
-        # Saved filter configs (per-user)
-        filt_cfg_id = request.GET.get("filter_config_id") if query_enabled else None
+        # Saved filter configs (per-user); prefer per-instance param when present (full domId then ns)
+        filt_cfg_id = None
+        if query_enabled:
+            filt_cfg_id = request.GET.get(f"filter_config_id__{dom_id_full}")
+            if filt_cfg_id is None and dom_ns:
+                filt_cfg_id = request.GET.get(f"filter_config_id__{dom_ns}")
+            if filt_cfg_id is None:
+                filt_cfg_id = request.GET.get("filter_config_id")
         try:
             filt_cfg_id_int = int(filt_cfg_id) if filt_cfg_id else None
         except ValueError:
@@ -395,7 +411,10 @@ class BlockController:
 
         block_row = get_block_for_spec(self.spec.id)
         filter_configs = list(list_filter_configs(block_row, request.user))
-        cfg_id = request.GET.get("filter_config_id") if query_enabled else None
+        ns_filter_key = f"filter_config_id__{dom_ns}" if dom_ns else "filter_config_id"
+        cfg_id = request.GET.get(ns_filter_key) if query_enabled else None
+        if cfg_id is None and query_enabled:
+            cfg_id = request.GET.get("filter_config_id")
         try:
             cfg_id_int = int(cfg_id) if cfg_id else None
         except ValueError:
@@ -444,7 +463,13 @@ class BlockController:
         filters = prune_filter_values(filters, allowed_filter_keys)
 
         pivot_configs = list(list_pivot_configs(block_row, request.user))
-        pivot_cfg_id = request.GET.get("pivot_config_id") if query_enabled else None
+        pivot_cfg_id = None
+        if query_enabled:
+            pivot_cfg_id = request.GET.get(f"pivot_config_id__{dom_id_full}")
+            if pivot_cfg_id is None and dom_ns:
+                pivot_cfg_id = request.GET.get(f"pivot_config_id__{dom_ns}")
+            if pivot_cfg_id is None:
+                pivot_cfg_id = request.GET.get("pivot_config_id")
         try:
             pivot_cfg_id_int = int(pivot_cfg_id) if pivot_cfg_id else None
         except ValueError:

@@ -6,6 +6,14 @@
   const ns = window.v2TableFilters || (window.v2TableFilters = {});
   const IGNORED_FIELDS = new Set(["config_id", "filter_config_id", "pivot_config_id"]);
 
+  function paramName(base, domId) {
+    const clean = String(base || '').trim();
+    if (!domId || !clean) {
+      return clean;
+    }
+    return `${clean}__${domId}`;
+  }
+
   ns._filterKeys = ns._filterKeys || {};
   ns._exportTemplates = ns._exportTemplates || {};
   ns._activeConfigs = ns._activeConfigs || {};
@@ -474,19 +482,19 @@
     const cfgInput = form.querySelector('input[name="config_id"]');
     const cfgVal = cfgInput && cfgInput.value ? cfgInput.value.trim() : "";
     if (hasValue(cfgVal)) {
-      params.set("config_id", cfgVal);
+      params.set(paramName("config_id", domId), cfgVal);
       ns._activeConfigs[domId] = cfgVal;
     } else {
-      params.delete("config_id");
+      params.delete(paramName("config_id", domId));
       delete ns._activeConfigs[domId];
     }
 
     const filterCfgInput = form.querySelector('input[name="filter_config_id"]');
     const filterCfgVal = filterCfgInput && filterCfgInput.value ? filterCfgInput.value.trim() : "";
     if (hasValue(filterCfgVal)) {
-      params.set("filter_config_id", filterCfgVal);
+      params.set(paramName("filter_config_id", domId), filterCfgVal);
     } else {
-      params.delete("filter_config_id");
+      params.delete(paramName("filter_config_id", domId));
     }
 
     appendFormValues(params, form);
@@ -509,9 +517,9 @@
     const filterKeys = getFilterKeys(domId);
     const params = createBaseParams(filterKeys);
     if (hasValue(select.value)) {
-      params.set("filter_config_id", select.value);
+      params.set(paramName("filter_config_id", domId), select.value);
     } else {
-      params.delete("filter_config_id");
+      params.delete(paramName("filter_config_id", domId));
     }
 
     const form = document.getElementById(`v2TableFilterForm-${domId}`);
@@ -556,13 +564,13 @@
 
     const select = document.getElementById(`filterCfgSelect-${domId}`);
     if (select && hasValue(select.value)) {
-      params.set("filter_config_id", select.value);
+      params.set(paramName("filter_config_id", domId), select.value);
     }
 
     const cfgInput = form ? form.querySelector('input[name="config_id"]') : null;
     const cfgVal = cfgInput && cfgInput.value ? cfgInput.value.trim() : "";
     if (hasValue(cfgVal)) {
-      params.set("config_id", cfgVal);
+      params.set(paramName("config_id", domId), cfgVal);
     }
 
     const query = params.toString();
@@ -583,12 +591,12 @@
 
     const activeCfg = ns._activeConfigs[domId];
     if (hasValue(activeCfg)) {
-      params.set("config_id", activeCfg);
+      params.set(paramName("config_id", domId), activeCfg);
     }
 
     const select = document.getElementById(`filterCfgSelect-${domId}`);
     if (select && hasValue(select.value)) {
-      params.set("filter_config_id", select.value);
+      params.set(paramName("filter_config_id", domId), select.value);
     }
 
     const form = document.getElementById(`v2TableFilterForm-${domId}`);
