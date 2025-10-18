@@ -5,9 +5,9 @@ from django.urls import path
 from . import views
 
 app_name = "blocks"
-from apps.blocks.tables.layouts_table import render_layouts_table
-from apps.blocks.tables.items_table import render_items_table
-from apps.blocks.pivots.items_pivot import render_items_pivot
+from apps.layout.tables.layouts_table import render_layouts_table
+from apps.common.tables.items_table import render_items_table
+from apps.common.pivots.items_pivot import render_items_pivot
 
 
 app_name = "blocks"

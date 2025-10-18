@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from .registry import register, get_registry
 from .specs import BlockSpec, Services
-from apps.blocks.tables.layouts_table import LayoutsTableSpec
-from apps.blocks.tables.items_table import ItemsTableSpec
-from apps.blocks.pivots.items_pivot import ItemsPivotSpec
+from apps.layout.tables.layouts_table import LayoutsTableSpec
+from apps.common.tables.items_table import ItemsTableSpec
+from apps.common.pivots.items_pivot import ItemsPivotSpec
 
 _LOADED = False
 
