@@ -1,14 +1,11 @@
 from __future__ import annotations
 
+from importlib import import_module
+from importlib.util import find_spec
+
 from django.urls import path
 
 from . import views
-
-app_name = "blocks"
-from apps.layout.tables.layouts_table import render_layouts_table
-from apps.common.tables.items_table import render_items_table
-from apps.common.pivots.items_pivot import render_items_pivot
-
 
 app_name = "blocks"
 
@@ -42,8 +39,19 @@ urlpatterns = [
     path("pivot/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_pivot_config, name="duplicate_pivot_config"),
     path("pivot/delete/<str:spec_id>/<int:config_id>", views.delete_pivot_config, name="delete_pivot_config"),
     path("pivot/make_default/<str:spec_id>/<int:config_id>", views.make_default_pivot_config, name="make_default_pivot_config"),
-    # Demo table block (V2)
-    path("table/layouts", render_layouts_table, name="table_layouts"),
-    path("table/items", render_items_table, name="table_items"),
-    path("pivot/items", render_items_pivot, name="pivot_items"),
 ]
+
+_OPTIONAL_ROUTES = (
+    ("apps.layout.tables.layouts_table", "render_layouts_table", "table/layouts", "table_layouts"),
+    ("apps.common.tables.items_table", "render_items_table", "table/items", "table_items"),
+    ("apps.common.pivots.items_pivot", "render_items_pivot", "pivot/items", "pivot_items"),
+)
+
+for module_path, attr_name, route, name in _OPTIONAL_ROUTES:
+    if find_spec(module_path) is None:
+        continue
+    module = import_module(module_path)
+    view = getattr(module, attr_name, None)
+    if view is None:
+        continue
+    urlpatterns.append(path(route, view, name=name))
