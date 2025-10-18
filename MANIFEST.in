@@ -1,0 +1,5 @@
+include README.md
+recursive-include apps/blocks/templates *.html
+recursive-include apps/blocks/static *
+recursive-include apps/blocks/migrations *.py
+recursive-include apps/blocks/management *.py
