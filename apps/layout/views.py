@@ -384,6 +384,50 @@ def layout_design(request: HttpRequest, username: str, slug: str) -> HttpRespons
     blocks = []
     blocks_meta = []
     for lb in LayoutBlock.objects.filter(layout=layout).order_by("position", "id"):
+        # Persist header selections from query params into LayoutBlock defaults (server-side, avoids client race)
+        try:
+            base = "v2-" + str(getattr(lb.block, "code", "")).replace(".", "-")
+            dom_ns = f"lb{lb.id}"
+            dom_id_full = f"{base}-{dom_ns}"
+            from apps.blocks.configs import list_table_configs, list_filter_configs
+            # Table view config
+            cfg_key_full = f"config_id__{dom_id_full}"
+            cfg_key_ns = f"config_id__{dom_ns}"
+            raw_cfg = request.GET.get(cfg_key_full) or request.GET.get(cfg_key_ns) or None
+            cfg_id = None
+            try:
+                cfg_id = int(raw_cfg) if raw_cfg is not None else None
+            except (TypeError, ValueError):
+                cfg_id = None
+            if cfg_id:
+                try:
+                    cfgs = list(list_table_configs(lb.block, request.user))
+                    match = next((c for c in cfgs if getattr(c, "id", None) == cfg_id), None)
+                    if match and isinstance(getattr(match, "name", None), str):
+                        lb.preferred_setting_name = match.name.strip()
+                        lb.save(update_fields=["preferred_setting_name"])  # persist
+                except Exception:
+                    pass
+            # Filter config
+            f_key_full = f"filter_config_id__{dom_id_full}"
+            f_key_ns = f"filter_config_id__{dom_ns}"
+            raw_f = request.GET.get(f_key_full) or request.GET.get(f_key_ns) or None
+            f_id = None
+            try:
+                f_id = int(raw_f) if raw_f is not None else None
+            except (TypeError, ValueError):
+                f_id = None
+            if f_id:
+                try:
+                    fcfgs = list(list_filter_configs(lb.block, request.user))
+                    fmatch = next((c for c in fcfgs if getattr(c, "id", None) == f_id), None)
+                    if fmatch and isinstance(getattr(fmatch, "name", None), str):
+                        lb.preferred_filter_name = fmatch.name.strip()
+                        lb.save(update_fields=["preferred_filter_name"])  # persist
+                except Exception:
+                    pass
+        except Exception:
+            pass
         pref_filter = (getattr(lb, "preferred_filter_name", "") or "").strip()
         pref_setting = (getattr(lb, "preferred_setting_name", "") or "").strip()
         pref_pivot = ""
