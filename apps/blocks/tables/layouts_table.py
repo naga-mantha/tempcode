@@ -17,7 +17,7 @@ from apps.blocks.services.model_table import (
     ModelSerializer,
 )
 from apps.blocks.services.export_options import DefaultExportOptions
-from apps.blocks.filters import multiselect_filter, text_filter
+from apps.common.filters.schemas import text_filter, multiselect_filter
 
 
 """V2 Layouts table spec using schema-driven services (no hard-coded filters).

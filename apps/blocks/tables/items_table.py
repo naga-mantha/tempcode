@@ -7,14 +7,11 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from apps.blocks.specs import BlockSpec, Services
-from apps.blocks.filters import (
-    item_choices,
-    item_group_choices,
-    item_type_choices,
-    multiselect_filter,
-    text_filter,
-)
-from apps.blocks.models.item import Item
+from apps.common.models.items import Item
+from apps.common.filters.schemas import text_filter, multiselect_filter
+from apps.common.filters.item_groups import item_group_choices
+from apps.common.filters.item_types import item_type_choices
+from apps.common.filters.items import item_choices
 from apps.blocks.policy import PolicyService
 from apps.blocks.controller import BlockController
 from apps.blocks.services.model_table import (

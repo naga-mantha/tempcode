@@ -15,9 +15,18 @@ from apps.blocks.models.field_display_rule import FieldDisplayRule
 # in Manage Columns. The raw "*_id" DB columns are not separate model
 # fields and are therefore not necessary to list here.
 DEFAULT_CONFIG: dict[str, list[str]] = {
-    "blocks.Item": ["item_group", "type"],
-    "blocks.ItemGroup": [],
-    "blocks.ItemType": [],
+    "common.Item": ["workflow", "workflow_state"],
+    "common.BusinessPartner": ["workflow", "workflow_state"],
+    "common.PurchaseOrder": ["workflow", "workflow_state"],
+    "common.PurchaseOrderLine": ["workflow", "workflow_state"],
+    "common.Receipt": ["workflow", "workflow_state"],
+    "common.ReceiptLine": ["workflow", "workflow_state"],
+    "common.PlannedPurchaseOrder": ["workflow", "workflow_state"],
+    "common.PurchaseMrpMessage": ["workflow", "workflow_state"],
+    "common.ItemGroupType": ["workflow", "workflow_state"],
+    "common.Program": ["workflow", "workflow_state"],
+    "common.ItemGroup": ["workflow", "workflow_state"],
+    "common.ItemType": ["workflow", "workflow_state"],
 }
 
 
@@ -26,7 +35,8 @@ class Command(BaseCommand):
         "Set FieldDisplayRule.is_excluded=True for specified model fields.\n\n"
         "Provide a JSON mapping of model labels to field lists, e.g.:\n"
         "  {\n"
-        "    \"blocks.Item\": [\"item_group\", \"type\"]\n"
+        "    \"common.ReceiptLine\": [\"workflow\", \"workflow_state\"],\n"
+        "    \"common.PurchaseOrderLine\": [\"workflow\", \"workflow_state\"]\n"
         "  }\n\n"
         "Fields that do not exist on the model are reported and skipped."
     )

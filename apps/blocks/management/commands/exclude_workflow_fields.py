@@ -5,9 +5,18 @@ from apps.blocks.models.field_display_rule import FieldDisplayRule
 
 
 TARGET_MODELS = [
-    "blocks.Item",
-    "blocks.ItemGroup",
-    "blocks.ItemType",
+    "common.Item",
+    "common.BusinessPartner",
+    "common.PurchaseOrder",
+    "common.PurchaseOrderLine",
+    "common.Receipt",
+    "common.ReceiptLine",
+    "common.PlannedPurchaseOrder",
+    "common.PurchaseMrpMessage",
+    "common.ItemGroupType",
+    "common.Program",
+    "common.ItemGroup",
+    "common.ItemType",
 ]
 
 
