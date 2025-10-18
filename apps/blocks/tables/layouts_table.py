@@ -8,7 +8,7 @@ from django.shortcuts import render
 
 from apps.layout.models import Layout
 from apps.blocks.specs import BlockSpec, Services
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 from apps.blocks.controller import BlockController
 from apps.blocks.services.model_table import (
     SchemaFilterResolver,
@@ -17,7 +17,7 @@ from apps.blocks.services.model_table import (
     ModelSerializer,
 )
 from apps.blocks.services.export_options import DefaultExportOptions
-from apps.common.filters.schemas import text_filter, multiselect_filter
+from apps.blocks.filters import multiselect_filter, text_filter
 
 
 """V2 Layouts table spec using schema-driven services (no hard-coded filters).

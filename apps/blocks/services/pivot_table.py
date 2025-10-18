@@ -9,7 +9,7 @@ from django.db.models import Avg, Count, Max, Min, Sum
 from django.db.models.functions import TruncDate, TruncMonth, TruncQuarter, TruncYear
 
 from apps.blocks.models.pivot_config import PivotConfig
-from apps.policy.service import PolicyService
+from apps.blocks.policy import PolicyService
 
 
 @dataclass
