@@ -38,11 +38,6 @@ class BlockController:
         allow_request_overrides: bool = True,
     ) -> Dict[str, Any]:
         services = self.spec.services or None
-        # print("Building context for spec:", self.spec.id)
-        # print("Spec:", self.spec)
-        # print("Policy:", self.policy)
-        # print("Preferred filter name:", preferred_filter_name)
-        # print("Preferred setting name:", preferred_setting_name)
         # if not services:
         #     base = self.spec.id.replace('.', '-')
         #     dom_base = f"{base}-{dom_ns}" if dom_ns else base

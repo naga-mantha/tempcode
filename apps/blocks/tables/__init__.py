@@ -1,2 +1,0 @@
-"""Table block implementations."""
-
