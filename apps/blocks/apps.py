@@ -5,7 +5,6 @@ class BlocksConfig(AppConfig):
     name = "apps.blocks"
 
     def ready(self):
-        # Initialize v2-style specs into the registry
         try:
             from .register import load_specs
             load_specs()

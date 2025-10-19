@@ -4,7 +4,7 @@ from .registry import get_registry
 _LOADED = False
 
 def load_specs() -> None:
-    """Register a minimal set of V2 specs (idempotent)."""
+    """Register a minimal set of specs (idempotent)."""
     global _LOADED
     if _LOADED:
         return
