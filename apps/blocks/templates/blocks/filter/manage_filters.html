@@ -31,9 +31,7 @@
         </select>
       </form>
       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
-      {% if spec_id == 'items.table' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_items' %}">Table Link</a>
-      {% elif spec_id == 'layouts.table' %}
+      {% if spec_id == 'layouts.table' %}
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:table_layouts' %}">Table Link</a>
       {% else %}
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Table Link</a>
