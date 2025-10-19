@@ -31,11 +31,7 @@
         </select>
       </form>
       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="history.back()">Back</button>
-      {% if spec_id == 'items.pivot' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:pivot_items' %}">Pivot Link</a>
-      {% else %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
-      {% endif %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
     </div>
   </div>
 
