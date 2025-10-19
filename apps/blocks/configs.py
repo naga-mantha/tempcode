@@ -1,19 +1,14 @@
 from __future__ import annotations
-
-from typing import Iterable, List, Optional, Sequence
-
+from typing import Iterable, Optional
 from django.db.models import Q, Case, When, IntegerField
-
 from apps.blocks.models.block import Block
 from apps.blocks.models.table_config import BlockTableConfig
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.models.pivot_config import PivotConfig
 
-
 def get_block_for_spec(spec_id: str) -> Block:
     obj, _ = Block.objects.get_or_create(code=spec_id, defaults={"name": spec_id, "description": ""})
     return obj
-
 
 def list_table_configs(block: Block, user) -> Iterable[BlockTableConfig]:
     qs = BlockTableConfig.objects.filter(block=block).filter(Q(user=user) | Q(visibility=BlockTableConfig.VISIBILITY_PUBLIC))
@@ -25,9 +20,7 @@ def list_table_configs(block: Block, user) -> Iterable[BlockTableConfig]:
         )
     ).order_by("_vis_order", "name")
 
-
 def list_filter_configs(block: Block, user) -> Iterable[BlockFilterConfig]:
-    from django.db.models import Q, Case, When, IntegerField
     qs = BlockFilterConfig.objects.filter(block=block).filter(Q(user=user) | Q(visibility=BlockFilterConfig.VISIBILITY_PUBLIC))
     return qs.annotate(
         _vis_order=Case(
@@ -36,7 +29,6 @@ def list_filter_configs(block: Block, user) -> Iterable[BlockFilterConfig]:
             output_field=IntegerField(),
         )
     ).order_by("_vis_order", "name")
-
 
 def choose_active_table_config(block: Block, user, config_id: Optional[int]) -> Optional[BlockTableConfig]:
     qs = list_table_configs(block, user)
@@ -53,7 +45,6 @@ def choose_active_table_config(block: Block, user, config_id: Optional[int]) -> 
         or qs.filter(visibility=BlockTableConfig.VISIBILITY_PUBLIC).first()
     )
 
-
 def choose_active_filter_config(block: Block, user, config_id: Optional[int]) -> Optional[BlockFilterConfig]:
     qs = list_filter_configs(block, user)
     if config_id:
@@ -68,8 +59,6 @@ def choose_active_filter_config(block: Block, user, config_id: Optional[int]) ->
         or qs.filter(visibility=BlockFilterConfig.VISIBILITY_PUBLIC).first()
     )
 
-
-
 def list_pivot_configs(block: Block, user) -> Iterable[PivotConfig]:
     qs = PivotConfig.objects.filter(block=block).filter(Q(user=user) | Q(visibility=PivotConfig.VISIBILITY_PUBLIC))
     return qs.annotate(
@@ -79,8 +68,6 @@ def list_pivot_configs(block: Block, user) -> Iterable[PivotConfig]:
             output_field=IntegerField(),
         )
     ).order_by("_vis_order", "name")
-
-
 
 def choose_active_pivot_config(block: Block, user, config_id: Optional[int]) -> Optional[PivotConfig]:
     qs = list_pivot_configs(block, user)

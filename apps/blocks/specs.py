@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional, Sequence
-
 
 @dataclass(frozen=True)
 class Services:
@@ -12,7 +10,6 @@ class Services:
     serializer: Optional[type] = None
     export_options: Optional[type] = None
     pivot_engine: Optional[type] = None
-
 
 @dataclass(frozen=True)
 class BlockSpec:

@@ -38,18 +38,23 @@ class BlockController:
         allow_request_overrides: bool = True,
     ) -> Dict[str, Any]:
         services = self.spec.services or None
-        if not services:
-            base = f"v2-{self.spec.id.replace('.', '-')}"
-            dom_base = f"{base}-{dom_ns}" if dom_ns else base
-            return {
-                "title": self.spec.name,
-                "spec_id": self.spec.id,
-                "dom_id": dom_base,
-                "dom_table_id": f"{dom_base}-table",
-                "dom_wrapper_id": f"{dom_base}-card",
-                "refresh_url": reverse("blocks:render_spec", args=[self.spec.id]),
-                "data_url": reverse("blocks:data_spec", args=[self.spec.id]),
-            }
+        # print("Building context for spec:", self.spec.id)
+        # print("Spec:", self.spec)
+        # print("Policy:", self.policy)
+        # print("Preferred filter name:", preferred_filter_name)
+        # print("Preferred setting name:", preferred_setting_name)
+        # if not services:
+        #     base = f"v2-{self.spec.id.replace('.', '-')}"
+        #     dom_base = f"{base}-{dom_ns}" if dom_ns else base
+        #     return {
+        #         "title": self.spec.name,
+        #         "spec_id": self.spec.id,
+        #         "dom_id": dom_base,
+        #         "dom_table_id": f"{dom_base}-table",
+        #         "dom_wrapper_id": f"{dom_base}-card",
+        #         "refresh_url": reverse("blocks:render_spec", args=[self.spec.id]),
+        #         "data_url": reverse("blocks:data_spec", args=[self.spec.id]),
+        #     }
 
         if self.spec.kind == "pivot":
             return self._build_pivot_context(
@@ -106,9 +111,10 @@ class BlockController:
         # Saved table configs (per-user) and filter layout
         block_row = get_block_for_spec(self.spec.id)
         # Support per-instance query overrides using namespaced params first.
-        # Client uses the full domId (e.g., v2-items-table-lb80). Accept both domId and dom_ns.
+        # Client uses the full domId. Accept both domId and dom_ns.
         base = f"v2-{self.spec.id.replace('.', '-')}"
         dom_id_full = f"{base}-{dom_ns}" if dom_ns else base
+
         cfg_id = None
         if query_enabled:
             cfg_id = request.GET.get(f"config_id__{dom_id_full}")
@@ -360,6 +366,10 @@ class BlockController:
         filters: Mapping[str, Any] = {}
         query_enabled = bool(allow_request_overrides)
 
+        base = f"v2-{self.spec.id.replace('.', '-')}"
+        dom_base = f"{base}-{dom_ns}" if dom_ns else base
+        dom_id_full = dom_base
+
         if services.filter_resolver:
             try:
                 resolver = services.filter_resolver(self.spec)
@@ -541,8 +551,6 @@ class BlockController:
         excel_download_options = dict(download_options.get("excel") or {})
         pdf_download_options = dict(download_options.get("pdf") or {})
 
-        base = f"v2-{self.spec.id.replace('.', '-')}"
-        dom_base = f"{base}-{dom_ns}" if dom_ns else base
         refresh_url = reverse("blocks:render_spec", args=[self.spec.id])
         export_url = reverse("blocks:export_spec", args=[self.spec.id, "csv"])
 

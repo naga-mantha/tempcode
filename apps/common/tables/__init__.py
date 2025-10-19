@@ -1,0 +1,1 @@
+from apps.common.tables.items_table import render_items_table

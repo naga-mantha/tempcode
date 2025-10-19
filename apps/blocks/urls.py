@@ -41,17 +41,17 @@ urlpatterns = [
     path("pivot/make_default/<str:spec_id>/<int:config_id>", views.make_default_pivot_config, name="make_default_pivot_config"),
 ]
 
-_OPTIONAL_ROUTES = (
-    ("apps.layout.tables.layouts_table", "render_layouts_table", "table/layouts", "table_layouts"),
-    ("apps.common.tables.items_table", "render_items_table", "table/items", "table_items"),
-    ("apps.common.pivots.items_pivot", "render_items_pivot", "pivot/items", "pivot_items"),
-)
-
-for module_path, attr_name, route, name in _OPTIONAL_ROUTES:
-    if find_spec(module_path) is None:
-        continue
-    module = import_module(module_path)
-    view = getattr(module, attr_name, None)
-    if view is None:
-        continue
-    urlpatterns.append(path(route, view, name=name))
+# _OPTIONAL_ROUTES = (
+#     ("apps.layout.tables.layouts_table", "render_layouts_table", "table/layouts", "table_layouts"),
+#     ("apps.common.tables.items_table", "render_items_table", "table/items", "table_items"),
+#     ("apps.common.pivots.items_pivot", "render_items_pivot", "pivot/items", "pivot_items"),
+# )
+#
+# for module_path, attr_name, route, name in _OPTIONAL_ROUTES:
+#     if find_spec(module_path) is None:
+#         continue
+#     module = import_module(module_path)
+#     view = getattr(module, attr_name, None)
+#     if view is None:
+#         continue
+#     urlpatterns.append(path(route, view, name=name))
