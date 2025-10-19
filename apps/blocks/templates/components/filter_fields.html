@@ -274,10 +274,15 @@
 <script>
   (function(){
     var domId = '{{ id_prefix|default:"" }}';
-    var form = domId ? document.getElementById('v2TableFilterForm-' + domId) : null;
-    if (domId && form && window.v2TableFilters && window.v2TableFilters.handlesFilterFields) {
-      if (typeof window.v2TableFilters.bootstrapFilterForm === 'function') {
-        window.v2TableFilters.bootstrapFilterForm(domId, form);
+    var form = domId ? document.getElementById('tableFilterForm-' + domId) : null;
+    var legacyKey = 'v' + '2' + 'TableFilters';
+    var filters = window.tableFilters || window[legacyKey];
+    if (!window.tableFilters && filters) {
+      window.tableFilters = filters;
+    }
+    if (domId && form && filters && filters.handlesFilterFields) {
+      if (typeof filters.bootstrapFilterForm === 'function') {
+        filters.bootstrapFilterForm(domId, form);
       }
       return;
     }

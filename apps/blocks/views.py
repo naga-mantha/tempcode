@@ -267,7 +267,7 @@ def choices_spec(request: HttpRequest, spec_id: str, field: str) -> HttpResponse
         filt_fp = ":".join(f"{k}={v}" for k, v in sorted(filters.items()))
     except Exception:
         filt_fp = ""
-    cache_key = f"v2:choices:{spec_id}:{field}:{q.lower()}:{filt_fp}"
+    cache_key = f"choices:{spec_id}:{field}:{q.lower()}:{filt_fp}"
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse({"results": cached})

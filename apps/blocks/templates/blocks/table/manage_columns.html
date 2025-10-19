@@ -220,7 +220,7 @@
     try {
       if (window.Sortable) {
         const groupName = 'cols';
-        window.__v2AvailSort = new Sortable(availableList, {
+        window.__availSort = new Sortable(availableList, {
           group: { name: groupName, put: function(to, from, dragged){
             // Do not allow dropping mandatory fields into Available
             try { return dragged.getAttribute('data-mandatory') !== '1'; } catch(e){ return true; }
@@ -228,7 +228,7 @@
           animation: 150,
           swapThreshold: 0.65
         });
-        window.__v2SelSort = new Sortable(selectedList, {
+        window.__selSort = new Sortable(selectedList, {
           group: { name: groupName, pull: true, put: true },
           animation: 150,
           swapThreshold: 0.65,

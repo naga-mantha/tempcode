@@ -44,7 +44,7 @@ class BlockController:
         # print("Preferred filter name:", preferred_filter_name)
         # print("Preferred setting name:", preferred_setting_name)
         # if not services:
-        #     base = f"v2-{self.spec.id.replace('.', '-')}"
+        #     base = self.spec.id.replace('.', '-')
         #     dom_base = f"{base}-{dom_ns}" if dom_ns else base
         #     return {
         #         "title": self.spec.name,
@@ -112,7 +112,7 @@ class BlockController:
         block_row = get_block_for_spec(self.spec.id)
         # Support per-instance query overrides using namespaced params first.
         # Client uses the full domId. Accept both domId and dom_ns.
-        base = f"v2-{self.spec.id.replace('.', '-')}"
+        base = self.spec.id.replace('.', '-')
         dom_id_full = f"{base}-{dom_ns}" if dom_ns else base
 
         cfg_id = None
@@ -295,7 +295,7 @@ class BlockController:
                 ser = services.serializer()
             rows = list(ser.serialize_rows(qs, columns, user=request.user, policy=self.policy))
 
-        base = f"v2-{self.spec.id.replace('.', '-')}"
+        base = self.spec.id.replace('.', '-')
         dom_base = f"{base}-{dom_ns}" if dom_ns else base
         refresh_url = reverse("blocks:render_spec", args=[self.spec.id])
         data_url = reverse("blocks:data_spec", args=[self.spec.id])
@@ -366,7 +366,7 @@ class BlockController:
         filters: Mapping[str, Any] = {}
         query_enabled = bool(allow_request_overrides)
 
-        base = f"v2-{self.spec.id.replace('.', '-')}"
+        base = self.spec.id.replace('.', '-')
         dom_base = f"{base}-{dom_ns}" if dom_ns else base
         dom_id_full = dom_base
 
