@@ -14,7 +14,7 @@ from apps.blocks.policy import PolicyService
 
 class Command(BaseCommand):
     help = (
-        "Sync V2 table configs (columns) with current FieldDisplay rules: "
+        "Sync table configs (columns) with current FieldDisplay rules: "
         "drop newly-excluded fields, inject newly-mandatory fields."
     )
 

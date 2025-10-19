@@ -1,2 +1,2 @@
-"""Service interfaces for V2 blocks."""
+"""Service interfaces for blocks."""
 

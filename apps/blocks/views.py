@@ -467,7 +467,7 @@ def save_filter_config(request: HttpRequest, spec_id: str) -> HttpResponse:
 
 @login_required
 def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """Manage Filters page (V2): list/rename/duplicate/delete/make-default filter configs.
+    """Manage Filters page: list/rename/duplicate/delete/make-default filter configs.
 
     Also links to Filter Layout (per-user) and Default Filter Layout (admin).
     """
@@ -492,7 +492,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         active_cfg = choose_active_filter_config(block, request.user, cfg_id_int)
     else:
         active_cfg = None
-    # Build filter schema (V2) for render + load per-user/default layout
+    # Build filter schema for render + load per-user/default layout
     services = spec.services or None
     schema_list = []
     if services and services.filter_resolver:
@@ -515,7 +515,7 @@ def manage_filters(request: HttpRequest, spec_id: str) -> HttpResponse:
         for s in (schema_list or [])
         if isinstance(s, dict) and s.get("key")
     ]
-    # Build mapping for template include (key -> cfg) and attach V2 choices URLs
+    # Build mapping for template include (key -> cfg) and attach choices URLs
     from django.urls import reverse
     filter_schema = {}
     for s in (schema_list or []):
@@ -848,7 +848,7 @@ def export_spec(request: HttpRequest, spec_id: str, fmt: str) -> HttpResponse:
 
 @login_required
 def manage_columns(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """Manage Columns page (V2) using SortableJS.
+    """Manage Columns page using SortableJS.
 
     Shows available fields (policy-pruned) and selected fields (current view).
     """
@@ -1263,9 +1263,9 @@ def make_default_pivot_config(request: HttpRequest, spec_id: str, config_id: int
 
 @login_required
 def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """V2-native Filter Layout (per-user) for a spec.
+    """Filter Layout (per-user) for a spec.
 
-    Uses V2 filter schema as the available fields source.
+    Uses filter schema as the available fields source.
     """
     load_specs()
     reg = get_registry()
@@ -1327,7 +1327,7 @@ def manage_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
 
 @login_required
 def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """V2-native Default Filter Layout (admin-only) for a spec."""
+    """Default Filter Layout (admin-only) for a spec."""
     if not request.user.is_staff:
         raise Http404()
     load_specs()
@@ -1383,7 +1383,7 @@ def manage_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResp
 @login_required
 @require_POST
 def save_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """Save per-user Filter Layout for a spec (V2)."""
+    """Save per-user Filter Layout for a spec."""
     from apps.blocks.configs import get_block_for_spec
     from apps.blocks.models.block_filter_layout import BlockFilterLayout
     block = get_block_for_spec(spec_id)
@@ -1399,7 +1399,7 @@ def save_filter_layout(request: HttpRequest, spec_id: str) -> HttpResponse:
 @login_required
 @require_POST
 def save_filter_layout_default(request: HttpRequest, spec_id: str) -> HttpResponse:
-    """Save default Filter Layout (admin-only) for a spec (V2)."""
+    """Save default Filter Layout (admin-only) for a spec."""
     if not request.user.is_staff:
         return HttpResponse(status=403)
     from apps.blocks.configs import get_block_for_spec

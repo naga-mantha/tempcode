@@ -8,10 +8,10 @@ from apps.blocks.register import load_specs
 
 
 class Command(BaseCommand):
-    help = "Sync V2 BlockSpec registry into Block rows (DB-wins for display fields)."
+    help = "Sync BlockSpec registry into Block rows (DB-wins for display fields)."
 
     def handle(self, *args, **options):
-        # Load V2 specs (registers into registry)
+        # Load specs (registers into registry)
         load_specs()
         registry = get_registry()
 

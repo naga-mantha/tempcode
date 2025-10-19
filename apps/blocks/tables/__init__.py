@@ -1,2 +1,2 @@
-"""Table block implementations (V2)."""
+"""Table block implementations."""
 
