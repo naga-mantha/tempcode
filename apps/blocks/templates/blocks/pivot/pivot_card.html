@@ -1,10 +1,10 @@
 {% load dict_extras %}
 
-<script type="application/json" id="v2-table-config-{{ dom_id }}">
+<script type="application/json" id="table-config-{{ dom_id }}">
   {{ frontend_config|tojson }}
 </script>
 
-<div id="{{ dom_wrapper_id }}" class="card shadow-sm" data-v2-table-root="{{ dom_id }}">
+<div id="{{ dom_wrapper_id }}" class="card shadow-sm" data-table-root="{{ dom_id }}">
   <div class="card-header d-flex justify-content-between align-items-center">
     <div class="fw-semibold">{{ title }}</div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -32,7 +32,7 @@
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
       <span class="mx-1 text-muted">&mdash;</span>
       <label class="mb-0 small text-muted">Filter</label>
-      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" data-v2-filter-select data-dom-id="{{ dom_id }}">
+      <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" data-filter-select data-dom-id="{{ dom_id }}">
         <option value="">(None)</option>
         {% if filter_configs %}
           <optgroup label="Private filters">
@@ -54,15 +54,14 @@
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_filters' spec_id %}">Filter Settings</a>
       <span class="mx-1 text-muted">&mdash;</span>
       <div class="btn-group" role="group" aria-label="Exports">
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-v2-export-excel data-dom-id="{{ dom_id }}">Export Excel</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-v2-export-pdf data-dom-id="{{ dom_id }}">Export PDF</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-export-excel data-dom-id="{{ dom_id }}">Export Excel</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-export-pdf data-dom-id="{{ dom_id }}">Export PDF</button>
       </div>
-      <span class="text-muted small">V2</span>
     </div>
   </div>
   <div class="card-body">
     <div class="htmx-indicator spinner-border spinner-border-sm text-secondary" role="status" style="display:none"></div>
-    <form id="v2TableFilterForm-{{ dom_id }}" data-v2-filter-form data-dom-id="{{ dom_id }}">
+    <form id="tableFilterForm-{{ dom_id }}" data-filter-form data-dom-id="{{ dom_id }}">
       <input type="hidden" name="pivot_config_id" value="{{ active_pivot_config_id|default:'' }}">
       <input type="hidden" name="filter_config_id" value="{{ active_filter_config_id|default:'' }}">
       <div class="accordion mb-3" id="accordion-{{ dom_id }}">

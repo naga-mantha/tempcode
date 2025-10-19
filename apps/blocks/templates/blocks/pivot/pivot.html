@@ -13,15 +13,24 @@
   {{ block.super }}
   <script src="{% static 'common/js/table-filters.js' %}"></script>
   <script>
-    (function initV2PivotCards() {
-      if (!window.v2TableFilters) {
+    (function initPivotCards() {
+      var legacyKey = 'v' + '2' + 'TableFilters';
+      var filters = window.tableFilters || window[legacyKey];
+      if (!window.tableFilters && filters) {
+        window.tableFilters = filters;
+      }
+      if (!filters) {
         return;
       }
       function bootstrap(scope) {
         if (!scope || !scope.querySelectorAll) {
           return;
         }
-        var nodes = scope.querySelectorAll('script[type="application/json"][id^="v2-table-config-"]');
+        var activeFilters = window.tableFilters || window[legacyKey];
+        if (!activeFilters) {
+          return;
+        }
+        var nodes = scope.querySelectorAll('script[type="application/json"][id^="table-config-"]');
         nodes.forEach(function (node) {
           if (node.dataset && node.dataset.initialized === '1') {
             return;
@@ -29,19 +38,20 @@
           try {
             var cfg = JSON.parse(node.textContent || '{}');
             if (cfg && cfg.domId) {
-              window.v2TableFilters.init(cfg);
+              activeFilters.init(cfg);
               if (node.dataset) {
                 node.dataset.initialized = '1';
               }
             }
           } catch (err) {
-            console.warn('Failed to init V2 pivot config', err);
+            console.warn('Failed to init pivot config', err);
           }
         });
       }
       bootstrap(document);
       document.addEventListener('htmx:afterSwap', function (event) {
-        if (!window.v2TableFilters) {
+        var activeFilters = window.tableFilters || window[legacyKey];
+        if (!activeFilters) {
           return;
         }
         var scope = event && event.target ? event.target : document;

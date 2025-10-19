@@ -41,7 +41,7 @@
     </div>
 
     <div class="col-md-5">
-      <form id="v2ManageFilterForm" hx-post="{% url 'blocks:save_filter_config' spec_id %}" hx-swap="none">
+      <form id="manageFilterForm" hx-post="{% url 'blocks:save_filter_config' spec_id %}" hx-swap="none">
         {% csrf_token %}
         <div class="card">
           <div class="card-header">Save Filter</div>
@@ -65,9 +65,9 @@
                 </div>
               </div>
             </div>
-            <input type="hidden" name="values_json" id="v2ManageFilterValues">
+            <input type="hidden" name="values_json" id="manageFilterValues">
             <div class="mt-3">
-              <button type="button" class="btn btn-primary" onclick="saveV2ManageFilter()">Save Filter</button>
+              <button type="button" class="btn btn-primary" onclick="saveManageFilter()">Save Filter</button>
             </div>
           </div>
         </div>
@@ -87,8 +87,8 @@
           <div class="card-header">Filter Fields</div>
           <div class="card-body">
             {% if filter_schema %}
-              <div id="v2FilterFieldsPanel" class="mb-1">
-                {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values filter_layout=filter_layout name_prefix="" id_prefix="v2mf" %}
+              <div id="filterFieldsPanel" class="mb-1">
+                {% include "components/filter_fields.html" with filter_schema=filter_schema initial_values=initial_values filter_layout=filter_layout name_prefix="" id_prefix="mf" %}
               </div>
             {% else %}
               <div class="text-muted small">No filter schema defined for this spec.</div>
@@ -106,7 +106,7 @@
     try {
       var t = ev.target;
       // After saving a new filter, reload to refresh dropdown and values
-      if (t && t.id === 'v2ManageFilterForm'){
+      if (t && t.id === 'manageFilterForm'){
         const note = document.createElement('div');
         note.className = 'alert alert-success position-fixed top-0 end-0 m-3';
         note.textContent = 'Saved';
@@ -123,9 +123,9 @@
   });
 
   // Collect values and submit Save Filter
-  function saveV2ManageFilter(){
+  function saveManageFilter(){
     try {
-      const wrap = document.getElementById('v2ManageFilterForm');
+      const wrap = document.getElementById('manageFilterForm');
       const data = {};
       if (wrap){
         const fd = new FormData(wrap);
@@ -143,8 +143,8 @@
           }
         }
       }
-      document.getElementById('v2ManageFilterValues').value = JSON.stringify(data);
-      document.getElementById('v2ManageFilterForm').requestSubmit();
+      document.getElementById('manageFilterValues').value = JSON.stringify(data);
+      document.getElementById('manageFilterForm').requestSubmit();
     } catch (e) { alert('Unable to read filter values'); }
   }
 
@@ -152,7 +152,7 @@
     // Minimal TomSelect init for AJAX choices on this page
     try {
       if (window.TomSelect){
-        document.querySelectorAll('#v2ManageFilterForm select.filter-field-select').forEach(function(sel){
+        document.querySelectorAll('#manageFilterForm select.filter-field-select').forEach(function(sel){
           var ajaxUrl = sel.getAttribute('data-ajax-url');
           var opts = {};
           try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}
