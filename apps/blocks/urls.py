@@ -10,7 +10,6 @@ from . import views
 app_name = "blocks"
 
 urlpatterns = [
-    path("hello", views.hello, name="hello"),
     path("render/<str:spec_id>", views.render_spec, name="render_spec"),
     path("data/<str:spec_id>", views.data_spec, name="data_spec"),
     path("choices/<str:spec_id>/<str:field>", views.choices_spec, name="choices_spec"),

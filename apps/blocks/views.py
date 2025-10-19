@@ -29,16 +29,6 @@ except Exception:  # pragma: no cover
 
 
 @login_required
-def hello(request: HttpRequest) -> HttpResponse:
-    """Minimal V2 hello block render to prove the mount works."""
-    ctx = {
-        "title": "Hello Block (V2)",
-        "message": "V2 scaffolding is wired — hello from Blocks V2!",
-    }
-    return render(request, "blocks/hello.html", ctx)
-
-
-@login_required
 def render_spec(request: HttpRequest, spec_id: str) -> HttpResponse:
     """Render a block partial for HTMX refresh by spec id.
 
