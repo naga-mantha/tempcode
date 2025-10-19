@@ -29,11 +29,7 @@
         {% endif %}
       </select>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:manage_pivot_configs' spec_id %}">Pivot Settings</a>
-      {% if spec_id == 'items.pivot' %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:pivot_items' %}">Pivot Link</a>
-      {% else %}
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
-      {% endif %}
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:render_spec' spec_id %}">Pivot Link</a>
       <span class="mx-1 text-muted">&mdash;</span>
       <label class="mb-0 small text-muted">Filter</label>
       <select id="filterCfgSelect-{{ dom_id }}" class="form-select form-select-sm w-auto" data-v2-filter-select data-dom-id="{{ dom_id }}">
