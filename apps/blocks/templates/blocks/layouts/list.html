@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Layouts</h1>
+    <a class="btn btn-primary" href="{% url 'blocks:layout_create' %}">New Layout</a>
+  </div>
+  {% if layouts %}
+  <ul class="list-group">
+    {% for layout in layouts %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <div class="fw-semibold">{{ layout.name }}</div>
+        <div class="text-muted small">{{ layout.owner.username }} · {{ layout.get_visibility_display }}</div>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">View</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-muted">No layouts available yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

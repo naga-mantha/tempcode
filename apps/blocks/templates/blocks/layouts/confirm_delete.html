@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3">Delete Layout</h1>
+  <p>Are you sure you want to delete <strong>{{ layout.name }}</strong>? This action cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Confirm Delete</button>
+    <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

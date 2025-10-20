@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-0">{{ layout.name }}</h1>
+      <p class="text-muted mb-0">Owned by {{ layout.owner.username }} · {{ layout.get_visibility_display }}</p>
+    </div>
+    <div class="btn-group">
+      {% if request.user.is_staff or request.user == layout.owner %}
+      <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_edit' layout.owner.username layout.slug %}">Edit</a>
+      <a class="btn btn-outline-danger" href="{% url 'blocks:layout_delete' layout.owner.username layout.slug %}">Delete</a>
+      {% endif %}
+    </div>
+  </div>
+  <p>{{ layout.description|default:"No description provided." }}</p>
+</div>
+{% endblock %}

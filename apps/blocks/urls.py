@@ -60,6 +60,11 @@ urlpatterns += [
         name="layout_edit",
     ),
     path(
+        "layouts/<str:username>/<slug:slug>/delete/",
+        layout_views.LayoutDeleteView.as_view(),
+        name="layout_delete",
+    ),
+    path(
         "layouts/<str:username>/<slug:slug>/filters/manage/",
         layout_views.LayoutFilterManageView.as_view(),
         name="layout_manage_filters",
