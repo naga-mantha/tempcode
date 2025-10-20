@@ -58,6 +58,8 @@
          data-update-url="{{ layout_block_update_url }}"
          data-empty-indicator="#layoutGridEmpty"
          data-grid-gap="{{ layout_grid_margin|default:15 }}"
+         data-grid-columns="12"
+         data-grid-row-height="200"
          data-default-width="{{ layout_block_defaults.width }}"
          data-default-height="{{ layout_block_defaults.height }}">
       {% for block_html in layout_grid_items %}
