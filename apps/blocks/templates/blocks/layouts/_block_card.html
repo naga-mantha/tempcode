@@ -1,0 +1,18 @@
+<div class="card h-100 shadow-sm block-card" id="layoutBlock-{{ layout_block.slug }}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <span class="fw-semibold">{{ layout_block.title|default:layout_block.block.name }}</span>
+      {% if layout_block.block.category %}
+        <span class="text-muted small ms-2">{{ layout_block.block.category }}</span>
+      {% endif %}
+    </div>
+    {% if layout_block.updated_at %}
+      <time class="text-muted small" datetime="{{ layout_block.updated_at|date:'c' }}">
+        Updated {{ layout_block.updated_at|timesince }} ago
+      </time>
+    {% endif %}
+  </div>
+  <div class="card-body" hx-target="this" hx-swap="innerHTML">
+    {{ inner_html|safe }}
+  </div>
+</div>

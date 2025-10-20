@@ -202,7 +202,7 @@ def render_layout_display_block(
         "inner_html": inner_html,
     }
     return render_to_string(
-        "blocks/layouts/_detail_block.html",
+        "blocks/layouts/_block_card.html",
         wrapper_context,
         request=request,
     )
@@ -713,7 +713,7 @@ class LayoutFilterConfigMakeDefaultView(LayoutFilterConfigHTMXMixin, generic.Vie
 class LayoutFilterPanelView(LayoutUserSlugMixin, generic.DetailView):
     """HTMX endpoint rendering the filter offcanvas panel."""
 
-    template_name = "blocks/layouts/_filter_panel.html"
+    template_name = "blocks/layouts/_filter_sidebar.html"
     context_object_name = "layout"
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
