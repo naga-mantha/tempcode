@@ -1,7 +1,196 @@
 {% extends "base.html" %}
+
+{% block title %}<title>Manage Layout Filters — {{ layout.name }}</title>{% endblock %}
+
 {% block content %}
-<div class="container py-4">
-  <h1 class="h3 mb-3">Manage Filters for {{ layout.name }}</h1>
-  <p class="text-muted">Filter management tooling will be implemented in a follow-up iteration.</p>
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="mb-0">Manage Layout Filters — {{ layout.name }}</h5>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <label class="mb-0 small text-muted">Load Filter</label>
+      <form method="get" class="d-inline m-0 p-0">
+        <select name="config" class="form-select form-select-sm w-auto"
+                onchange="(function(sel){ if(!sel.value){ sel.setAttribute('data-old-name', sel.getAttribute('name')); sel.removeAttribute('name'); } sel.form.requestSubmit(); })(this)">
+          <option value="">New (default)</option>
+          {% if layout_filter_configs %}
+            <optgroup label="Private filters">
+              {% for cfg in layout_filter_configs %}
+                {% if cfg.visibility == 'private' %}
+                  <option value="{{ cfg.slug }}" {% if cfg.slug == active_layout_filter_slug %}selected{% endif %}>{{ cfg.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Public filters">
+              {% for cfg in layout_filter_configs %}
+                {% if cfg.visibility == 'public' %}
+                  <option value="{{ cfg.slug }}" {% if cfg.slug == active_layout_filter_slug %}selected{% endif %}>{{ cfg.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
+      </form>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">Back to Layout</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-7">
+      {% include "blocks/layouts/_saved_filters.html" with layout=layout layout_filter_configs=layout_filter_configs %}
+    </div>
+
+    <div class="col-md-5">
+      <form id="manageLayoutFilterForm" hx-post="{% url 'blocks:layout_filter_config_save' layout.owner.username layout.slug %}" hx-swap="none">
+        {% csrf_token %}
+        <div class="card">
+          <div class="card-header">Save Filter</div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control" value="{{ active_layout_filter_name|default:'' }}" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Visibility</label>
+                <select name="visibility" class="form-select">
+                  <option value="private" {% if active_layout_filter_visibility != 'public' %}selected{% endif %}>Private</option>
+                  <option value="public" {% if active_layout_filter_visibility == 'public' %}selected{% endif %}>Public</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" name="is_default" id="layoutDefaultFilter"
+                         {% if active_layout_filter_is_default %}checked{% endif %}>
+                  <label class="form-check-label" for="layoutDefaultFilter">Default</label>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" name="values_json" id="manageLayoutFilterValues">
+            <div class="mt-3">
+              <button type="button" class="btn btn-primary" onclick="saveManageLayoutFilter()">Save Filter</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header">Filter Fields</div>
+          <div class="card-body">
+            {% if layout_filter_blocks %}
+              <div id="layoutFilterFieldsPanel" class="mb-1">
+                <div class="accordion" id="layoutFilterFieldsAccordion">
+                  {% for block in layout_filter_blocks %}
+                    <div class="accordion-item mb-2">
+                      <h2 class="accordion-header" id="lf-heading-{{ block.slug }}">
+                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#lf-collapse-{{ block.slug }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="lf-collapse-{{ block.slug }}">
+                          {{ block.title }}
+                          <span class="text-muted small ms-2">{{ block.spec_name }}</span>
+                        </button>
+                      </h2>
+                      <div id="lf-collapse-{{ block.slug }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#layoutFilterFieldsAccordion">
+                        <div class="accordion-body">
+                          {% if block.filter_schema %}
+                            {% include "components/filter_fields.html" with filter_schema=block.filter_schema initial_values=block.initial_values filter_layout=block.filter_layout name_prefix="filters__"|add:block.slug|add:"__" id_prefix=block.slug %}
+                          {% else %}
+                            <p class="text-muted small mb-0">No filters available for this block.</p>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% else %}
+              <div class="text-muted small">No filterable blocks were found in this layout.</div>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
+
+<script>
+  document.addEventListener('htmx:afterRequest', function(ev){
+    try {
+      var t = ev.target;
+      if (t && t.id === 'manageLayoutFilterForm'){
+        const note = document.createElement('div');
+        note.className = 'alert alert-success position-fixed top-0 end-0 m-3';
+        note.textContent = 'Saved';
+        document.body.appendChild(note);
+        setTimeout(function(){ note.remove(); window.location.reload(); }, 800);
+        return;
+      }
+      if (t && t.classList && t.classList.contains('js-reload-on-success')){
+        if (ev.detail && ev.detail.xhr && ev.detail.xhr.status >= 200 && ev.detail.xhr.status < 300){
+          window.location.reload();
+        }
+      }
+    } catch (e) {}
+  });
+
+  function saveManageLayoutFilter(){
+    try {
+      const form = document.getElementById('manageLayoutFilterForm');
+      const fd = new FormData(form);
+      const blockValues = {};
+      for (let [key, value] of fd.entries()){
+        if (key === 'name' || key === 'visibility' || key === 'is_default' || key === 'values_json' || key === 'csrfmiddlewaretoken') continue;
+        if (!key.startsWith('filters__')) continue;
+        if (value === '') continue;
+        const parts = key.split('__');
+        if (parts.length < 3) continue;
+        const slug = parts[1];
+        const field = parts.slice(2).join('__');
+        if (!slug || !field) continue;
+        const block = blockValues[slug] = blockValues[slug] || {};
+        if (Object.prototype.hasOwnProperty.call(block, field)){
+          if (!Array.isArray(block[field])) block[field] = [block[field]];
+          block[field].push(value);
+        } else {
+          block[field] = value;
+        }
+      }
+      const payload = {};
+      Object.keys(blockValues).forEach(function(slug){
+        payload[slug] = {filters: blockValues[slug]};
+      });
+      document.getElementById('manageLayoutFilterValues').value = JSON.stringify({blocks: payload});
+      form.requestSubmit();
+    } catch (e) {
+      alert('Unable to read filter values');
+    }
+  }
+
+  (function(){
+    try {
+      if (window.TomSelect){
+        document.querySelectorAll('#manageLayoutFilterForm select.filter-field-select').forEach(function(sel){
+          var ajaxUrl = sel.getAttribute('data-ajax-url');
+          var opts = {};
+          try { var raw = sel.getAttribute('data-tom-select-options'); if (raw) opts = JSON.parse(raw); } catch(e){}
+          var minLen = 3;
+          if (ajaxUrl){
+            new TomSelect(sel, Object.assign({
+              valueField: 'value',
+              labelField: 'label',
+              searchField: 'label',
+              persist: false,
+              closeAfterSelect: true,
+              preload: 'focus',
+              openOnFocus: true,
+              placeholder: 'Type at least ' + minLen + ' characters',
+              load: function(query, callback){
+                if (!query || query.length < minLen) { callback(); return; }
+                fetch(ajaxUrl + '?q=' + encodeURIComponent(query), {headers: {'X-Requested-With':'XMLHttpRequest'}})
+                  .then(r => r.json()).then(resp => callback(resp.results || []))
+                  .catch(() => callback());
+              }
+            }, opts));
+          }
+        });
+      }
+    } catch(e) { console.warn('TomSelect init failed', e); }
+  })();
+</script>
 {% endblock %}

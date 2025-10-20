@@ -8,18 +8,27 @@ from typing import Any, Dict, List
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import IntegrityError
 from django.db.models import Case, IntegerField, Q, Value, When
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, QueryDict
+from django.http import (
+    HttpResponse,
+    HttpResponseBadRequest,
+    JsonResponse,
+    QueryDict,
+)
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views import generic
+from django.views.generic.detail import SingleObjectMixin
 
 from apps.blocks.controller import BlockController
+from apps.blocks.forms.layout_filters import LayoutFilterConfigForm
 from apps.blocks.forms.layouts import LayoutBlockFormSet, LayoutForm
 from apps.blocks.models.block import Block
 from apps.blocks.models.layout import Layout, VisibilityChoices
 from apps.blocks.models.layout_block import LayoutBlock
+from apps.blocks.models.layout_filter_config import LayoutFilterConfig
 from apps.blocks.policy import PolicyService
 from apps.blocks.register import load_specs
 from apps.blocks.registry import get_registry
@@ -27,6 +36,7 @@ from apps.blocks.services.layout_filters import (
     aggregate_layout_filter_metadata,
     choose_layout_filter_config,
     extract_layout_filter_values,
+    duplicate_layout_filter_config,
     list_layout_filter_configs,
     merge_layout_filter_values,
     parse_request_filter_overrides,
@@ -529,17 +539,175 @@ class LayoutDeleteView(LayoutUserSlugMixin, generic.DeleteView):
         return reverse("blocks:layout_list")
 
 
-class LayoutFilterManageView(LayoutUserSlugMixin, generic.DetailView):
-    """Placeholder view for managing filter configurations on a layout."""
+class LayoutFilterManageView(LayoutOwnerPermissionMixin, generic.DetailView):
+    """Render the manage filters interface for a layout."""
 
     template_name = "blocks/layouts/manage_filters.html"
     context_object_name = "layout"
 
-    def get_object(self, queryset=None):  # type: ignore[override]
-        obj = super().get_object(queryset)
-        if not (self.request.user.is_staff or obj.owner_id == self.request.user.id):
-            raise PermissionDenied("You do not have permission to manage filters for this layout.")
-        return obj
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        context = super().get_context_data(**kwargs)
+        layout: Layout = context.get("layout")
+        request = self.request
+
+        configs = list(list_layout_filter_configs(layout, request.user))
+        identifier = (
+            request.GET.get("config")
+            or request.GET.get("layout_filter")
+            or request.GET.get("filter_config_id")
+        )
+        active_config = choose_layout_filter_config(
+            layout,
+            request.user,
+            identifier=identifier,
+            configs=configs,
+        )
+
+        values = extract_layout_filter_values(active_config)
+        filter_blocks = list(
+            aggregate_layout_filter_metadata(
+                layout,
+                user=request.user,
+                policy=PolicyService(),
+                values=values,
+            )
+        )
+
+        context.update(
+            {
+                "layout_filter_configs": configs,
+                "layout_filter_blocks": filter_blocks,
+                "active_layout_filter_config": active_config,
+                "active_layout_filter_slug": getattr(active_config, "slug", ""),
+                "active_layout_filter_name": getattr(active_config, "name", ""),
+                "active_layout_filter_visibility": getattr(
+                    active_config,
+                    "visibility",
+                    VisibilityChoices.PRIVATE,
+                ),
+                "active_layout_filter_is_default": bool(
+                    getattr(active_config, "is_default", False)
+                ),
+            }
+        )
+        return context
+
+
+class LayoutFilterConfigHTMXMixin(LayoutOwnerPermissionMixin, SingleObjectMixin):
+    """Shared helpers for HTMX responses used by layout filter config views."""
+
+    def _render_saved_filters(self, layout: Layout) -> HttpResponse:
+        configs = list(list_layout_filter_configs(layout, self.request.user))
+        html = render_to_string(
+            "blocks/layouts/_saved_filters.html",
+            {
+                "layout": layout,
+                "layout_filter_configs": configs,
+                "request": self.request,
+            },
+            request=self.request,
+        )
+        return HttpResponse(html)
+
+
+class LayoutFilterConfigSaveView(LayoutFilterConfigHTMXMixin, generic.View):
+    """Persist filter configurations submitted from the manage filters page."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # type: ignore[override]
+        layout = self.get_object()
+        form = LayoutFilterConfigForm(
+            data=request.POST,
+            layout=layout,
+            acting_user=request.user,
+        )
+        if form.is_valid():
+            form.save()
+            if request.headers.get("HX-Request"):
+                return self._render_saved_filters(layout)
+            return HttpResponse(status=204)
+        return JsonResponse({"errors": form.errors}, status=400)
+
+
+class LayoutFilterConfigRenameView(LayoutFilterConfigHTMXMixin, generic.View):
+    """Rename an existing layout filter configuration."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # type: ignore[override]
+        layout = self.get_object()
+        config = get_object_or_404(
+            LayoutFilterConfig,
+            pk=kwargs.get("config_id"),
+            layout=layout,
+        )
+        new_name = (request.POST.get("name") or "").strip()
+        if not new_name:
+            return HttpResponseBadRequest("Name is required")
+        config.name = new_name
+        try:
+            config.save(update_fields=["name", "updated_at"])
+        except IntegrityError:
+            return HttpResponseBadRequest("A filter with this name already exists.")
+        if request.headers.get("HX-Request"):
+            return self._render_saved_filters(layout)
+        return HttpResponse(status=204)
+
+
+class LayoutFilterConfigDuplicateView(LayoutFilterConfigHTMXMixin, generic.View):
+    """Duplicate a layout filter configuration as a new private entry."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # type: ignore[override]
+        layout = self.get_object()
+        config = get_object_or_404(
+            LayoutFilterConfig,
+            pk=kwargs.get("config_id"),
+            layout=layout,
+        )
+        duplicate_layout_filter_config(config)
+        if request.headers.get("HX-Request"):
+            return self._render_saved_filters(layout)
+        return HttpResponse(status=204)
+
+
+class LayoutFilterConfigDeleteView(LayoutFilterConfigHTMXMixin, generic.View):
+    """Delete a layout filter configuration."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # type: ignore[override]
+        layout = self.get_object()
+        config = get_object_or_404(
+            LayoutFilterConfig,
+            pk=kwargs.get("config_id"),
+            layout=layout,
+        )
+        config.delete()
+        if request.headers.get("HX-Request"):
+            return self._render_saved_filters(layout)
+        return HttpResponse(status=204)
+
+
+class LayoutFilterConfigMakeDefaultView(LayoutFilterConfigHTMXMixin, generic.View):
+    """Mark a layout filter configuration as the default for the owner."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # type: ignore[override]
+        layout = self.get_object()
+        config = get_object_or_404(
+            LayoutFilterConfig,
+            pk=kwargs.get("config_id"),
+            layout=layout,
+        )
+        config.is_default = True
+        config.save(update_fields=["is_default"])
+        if request.headers.get("HX-Request"):
+            return self._render_saved_filters(layout)
+        return HttpResponse(status=204)
 
 
 class LayoutFilterPanelView(LayoutUserSlugMixin, generic.DetailView):

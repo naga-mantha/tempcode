@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.urls import reverse
+from django.utils.text import slugify
 
 from apps.blocks.configs import get_block_for_spec
-from apps.blocks.models.layout import Layout, VisibilityChoices
+from apps.blocks.models.layout import Layout, VisibilityChoices, validate_public_visibility
 from apps.blocks.models.layout_filter_config import LayoutFilterConfig
 from apps.blocks.policy import PolicyService
 from apps.blocks.register import load_specs
@@ -257,3 +261,189 @@ def aggregate_layout_filter_metadata(
         )
 
     return results
+
+
+def _normalize_filter_values(payload: Mapping[str, Any] | None) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    for key, value in (payload or {}).items():
+        if value in (None, "", [], ()):  # skip empty entries
+            continue
+        if isinstance(value, tuple):
+            value = list(value)
+        elif isinstance(value, set):
+            value = list(value)
+        normalized[str(key)] = value
+    return normalized
+
+
+def clean_layout_filter_values(
+    layout: Layout,
+    raw_values: Mapping[str, Any] | None,
+    *,
+    user,
+    policy: Optional[PolicyService] = None,
+) -> Dict[str, Any]:
+    """Validate and normalize layout filter values for persistence."""
+
+    if not raw_values:
+        return {}
+
+    blocks_payload = raw_values.get("blocks") if isinstance(raw_values, Mapping) else None
+    if blocks_payload is None:
+        blocks_payload = raw_values
+    if not isinstance(blocks_payload, Mapping):
+        return {}
+
+    policy = policy or PolicyService()
+
+    load_specs()
+    registry = get_registry()
+
+    cleaned_blocks: Dict[str, Dict[str, Any]] = {}
+
+    for layout_block in layout.layout_blocks.select_related("block").order_by("order", "pk"):
+        slug = str(layout_block.slug)
+        raw_block = blocks_payload.get(slug)
+        if isinstance(raw_block, Mapping):
+            raw_filters = raw_block.get("filters") if "filters" in raw_block else raw_block
+        else:
+            raw_filters = {}
+        if not isinstance(raw_filters, Mapping):
+            continue
+
+        spec = registry.get(layout_block.block.code)
+        if spec is None:
+            continue
+        services = getattr(spec, "services", None)
+        resolver_cls = getattr(services, "filter_resolver", None) if services else None
+        if not resolver_cls:
+            continue
+        try:
+            try:
+                resolver = resolver_cls(spec)
+            except TypeError:
+                resolver = resolver_cls()
+            schema_list = list(resolver.schema())
+        except Exception:  # pragma: no cover - defensive logging
+            schema_list = []
+        schema_list = prune_filter_schema(
+            schema_list,
+            model=getattr(spec, "model", None),
+            user=user,
+            policy=policy,
+        )
+        allowed_keys = [
+            str(entry.get("key"))
+            for entry in schema_list
+            if isinstance(entry, Mapping) and entry.get("key")
+        ]
+        block_values = prune_filter_values(dict(raw_filters), allowed_keys)
+        try:
+            cleaned = resolver.clean(block_values) or {}
+        except Exception:
+            cleaned = block_values
+        cleaned = prune_filter_values(cleaned, allowed_keys)
+        normalized = _normalize_filter_values(cleaned)
+        if normalized:
+            cleaned_blocks[slug] = {"filters": normalized}
+
+    if not cleaned_blocks:
+        return {}
+    return {"blocks": cleaned_blocks}
+
+
+def _generate_unique_slug(layout: Layout, base: str, *, exclude: Optional[int] = None) -> str:
+    seed = slugify(base) or "filter"
+    slug = seed
+    suffix = 2
+    qs = LayoutFilterConfig.objects.filter(layout=layout)
+    if exclude:
+        qs = qs.exclude(pk=exclude)
+    while qs.filter(slug=slug).exists():
+        slug = f"{seed}-{suffix}"
+        suffix += 1
+    return slug
+
+
+def save_layout_filter_config(
+    layout: Layout,
+    *,
+    name: str,
+    visibility: str,
+    is_default: bool,
+    values: Mapping[str, Any] | None,
+    acting_user,
+) -> LayoutFilterConfig:
+    """Create or update a layout filter configuration for ``layout``."""
+
+    owner = layout.owner
+    if not (acting_user.is_staff or acting_user == owner):
+        raise PermissionDenied("You do not have permission to modify these filters.")
+
+    if visibility not in VisibilityChoices.values:
+        visibility = VisibilityChoices.PRIVATE
+
+    if visibility == VisibilityChoices.PUBLIC:
+        if not acting_user.is_staff:
+            raise PermissionDenied("Only staff users can create public layout filters.")
+        validate_public_visibility(owner, model_label="layout filter config")
+
+    store_values: Dict[str, Any]
+    if isinstance(values, Mapping):
+        store_values = copy.deepcopy(dict(values))
+    else:
+        store_values = {}
+
+    with transaction.atomic():
+        existing = LayoutFilterConfig.objects.select_for_update().filter(
+            layout=layout,
+            owner=owner,
+            name=name,
+        ).first()
+        if existing:
+            existing.visibility = visibility
+            existing.is_default = bool(is_default)
+            existing.values = store_values
+            existing.save()
+            return existing
+
+        slug = _generate_unique_slug(layout, name)
+        config = LayoutFilterConfig(
+            layout=layout,
+            owner=owner,
+            name=name,
+            slug=slug,
+            visibility=visibility,
+            is_default=bool(is_default),
+            values=store_values,
+        )
+        config.save()
+        return config
+
+
+def duplicate_layout_filter_config(config: LayoutFilterConfig) -> LayoutFilterConfig:
+    """Create a private copy of ``config`` with a unique name/slug."""
+
+    layout = config.layout
+    owner = config.owner
+
+    base_name = f"{config.name} (copy)"
+    candidate = base_name
+    suffix = 2
+    while LayoutFilterConfig.objects.filter(layout=layout, owner=owner, name=candidate).exists():
+        candidate = f"{base_name} {suffix}"
+        suffix += 1
+
+    slug = _generate_unique_slug(layout, candidate)
+
+    clone = LayoutFilterConfig(
+        layout=layout,
+        owner=owner,
+        name=candidate,
+        slug=slug,
+        visibility=VisibilityChoices.PRIVATE,
+        is_default=False,
+        values=copy.deepcopy(config.values or {}),
+    )
+    clone.save()
+    return clone
