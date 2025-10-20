@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-3">{% if layout.pk %}Edit{% else %}Create{% endif %} Layout</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form|crispy }}
+    {% if block_formset %}
+    <div class="mt-4">
+      <h2 class="h5">Blocks</h2>
+      {{ block_formset.management_form }}
+      {% for block_form in block_formset.forms %}
+      <div class="border rounded p-3 mb-3">
+        {{ block_form|crispy }}
+        {% if block_form.can_delete %}
+        <div class="form-check">
+          {{ block_form.DELETE }}
+          <label class="form-check-label" for="{{ block_form.DELETE.id_for_label }}">Remove block</label>
+        </div>
+        {% endif %}
+      </div>
+      {% empty %}
+      <p class="text-muted">No blocks have been added yet.</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a class="btn btn-outline-secondary" href="{% if layout.pk %}{% url 'blocks:layout_detail' layout.owner.username layout.slug %}{% else %}{% url 'blocks:layout_list' %}{% endif %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
