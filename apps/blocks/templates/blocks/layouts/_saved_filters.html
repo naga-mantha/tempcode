@@ -1,0 +1,59 @@
+<div id="layoutSavedFilters">
+  <div class="card">
+    <div class="card-header">Saved Filters</div>
+    <div class="card-body">
+      {% if layout_filter_configs %}
+        <ul class="list-group">
+          {% for cfg in layout_filter_configs %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                {{ cfg.name }}
+                {% if cfg.is_default %}<span class="badge text-bg-secondary ms-2">default</span>{% endif %}
+                <span class="badge text-bg-light border ms-2">{{ cfg.visibility }}</span>
+              </span>
+              <span class="btn-group">
+                <form method="post"
+                      action="{% url 'blocks:layout_filter_config_rename' layout.owner.username layout.slug cfg.id %}"
+                      class="d-inline"
+                      hx-post="{% url 'blocks:layout_filter_config_rename' layout.owner.username layout.slug cfg.id %}"
+                      hx-target="#layoutSavedFilters" hx-swap="outerHTML"
+                      onsubmit="return (function(id){ var name = prompt('New name:', '{{ cfg.name|escapejs }}'); if(!name) return false; var inp=document.getElementById(id); if(inp) inp.value=name; return true; })('lfn{{ cfg.id }}')">
+                  {% csrf_token %}
+                  <input type="hidden" name="name" id="lfn{{ cfg.id }}">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
+                </form>
+                <form method="post"
+                      action="{% url 'blocks:layout_filter_config_make_default' layout.owner.username layout.slug cfg.id %}"
+                      class="d-inline"
+                      hx-post="{% url 'blocks:layout_filter_config_make_default' layout.owner.username layout.slug cfg.id %}"
+                      hx-target="#layoutSavedFilters" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-secondary" {% if cfg.is_default %}disabled{% endif %}>Make Default</button>
+                </form>
+                <form method="post"
+                      action="{% url 'blocks:layout_filter_config_duplicate' layout.owner.username layout.slug cfg.id %}"
+                      class="d-inline"
+                      hx-post="{% url 'blocks:layout_filter_config_duplicate' layout.owner.username layout.slug cfg.id %}"
+                      hx-target="#layoutSavedFilters" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Duplicate</button>
+                </form>
+                <form method="post"
+                      action="{% url 'blocks:layout_filter_config_delete' layout.owner.username layout.slug cfg.id %}"
+                      class="d-inline"
+                      onsubmit="return confirm('Delete filter {{ cfg.name|escapejs }}?')"
+                      hx-post="{% url 'blocks:layout_filter_config_delete' layout.owner.username layout.slug cfg.id %}"
+                      hx-target="#layoutSavedFilters" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="text-muted small">No saved filters yet. Use the form to create one.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>

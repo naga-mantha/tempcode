@@ -70,6 +70,31 @@ urlpatterns += [
         name="layout_manage_filters",
     ),
     path(
+        "layouts/<str:username>/<slug:slug>/filters/save/",
+        layout_views.LayoutFilterConfigSaveView.as_view(),
+        name="layout_filter_config_save",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/filters/<int:config_id>/rename/",
+        layout_views.LayoutFilterConfigRenameView.as_view(),
+        name="layout_filter_config_rename",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/filters/<int:config_id>/duplicate/",
+        layout_views.LayoutFilterConfigDuplicateView.as_view(),
+        name="layout_filter_config_duplicate",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/filters/<int:config_id>/delete/",
+        layout_views.LayoutFilterConfigDeleteView.as_view(),
+        name="layout_filter_config_delete",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/filters/<int:config_id>/make-default/",
+        layout_views.LayoutFilterConfigMakeDefaultView.as_view(),
+        name="layout_filter_config_make_default",
+    ),
+    path(
         "layouts/<str:username>/<slug:slug>/filters/panel/",
         layout_views.LayoutFilterPanelView.as_view(),
         name="layout_filter_panel",
