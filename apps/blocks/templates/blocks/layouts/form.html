@@ -1,34 +1,81 @@
 {% extends "base.html" %}
-{% load crispy_forms_tags %}
+{% load crispy_forms_tags static %}
+
+{% block extra_head %}
+  {{ block.super }}
+  {% if layout.pk %}
+  <link rel="stylesheet" href="{% static 'blocks/layouts/gridstack.min.css' %}">
+  {% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
   <h1 class="h3 mb-3">{% if layout.pk %}Edit{% else %}Create{% endif %} Layout</h1>
-  <form method="post">
+  <form method="post" class="mb-4">
     {% csrf_token %}
     {{ form|crispy }}
-    {% if block_formset %}
-    <div class="mt-4">
-      <h2 class="h5">Blocks</h2>
-      {{ block_formset.management_form }}
-      {% for block_form in block_formset.forms %}
-      <div class="border rounded p-3 mb-3">
-        {{ block_form|crispy }}
-        {% if block_form.can_delete %}
-        <div class="form-check">
-          {{ block_form.DELETE }}
-          <label class="form-check-label" for="{{ block_form.DELETE.id_for_label }}">Remove block</label>
-        </div>
-        {% endif %}
-      </div>
-      {% empty %}
-      <p class="text-muted">No blocks have been added yet.</p>
-      {% endfor %}
-    </div>
-    {% endif %}
     <div class="mt-4 d-flex gap-2">
       <button type="submit" class="btn btn-primary">Save</button>
       <a class="btn btn-outline-secondary" href="{% if layout.pk %}{% url 'blocks:layout_detail' layout.owner.username layout.slug %}{% else %}{% url 'blocks:layout_list' %}{% endif %}">Cancel</a>
     </div>
   </form>
+
+  {% if layout.pk %}
+  <section aria-labelledby="layout-grid-heading">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+      <h2 id="layout-grid-heading" class="h5 mb-3">Layout Blocks</h2>
+      <p class="text-muted small mb-3 mb-md-0">Drag or resize blocks to update their placement. Changes are saved automatically.</p>
+    </div>
+
+    <form id="layoutAddBlockForm"
+          class="row g-2 align-items-end mb-3"
+          method="post"
+          hx-post="{{ layout_block_add_url }}"
+          hx-target="#layoutGrid"
+          hx-swap="beforeend">
+      {% csrf_token %}
+      <div class="col-md-5">
+        <label class="form-label" for="layoutAddBlockSelect">Select Block</label>
+        <select id="layoutAddBlockSelect" name="spec_id" class="form-select" required>
+          <option value="" selected disabled>Choose a block…</option>
+          {% for spec in available_block_specs %}
+          <option value="{{ spec.id }}">{{ spec.name }}{% if spec.category %} · {{ spec.category }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label" for="layoutAddBlockTitle">Custom Title (optional)</label>
+        <input type="text" id="layoutAddBlockTitle" name="title" class="form-control" placeholder="Title">
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-outline-primary">Add Block</button>
+      </div>
+    </form>
+
+    <div class="grid-stack"
+         id="layoutGrid"
+         data-layout-grid="true"
+         data-update-url="{{ layout_block_update_url }}"
+         data-empty-indicator="#layoutGridEmpty"
+         data-grid-gap="{{ layout_grid_margin|default:15 }}"
+         data-default-width="{{ layout_block_defaults.width }}"
+         data-default-height="{{ layout_block_defaults.height }}">
+      {% for block_html in layout_grid_items %}
+      {{ block_html|safe }}
+      {% endfor %}
+    </div>
+    <p id="layoutGridEmpty" class="text-muted {% if layout_grid_items %}d-none{% endif %} mt-3">
+      {{ layout_grid_empty_message }}
+    </p>
+  </section>
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  {% if layout.pk %}
+  <script src="{% static 'blocks/layouts/gridstack.min.js' %}" defer></script>
+  <script src="{% static 'blocks/layouts/layout-editor.js' %}" defer></script>
+  {% endif %}
 {% endblock %}
