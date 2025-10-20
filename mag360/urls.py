@@ -27,7 +27,6 @@ urlpatterns = [
     path('', include('apps.common.urls')),
     path('', include('apps.production.urls')),
     path('workflow/', include('apps.workflow.urls')),
-    # Canonical mounts for Blocks and Layouts
+    # Canonical mounts for Blocks
     path('blocks/', include('apps.blocks.urls')),
-    path('layouts/', include('apps.layout.urls')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
