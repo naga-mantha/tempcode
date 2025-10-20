@@ -70,6 +70,11 @@ urlpatterns += [
         name="layout_manage_filters",
     ),
     path(
+        "layouts/<str:username>/<slug:slug>/filters/panel/",
+        layout_views.LayoutFilterPanelView.as_view(),
+        name="layout_filter_panel",
+    ),
+    path(
         "layouts/<str:username>/<slug:slug>/blocks/add/",
         layout_views.LayoutBlockAddView.as_view(),
         name="layout_block_add",

@@ -1,0 +1,100 @@
+<div id="{{ filter_panel_wrapper_id }}">
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="{{ filter_offcanvas_id }}" aria-labelledby="{{ filter_offcanvas_id }}Label">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="{{ filter_offcanvas_id }}Label">Layout filters</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      {% if has_filter_blocks %}
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+          {% if layout_filter_configs %}
+            <div>
+              <label class="form-label small text-muted mb-1">Saved configuration</label>
+              <select name="config"
+                      class="form-select form-select-sm"
+                      hx-get="{{ layout_filter_panel_url }}"
+                      hx-target="#{{ filter_panel_wrapper_id }}"
+                      hx-swap="outerHTML"
+                      hx-push-url="false"
+                      hx-trigger="change">
+                <option value="__none__"{% if not active_layout_filter_slug %} selected{% endif %}>Unsaved selection</option>
+                {% for cfg in layout_filter_configs %}
+                  <option value="{{ cfg.slug }}" {% if cfg.slug == active_layout_filter_slug %}selected{% endif %}>
+                    {{ cfg.name }}{% if cfg.visibility == 'public' %} · Public{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
+          <div class="ms-auto">
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    hx-get="{{ layout_filter_panel_url }}?reset=1{% if active_layout_filter_slug %}&config={{ active_layout_filter_slug }}{% endif %}"
+                    hx-target="#{{ filter_panel_wrapper_id }}"
+                    hx-swap="outerHTML"
+                    hx-push-url="false">
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+
+        <form method="get" action="{{ layout_filter_form_action }}" id="layoutFilterForm">
+          {% if active_layout_filter_slug %}
+            <input type="hidden" name="layout_filter" value="{{ active_layout_filter_slug }}">
+          {% endif %}
+
+          <div class="accordion" id="layoutFilterAccordion">
+            {% for block in layout_filter_blocks %}
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-{{ block.slug }}">
+                  <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#collapse-{{ block.slug }}"
+                          aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+                          aria-controls="collapse-{{ block.slug }}">
+                    {{ block.title }}
+                    <span class="text-muted small ms-2">{{ block.spec_name }}</span>
+                  </button>
+                </h2>
+                <div id="collapse-{{ block.slug }}"
+                     class="accordion-collapse collapse {% if forloop.first %}show{% endif %}"
+                     data-bs-parent="#layoutFilterAccordion">
+                  <div class="accordion-body">
+                    {% if block.filter_schema %}
+                      {% include "components/filter_fields.html" with filter_schema=block.filter_schema initial_values=block.initial_values filter_layout=block.filter_layout name_prefix="filters__"|add:block.slug|add:"__" id_prefix=block.slug %}
+                    {% else %}
+                      <p class="text-muted small mb-0">No filters available for this block.</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-4">
+            <button type="reset" class="btn btn-outline-secondary">Clear form</button>
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+          </div>
+        </form>
+      {% else %}
+        <p class="text-muted mb-0">No filters are available for the blocks in this layout.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if is_htmx %}
+  <script>
+    (function() {
+      try {
+        var el = document.getElementById('{{ filter_offcanvas_id }}');
+        if (el && window.bootstrap) {
+          var instance = bootstrap.Offcanvas.getOrCreateInstance(el);
+          instance.show();
+        }
+      } catch (err) {
+        console.warn('Unable to open filter offcanvas', err);
+      }
+    })();
+  </script>
+  {% endif %}
+</div>
