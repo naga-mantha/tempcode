@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Case, IntegerField, Q, Value, When
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -23,6 +23,14 @@ from apps.blocks.models.layout_block import LayoutBlock
 from apps.blocks.policy import PolicyService
 from apps.blocks.register import load_specs
 from apps.blocks.registry import get_registry
+from apps.blocks.services.layout_filters import (
+    aggregate_layout_filter_metadata,
+    choose_layout_filter_config,
+    extract_layout_filter_values,
+    list_layout_filter_configs,
+    merge_layout_filter_values,
+    parse_request_filter_overrides,
+)
 from apps.blocks.services.layouts import (
     DEFAULT_GRID_HEIGHT,
     DEFAULT_GRID_WIDTH,
@@ -32,6 +40,10 @@ from apps.blocks.services.layouts import (
 
 
 log = logging.getLogger(__name__)
+
+
+FILTER_PANEL_WRAPPER_ID = "layoutFilterPanelWrapper"
+FILTER_OFFCANVAS_ID = "layoutFilterOffcanvas"
 
 
 def _resolve_block_template_name(spec) -> str:
@@ -104,6 +116,83 @@ def render_layout_grid_item(
     }
     return render_to_string(
         "blocks/layouts/_grid_item.html",
+        wrapper_context,
+        request=request,
+    )
+
+
+def render_layout_display_block(
+    request,
+    layout_block: LayoutBlock,
+    *,
+    registry=None,
+    policy: PolicyService | None = None,
+    filters: Dict[str, Any] | None = None,
+) -> str:
+    """Render a read-only layout block card with optional filter overrides."""
+
+    if registry is None:
+        load_specs()
+        registry = get_registry()
+
+    layout = layout_block.layout
+    spec = registry.get(layout_block.block.code)
+
+    if spec is None:
+        inner_html = (
+            "<div class=\"alert alert-warning mb-0\">"
+            f"Block template '{layout_block.block.code}' is unavailable."
+            "</div>"
+        )
+    else:
+        policy = policy or PolicyService()
+        controller = BlockController(spec, policy)
+        original_get = request.GET
+        try:
+            query = QueryDict("", mutable=True)
+            for key, value in (filters or {}).items():
+                if value in (None, ""):
+                    continue
+                name = f"filters.{key}"
+                if isinstance(value, (list, tuple)):
+                    for item in value:
+                        if item in (None, ""):
+                            continue
+                        query.appendlist(name, str(item))
+                else:
+                    query[name] = str(value)
+            request.GET = query
+            context = controller.build_context(
+                request,
+                dom_ns=layout_block.slug,
+                allow_request_overrides=False,
+            )
+            context.update({
+                "layout": layout,
+                "layout_block": layout_block,
+            })
+            inner_html = render_to_string(
+                _resolve_block_template_name(spec),
+                context,
+                request=request,
+            )
+        except Exception:  # pragma: no cover - defensive logging
+            log.exception("Failed to render block %s", layout_block.block.code)
+            inner_html = (
+                "<div class=\"alert alert-danger mb-0\">"
+                "Unable to render this block. Please try again later."
+                "</div>"
+            )
+        finally:
+            request.GET = original_get
+
+    wrapper_context = {
+        "layout_block": layout_block,
+        "layout": layout,
+        "inner_html": inner_html,
+    }
+    return render_to_string(
+        "blocks/layouts/_detail_block.html",
         wrapper_context,
         request=request,
     )
@@ -334,6 +423,95 @@ class LayoutDetailView(LayoutUserSlugMixin, generic.DetailView):
     template_name = "blocks/layouts/detail.html"
     context_object_name = "layout"
 
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        context = super().get_context_data(**kwargs)
+        layout: Layout = context.get("layout")
+        request = self.request
+
+        policy = PolicyService()
+        configs = list(list_layout_filter_configs(layout, request.user))
+        identifier = request.GET.get("layout_filter")
+        active_config = choose_layout_filter_config(
+            layout,
+            request.user,
+            identifier=identifier,
+            configs=configs,
+        )
+        base_values = extract_layout_filter_values(active_config)
+        overrides = parse_request_filter_overrides(request)
+        merged_values = merge_layout_filter_values(base_values, overrides)
+
+        filter_blocks = list(
+            aggregate_layout_filter_metadata(
+                layout,
+                user=request.user,
+                policy=policy,
+                values=merged_values,
+            )
+        )
+        block_value_lookup = {meta.slug: meta.initial_values for meta in filter_blocks}
+
+        load_specs()
+        registry = get_registry()
+
+        rendered_blocks: List[Dict[str, Any]] = []
+        for block in layout.layout_blocks.select_related("block").order_by("order", "pk"):
+            rendered_blocks.append(
+                {
+                    "slug": block.slug,
+                    "title": block.title or block.block.name,
+                    "html": render_layout_display_block(
+                        request,
+                        block,
+                        registry=registry,
+                        policy=policy,
+                        filters=block_value_lookup.get(block.slug, {}),
+                    ),
+                }
+            )
+
+        panel_url = reverse(
+            "blocks:layout_filter_panel",
+            kwargs={
+                "username": layout.owner.username,
+                "slug": layout.slug,
+            },
+        )
+        panel_query = request.GET.urlencode()
+        if panel_query:
+            panel_hx_url = f"{panel_url}?{panel_query}"
+        else:
+            active_slug = getattr(active_config, "slug", "")
+            panel_hx_url = (
+                f"{panel_url}?layout_filter={active_slug}"
+                if active_slug
+                else panel_url
+            )
+        detail_url = reverse(
+            "blocks:layout_detail",
+            kwargs={
+                "username": layout.owner.username,
+                "slug": layout.slug,
+            },
+        )
+
+        context.update(
+            {
+                "layout_filter_configs": configs,
+                "active_layout_filter_config": active_config,
+                "active_layout_filter_slug": getattr(active_config, "slug", ""),
+                "layout_filter_blocks": filter_blocks,
+                "layout_filter_panel_url": panel_url,
+                "layout_filter_panel_hx_url": panel_hx_url,
+                "layout_filter_form_action": detail_url,
+                "filter_offcanvas_id": FILTER_OFFCANVAS_ID,
+                "filter_panel_wrapper_id": FILTER_PANEL_WRAPPER_ID,
+                "has_filter_blocks": any(meta.has_filters for meta in filter_blocks),
+                "rendered_layout_blocks": rendered_blocks,
+            }
+        )
+        return context
+
 
 class LayoutDeleteView(LayoutUserSlugMixin, generic.DeleteView):
     """Delete an existing layout after confirming ownership."""
@@ -362,6 +540,75 @@ class LayoutFilterManageView(LayoutUserSlugMixin, generic.DetailView):
         if not (self.request.user.is_staff or obj.owner_id == self.request.user.id):
             raise PermissionDenied("You do not have permission to manage filters for this layout.")
         return obj
+
+
+class LayoutFilterPanelView(LayoutUserSlugMixin, generic.DetailView):
+    """HTMX endpoint rendering the filter offcanvas panel."""
+
+    template_name = "blocks/layouts/_filter_panel.html"
+    context_object_name = "layout"
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        context = super().get_context_data(**kwargs)
+        layout: Layout = context.get("layout")
+
+        configs = list(list_layout_filter_configs(layout, self.request.user))
+        identifier = self.request.GET.get("config") or self.request.GET.get("layout_filter")
+        active_config = choose_layout_filter_config(
+            layout,
+            self.request.user,
+            identifier=identifier,
+            configs=configs,
+        )
+
+        base_values = extract_layout_filter_values(active_config)
+        reset_requested = self.request.GET.get("reset") in {"1", "true", "True"}
+        overrides = (
+            {}
+            if reset_requested
+            else parse_request_filter_overrides(self.request)
+        )
+        merged_values = merge_layout_filter_values(base_values, overrides)
+
+        filter_blocks = list(
+            aggregate_layout_filter_metadata(
+                layout,
+                user=self.request.user,
+                policy=PolicyService(),
+                values=merged_values,
+            )
+        )
+
+        panel_url = reverse(
+            "blocks:layout_filter_panel",
+            kwargs={
+                "username": layout.owner.username,
+                "slug": layout.slug,
+            },
+        )
+        detail_url = reverse(
+            "blocks:layout_detail",
+            kwargs={
+                "username": layout.owner.username,
+                "slug": layout.slug,
+            },
+        )
+
+        context.update(
+            {
+                "layout_filter_configs": configs,
+                "active_layout_filter_config": active_config,
+                "active_layout_filter_slug": getattr(active_config, "slug", ""),
+                "layout_filter_blocks": filter_blocks,
+                "layout_filter_panel_url": panel_url,
+                "layout_filter_form_action": detail_url,
+                "filter_offcanvas_id": FILTER_OFFCANVAS_ID,
+                "filter_panel_wrapper_id": FILTER_PANEL_WRAPPER_ID,
+                "has_filter_blocks": any(meta.has_filters for meta in filter_blocks),
+                "is_htmx": self.request.headers.get("HX-Request", "").lower() == "true",
+            }
+        )
+        return context
 
 
 class LayoutBlockAddView(LayoutOwnerPermissionMixin, generic.View):

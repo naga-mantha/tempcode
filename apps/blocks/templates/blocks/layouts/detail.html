@@ -1,18 +1,66 @@
 {% extends "base.html" %}
+
+{% block title %}<title>{{ layout.name }} — Layout</title>{% endblock %}
+
 {% block content %}
 <div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
-      <h1 class="h3 mb-0">{{ layout.name }}</h1>
-      <p class="text-muted mb-0">Owned by {{ layout.owner.username }} · {{ layout.get_visibility_display }}</p>
+      <h1 class="h3 mb-1">{{ layout.name }}</h1>
+      <p class="text-muted small mb-2">
+        Owned by <strong>{{ layout.owner.username }}</strong>
+        · {{ layout.get_visibility_display }} layout
+        {% if layout.is_default %}
+          <span class="badge bg-info-subtle text-info-emphasis align-middle ms-2">Default</span>
+        {% endif %}
+      </p>
+      {% if active_layout_filter_config %}
+        <span class="badge bg-secondary">Active filters: {{ active_layout_filter_config.name }}</span>
+      {% endif %}
     </div>
-    <div class="btn-group">
+    <div class="d-flex flex-wrap gap-2">
+      {% if has_filter_blocks %}
+        <button type="button"
+                class="btn btn-outline-primary"
+                hx-get="{{ layout_filter_panel_hx_url }}"
+                hx-target="#{{ filter_panel_wrapper_id }}"
+                hx-swap="outerHTML"
+                hx-push-url="false"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#{{ filter_offcanvas_id }}"
+                aria-controls="{{ filter_offcanvas_id }}">
+          Filters
+        </button>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_list' %}">All layouts</a>
       {% if request.user.is_staff or request.user == layout.owner %}
-      <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_edit' layout.owner.username layout.slug %}">Edit</a>
-      <a class="btn btn-outline-danger" href="{% url 'blocks:layout_delete' layout.owner.username layout.slug %}">Delete</a>
+        <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_edit' layout.owner.username layout.slug %}">Edit layout</a>
+        <a class="btn btn-outline-secondary" href="{% url 'blocks:layout_manage_filters' layout.owner.username layout.slug %}">Manage saved filters</a>
+        <a class="btn btn-outline-danger" href="{% url 'blocks:layout_delete' layout.owner.username layout.slug %}">Delete</a>
       {% endif %}
     </div>
   </div>
-  <p>{{ layout.description|default:"No description provided." }}</p>
+
+  {% if layout.description %}
+    <p class="text-muted">{{ layout.description }}</p>
+  {% endif %}
+
+  <div id="{{ filter_panel_wrapper_id }}">
+    {% include "blocks/layouts/_filter_panel.html" with is_htmx=False %}
+  </div>
+
+  <div class="row g-4 mt-1">
+    {% if rendered_layout_blocks %}
+      {% for block in rendered_layout_blocks %}
+        <div class="col-12 col-xl-6 col-xxl-4">
+          {{ block.html|safe }}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">No blocks have been added to this layout yet.</div>
+      </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
