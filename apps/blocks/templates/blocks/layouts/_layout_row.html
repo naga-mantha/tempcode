@@ -1,0 +1,30 @@
+<div class="list-group-item d-flex flex-column flex-md-row align-items-md-center gap-3 py-3" id="layoutRow-{{ layout.pk }}">
+  <div class="flex-fill">
+    <div class="d-flex align-items-center gap-2">
+      <a class="fw-semibold text-decoration-none" href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">
+        {{ layout.name }}
+      </a>
+      {% if layout.is_default %}
+        <span class="badge bg-info-subtle text-info-emphasis small">Default</span>
+      {% endif %}
+      {% if layout.is_public %}
+        <span class="badge bg-success-subtle text-success-emphasis small">Public</span>
+      {% endif %}
+    </div>
+    <div class="text-muted small">
+      Owned by {{ layout.owner.username }} · {{ layout.get_visibility_display }}
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <a class="btn btn-outline-primary btn-sm"
+       href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">
+      View
+    </a>
+    {% if request.user == layout.owner or request.user.is_staff %}
+      <a class="btn btn-outline-secondary btn-sm"
+         href="{% url 'blocks:layout_edit' layout.owner.username layout.slug %}">
+        Edit
+      </a>
+    {% endif %}
+  </div>
+</div>

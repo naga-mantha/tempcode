@@ -1,24 +1,36 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block title %}<title>Layouts</title>{% endblock %}
+
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Layouts</h1>
-    <a class="btn btn-primary" href="{% url 'blocks:layout_create' %}">New Layout</a>
+<div class="container py-4" hx-boost="true">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 mb-1">Layouts</h1>
+      <p class="text-muted mb-0">Browse dashboards you have created or those shared with you.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'blocks:layout_create' %}">
+      <span class="me-1" aria-hidden="true">＋</span>
+      New Layout
+    </a>
   </div>
-  {% if layouts %}
-  <ul class="list-group">
-    {% for layout in layouts %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-      <div>
-        <div class="fw-semibold">{{ layout.name }}</div>
-        <div class="text-muted small">{{ layout.owner.username }} · {{ layout.get_visibility_display }}</div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="list-group list-group-flush" id="layoutList" aria-live="polite">
+        {% for layout in layouts %}
+          {% include "blocks/layouts/_layout_row.html" with layout=layout %}
+        {% empty %}
+          <div class="list-group-item py-5 text-center text-muted">
+            You have not created any layouts yet.
+            <a class="d-inline-flex align-items-center gap-1 ms-1" href="{% url 'blocks:layout_create' %}">
+              <span>Start with a new layout</span>
+            </a>
+          </div>
+        {% endfor %}
       </div>
-      <a class="btn btn-outline-secondary btn-sm" href="{% url 'blocks:layout_detail' layout.owner.username layout.slug %}">View</a>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="text-muted">No layouts available yet.</p>
-  {% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

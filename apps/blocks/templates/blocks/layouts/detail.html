@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}<title>{{ layout.name }} — Layout</title>{% endblock %}
 
@@ -45,11 +46,9 @@
     <p class="text-muted">{{ layout.description }}</p>
   {% endif %}
 
-  <div id="{{ filter_panel_wrapper_id }}">
-    {% include "blocks/layouts/_filter_panel.html" with is_htmx=False %}
-  </div>
+  {% include "blocks/layouts/_filter_sidebar.html" with is_htmx=False %}
 
-  <div class="row g-4 mt-1">
+  <div class="row g-4 mt-1" id="layoutBlocks">
     {% if rendered_layout_blocks %}
       {% for block in rendered_layout_blocks %}
         <div class="col-12 col-xl-6 col-xxl-4">
