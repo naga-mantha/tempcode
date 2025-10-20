@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     'apps.common',
     'apps.accounts',
     'apps.blocks',
-    'apps.blocks_demo',
     'apps.production',
     'apps.purchase',
     'apps.planning',
