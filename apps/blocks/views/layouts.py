@@ -100,7 +100,10 @@ def render_layout_grid_item(
         policy = policy or PolicyService()
         controller = BlockController(spec, policy)
         try:
-            context = controller.build_context(request)
+            context = controller.build_context(
+                request,
+                dom_ns=layout_block.slug,
+            )
             context.update({
                 "layout": layout,
                 "layout_block": layout_block,
