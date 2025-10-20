@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from importlib import import_module
-from importlib.util import find_spec
-
 from django.urls import path
 
 from . import views
+from .views import layouts as layout_views
 
 app_name = "blocks"
 
@@ -38,4 +36,32 @@ urlpatterns = [
     path("pivot/duplicate/<str:spec_id>/<int:config_id>", views.duplicate_pivot_config, name="duplicate_pivot_config"),
     path("pivot/delete/<str:spec_id>/<int:config_id>", views.delete_pivot_config, name="delete_pivot_config"),
     path("pivot/make_default/<str:spec_id>/<int:config_id>", views.make_default_pivot_config, name="make_default_pivot_config"),
+]
+urlpatterns += [
+    # Layouts
+    path(
+        "layouts/",
+        layout_views.LayoutListView.as_view(),
+        name="layout_list",
+    ),
+    path(
+        "layouts/create/",
+        layout_views.LayoutCreateView.as_view(),
+        name="layout_create",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/",
+        layout_views.LayoutDetailView.as_view(),
+        name="layout_detail",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/edit/",
+        layout_views.LayoutEditView.as_view(),
+        name="layout_edit",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/filters/manage/",
+        layout_views.LayoutFilterManageView.as_view(),
+        name="layout_manage_filters",
+    ),
 ]
