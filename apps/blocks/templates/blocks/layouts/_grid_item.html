@@ -1,0 +1,26 @@
+<div class="grid-stack-item"
+     data-slug="{{ layout_block.slug }}"
+     data-spec-id="{{ layout_block.block.code }}"
+     data-title="{{ layout_block.title|default_if_none:'' }}"
+     data-gs-x="{{ grid.x }}"
+     data-gs-y="{{ grid.y }}"
+     data-gs-width="{{ grid.width }}"
+     data-gs-height="{{ grid.height }}"
+     data-order="{{ layout_block.order }}">
+  <div class="grid-stack-item-content border rounded-3 h-100 bg-white shadow-sm">
+    <div class="d-flex justify-content-between align-items-center border-bottom px-3 py-2">
+      <div class="fw-semibold">{{ layout_block.title|default:layout_block.block.name }}</div>
+      <button type="button"
+              class="btn btn-sm btn-outline-danger"
+              hx-post="{{ remove_url }}"
+              hx-target="closest('.grid-stack-item')"
+              hx-swap="outerHTML"
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+        Remove
+      </button>
+    </div>
+    <div class="p-3 layout-block-body">
+      {{ inner_html|safe }}
+    </div>
+  </div>
+</div>

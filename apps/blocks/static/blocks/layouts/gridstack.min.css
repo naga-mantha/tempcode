@@ -1,0 +1,30 @@
+.grid-stack {
+  --grid-gap: 15px;
+  display: grid;
+  grid-auto-rows: minmax(200px, auto);
+  gap: var(--grid-gap);
+  padding: 0;
+}
+
+.grid-stack-item {
+  list-style: none;
+  cursor: move;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.grid-stack-item.is-dragging {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+.grid-stack-item .grid-stack-item-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.grid-stack-item .layout-block-body {
+  flex: 1 1 auto;
+  overflow: auto;
+}

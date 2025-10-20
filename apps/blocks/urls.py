@@ -69,4 +69,19 @@ urlpatterns += [
         layout_views.LayoutFilterManageView.as_view(),
         name="layout_manage_filters",
     ),
+    path(
+        "layouts/<str:username>/<slug:slug>/blocks/add/",
+        layout_views.LayoutBlockAddView.as_view(),
+        name="layout_block_add",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/blocks/update/",
+        layout_views.LayoutBlockUpdateView.as_view(),
+        name="layout_block_update",
+    ),
+    path(
+        "layouts/<str:username>/<slug:slug>/blocks/<slug:block_slug>/remove/",
+        layout_views.LayoutBlockRemoveView.as_view(),
+        name="layout_block_remove",
+    ),
 ]
