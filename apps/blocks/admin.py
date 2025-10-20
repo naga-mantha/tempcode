@@ -45,3 +45,33 @@ class BlockFilterLayoutAdmin(admin.ModelAdmin):
     list_display = ("block", "user")
     search_fields = ("block__code", "block__name", "user__username")
 
+
+@admin.register(Layout)
+class LayoutAdmin(admin.ModelAdmin):
+    list_display = ("name", "owner", "visibility", "is_default", "slug", "created_at")
+    search_fields = ("name", "slug", "owner__username")
+    list_filter = ("visibility", "is_default")
+    autocomplete_fields = ("owner",)
+
+
+@admin.register(LayoutBlock)
+class LayoutBlockAdmin(admin.ModelAdmin):
+    list_display = (
+        "layout",
+        "slug",
+        "block",
+        "order",
+        "row_index",
+        "column_index",
+    )
+    search_fields = ("slug", "layout__name", "block__name", "block__code")
+    list_filter = ("layout",)
+    autocomplete_fields = ("layout", "block")
+
+
+@admin.register(LayoutFilterConfig)
+class LayoutFilterConfigAdmin(admin.ModelAdmin):
+    list_display = ("layout", "owner", "name", "visibility", "is_default")
+    search_fields = ("name", "slug", "layout__name", "owner__username")
+    list_filter = ("visibility", "is_default")
+    autocomplete_fields = ("layout", "owner")
