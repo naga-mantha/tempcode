@@ -21,6 +21,7 @@
   ns.tables = ns.tables || {};
   ns.handlesFilterFields = true;
   ns._scriptLoaders = ns._scriptLoaders || {};
+  ns._styleLoaders = ns._styleLoaders || {};
 
   function parseFilterKeys(value) {
     if (Array.isArray(value)) {
@@ -166,6 +167,40 @@
     return ns._scriptLoaders[src];
   }
 
+  function loadExternalStyle(href) {
+    if (!href) {
+      return Promise.reject(new Error('Missing stylesheet href'));
+    }
+    if (ns._styleLoaders[href]) {
+      return ns._styleLoaders[href];
+    }
+    ns._styleLoaders[href] = new Promise((resolve, reject) => {
+      const existing = document.querySelector(`link[data-v2-dynamic-style="${href}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === 'true') {
+          resolve();
+        } else {
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', (err) => reject(err));
+        }
+        return;
+      }
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.dataset.v2DynamicStyle = href;
+      link.addEventListener('load', () => {
+        link.dataset.loaded = 'true';
+        resolve();
+      });
+      link.addEventListener('error', (err) => {
+        reject(err);
+      });
+      document.head.appendChild(link);
+    });
+    return ns._styleLoaders[href];
+  }
+
   function ensureExcelScripts() {
     if (typeof XLSX !== 'undefined') {
       return Promise.resolve();
@@ -190,6 +225,16 @@
           window.jsPDF = window.jspdf.jsPDF;
         }
       });
+  }
+
+  function ensureTabulatorAssets() {
+    if (typeof window.Tabulator !== 'undefined') {
+      return Promise.resolve();
+    }
+    const cssHref = 'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css';
+    const jsSrc = 'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js';
+    return loadExternalStyle(cssHref).catch(() => {})
+      .then(() => loadExternalScript(jsSrc));
   }
 
   function normalizeFilename(base, extension) {
@@ -779,9 +824,12 @@
       }
     }
 
-    if (window.Tabulator && config.tableElementId) {
-      const tableEl = document.getElementById(config.tableElementId);
-      if (tableEl) {
+    if (config.tableElementId) {
+      const initializeTable = () => {
+        const tableEl = document.getElementById(config.tableElementId);
+        if (!tableEl || typeof window.Tabulator === 'undefined') {
+          return;
+        }
         const sourceColumns = Array.isArray(config.columns) ? config.columns : [];
         const tabColumns = sourceColumns.map(function mapColumns(col) {
           return {
@@ -816,9 +864,21 @@
           options.data = config.rows;
         }
 
-        const table = new Tabulator(tableEl, options);
+        const table = new window.Tabulator(tableEl, options);
         ns.tables[domId] = table;
         window[domId] = table;
+      };
+
+      if (typeof window.Tabulator !== 'undefined') {
+        initializeTable();
+      } else {
+        ensureTabulatorAssets()
+          .then(() => {
+            initializeTable();
+          })
+          .catch((err) => {
+            console.error('Failed to load Tabulator', err);
+          });
       }
     }
   };
