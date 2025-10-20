@@ -13,7 +13,7 @@
       <button type="button"
               class="btn btn-sm btn-outline-danger"
               hx-post="{{ remove_url }}"
-              hx-target="closest('.grid-stack-item')"
+              hx-target="closest .grid-stack-item"
               hx-swap="outerHTML"
               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
         Remove
