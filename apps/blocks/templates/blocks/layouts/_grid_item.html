@@ -22,5 +22,13 @@
     <div class="p-3 layout-block-body">
       {{ inner_html|safe }}
     </div>
+    <button type="button"
+            class="layout-grid-resizer"
+            data-grid-resizer
+            aria-label="Resize block"
+            title="Resize block">
+      <span aria-hidden="true">↘</span>
+      <span class="visually-hidden">Resize block</span>
+    </button>
   </div>
 </div>
