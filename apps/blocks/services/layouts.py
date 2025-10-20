@@ -81,11 +81,21 @@ class LayoutGridstackSerializer:
                 seen_in_payload.add(slug)
 
                 block_obj = existing.get(slug)
+                if block_obj is None:
+                    block_obj = (
+                        LayoutBlock.objects.filter(layout=self.layout, slug=slug)
+                        .select_related("block")
+                        .first()
+                    )
                 block_code = self._extract_block_code(raw)
 
                 if block_obj is None:
                     if not block_code:
-                        raise ValueError("block_code/spec_id is required for new blocks")
+                        available = ", ".join(repr(key) for key in sorted(existing.keys())) or "<none>"
+                        raise ValueError(
+                            "block_code/spec_id is required for new blocks"
+                            f" (payload slug: {slug!r}; known slugs: {available})"
+                        )
                     block_obj = LayoutBlock(
                         layout=self.layout,
                         block=get_block_for_spec(block_code),
@@ -147,13 +157,16 @@ class LayoutGridstackSerializer:
         raw_slug = str(payload.get("slug") or payload.get("id") or "").strip()
         block_code = self._extract_block_code(payload)
 
+        is_existing = False
         if raw_slug and raw_slug in existing:
             slug = raw_slug
+            is_existing = True
         else:
             candidate = raw_slug or (block_code or f"block-{index + 1}")
-            slug = slugify(candidate) or f"block-{index + 1}"
+            normalized = str(candidate).replace(".", "-")
+            slug = slugify(normalized) or f"block-{index + 1}"
 
-        if slug in seen or slug in self._reserved_slugs:
+        if not is_existing and (slug in seen or slug in self._reserved_slugs):
             slug = self._next_available_slug(slug or "block", seen)
 
         self._reserved_slugs.add(slug)

@@ -779,7 +779,7 @@ class LayoutFilterPanelView(LayoutUserSlugMixin, generic.DetailView):
         return context
 
 
-class LayoutBlockAddView(LayoutOwnerPermissionMixin, generic.View):
+class LayoutBlockAddView(LayoutOwnerPermissionMixin, SingleObjectMixin, generic.View):
     """HTMX endpoint for instantiating new layout blocks."""
 
     http_method_names = ["post"]
@@ -853,7 +853,7 @@ class LayoutBlockAddView(LayoutOwnerPermissionMixin, generic.View):
         return data
 
 
-class LayoutBlockUpdateView(LayoutOwnerPermissionMixin, generic.View):
+class LayoutBlockUpdateView(LayoutOwnerPermissionMixin, SingleObjectMixin, generic.View):
     """Persist block position/size updates from the Gridstack UI."""
 
     http_method_names = ["post"]
@@ -878,7 +878,7 @@ class LayoutBlockUpdateView(LayoutOwnerPermissionMixin, generic.View):
         return JsonResponse({"status": "ok"})
 
 
-class LayoutBlockRemoveView(LayoutOwnerPermissionMixin, generic.View):
+class LayoutBlockRemoveView(LayoutOwnerPermissionMixin, SingleObjectMixin, generic.View):
     """Remove a layout block instance."""
 
     http_method_names = ["post"]
