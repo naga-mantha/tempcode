@@ -70,3 +70,20 @@ The pivot controller response mirrors the table payload: it bundles computed row
 
 ## Stored Configuration Accessors
 Helper functions in `apps.blocks.configs` wrap the ORM to list and choose active table/filter/pivot configurations. They centralize default selection logic (e.g., prefer a user default, then a public default, then the first available entry) so both table and pivot controllers behave consistently.【F:apps/blocks/configs.py†L1-L55】
+
+## Layouts
+
+### Core Concepts
+Layouts let users assemble reusable dashboards from individual block instances. The `Layout` model tracks owner, visibility, and default selection, demoting any previous default when a new one is saved.【F:apps/blocks/models/layout.py†L27-L74】  Each placed block is stored as a `LayoutBlock`, which records ordering, grid coordinates, configuration, and ensures slug uniqueness within the layout.【F:apps/blocks/models/layout_block.py†L9-L59】  Grid metadata arrives from the Gridstack UI via `LayoutGridstackSerializer`, which normalizes payloads, resolves block specs, and persists position/size updates inside a transaction so batch edits remain atomic.【F:apps/blocks/services/layouts.py†L13-L137】
+
+### Management Endpoints
+`LayoutListView` sorts layouts by ownership priority so private dashboards owned by the current user appear first, followed by their shared layouts and any public dashboards from other users.【F:apps/blocks/views/layouts.py†L207-L238】  Authenticated users can create dashboards with `LayoutCreateView`, while updates and block management are gated by `LayoutOwnerPermissionMixin`, which raises a `PermissionDenied` error if the requester is neither staff nor the layout owner.【F:apps/blocks/views/layouts.py†L153-L205】【F:apps/blocks/views/layouts.py†L316-L337】  HTMX endpoints (`LayoutBlockAddView`, `LayoutBlockUpdateView`, and `LayoutBlockRemoveView`) accept JSON payloads from the Gridstack client to instantiate, reposition, and remove block instances, returning partial HTML snippets for in-place rendering.【F:apps/blocks/views/layouts.py†L780-L870】
+
+### Saved Filter Configurations
+Layouts can persist cross-block filter presets through `LayoutFilterConfig`, which enforces owner/visibility invariants, promotes the first entry to default, and reassigns a fallback default when the active preset is deleted.【F:apps/blocks/models/layout_filter_config.py†L8-L73】  The manage-filters page and accompanying HTMX endpoints provide CRUD operations: saving configurations via `LayoutFilterConfigSaveView`, renaming/duplicating/deleting entries, and toggling the default selection, all while returning the `_saved_filters` partial to keep the UI in sync.【F:apps/blocks/views/layouts.py†L520-L707】  Incoming values are validated against each block’s filter schema with `clean_layout_filter_values`, which prunes unknown keys using the spec’s resolver before writing to the database.【F:apps/blocks/services/layout_filters.py†L279-L336】
+
+### Manual QA for Gridstack Interactions
+Automated end-to-end JavaScript tests are not currently wired into the build pipeline, so exercise the drag-and-drop workflow manually when testing layout changes:
+- Open the layout edit page and add a block from the “Available Blocks” list, confirming it renders inside the grid and the remove button posts via HTMX.
+- Drag the new block to a different position and resize it, then refresh the page to ensure persisted coordinates are respected.
+- Save a filter preset from the “Manage Filters” page, rename it, set it as default, duplicate it, and delete it, verifying that the saved filters sidebar updates after each HTMX action.
