@@ -191,6 +191,19 @@
     });
   }
 
+  function getCsrfToken() {
+    const matches = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    if (matches && matches[1]) {
+      try {
+        return decodeURIComponent(matches[1]);
+      } catch (err) {
+        /* no-op */
+      }
+    }
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return csrfInput ? csrfInput.value : undefined;
+  }
+
   function postUpdate(container) {
     const url = container.dataset.updateUrl;
     if (!url || typeof window.htmx === 'undefined') {
@@ -203,8 +216,13 @@
     const payload = {
       blocks: nodes,
     };
+    const csrfToken = getCsrfToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
     window.htmx.ajax('POST', url, {
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       swap: 'none',
       values: {},
       body: JSON.stringify(payload),
