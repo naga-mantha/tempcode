@@ -1,74 +1,60 @@
-  Overview                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                              
-  - Pure composition layer: arranges blocks, delegates data to blocks, persists per-instance settings.                                                                                                                                        
-  - HTMX-driven partials; Bootstrap 5.3 components; theme-aware.                                                                                                                                                                              
-                                                                                                                                                                                                                                              
-  Composition & Grid                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                              
-  - Drag-and-drop grid (keep x/y/w/h via Gridstack semantics).                                                                                                                                                                                
-  - Per-block instance props: title, note, position, preferred sizes.                                                                                                                                                                         
-  - Add/remove/reorder blocks; lazy-load block content with skeletons.                                                                                                                                                                        
+Layout Module
 
-  Filter UX (Shared)                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                              
-  - Header: Edit Layout, Layout Filter dropdown, Manage, Reset.                                                                                                                                                                               
-  - Sidebar offcanvas for “Filter Conditions” driven by layout filter schema.                                                                                                                                                                 
-  - Saved filter configs: private/public; pick active; badges for active filters.                                                                                                                                                             
-                                                                                                                                                                                                                                              
-  Persistence & Visibility                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                              
-  - Private and Public layouts; categories; list in sidebar (alphabetical, highlight current).                                                                                                                                                
-  - Layout CRUD: list, create, edit, detail, delete.                                                                                                                                                                                          
-  - Persist offcanvas open/closed state; persist layout defaults.                                                                                                                                                                             
-                                                                                                                                                                                                                                              
-  Block Interactions                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                              
-  - Standard block chrome (title, note, actions).                                                                                                                                                                                             
-  - Block refresh via HTMX; pagination/sort/filters/exports from the block.                                                                                                                                                                   
-  - Save per-block settings (minor tweaks) via POST /layouts/<username>/<slug>/blocks/<id>/settings.                                                                                                                                          
-                                                                                                                                                                                                                                              
-  Content Blocks
-                                                                                                                                                                                                                                              
-  - Spacer, Text, Button, Card with JSON settings saved on LayoutBlock.settings.                                                                                                                                                              
-  - Render content blocks directly (no data services).                                                                                                                                                                                        
-                                                                                                                                                                                                                                              
-  Context-Aware Detail Pages                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                              
-  - Model/object-scoped “detail layouts” mapped via scope_type/scope_ref.                                                                                                                                                                     
-  - Context object passed to blocks (model, id, extra).                                                                                                                                                                                       
-  - Bindings in LayoutBlock.settings map context → block filters/config.                                                                                                                                                                      
-  - Server validates access and re-fetches object each request.                                                                                                                                                                               
-                                                                                                                                                                                                                                              
-  Endpoints                                                                                                                                                                                                                                   
-                                                                                                                                                                                                                                              
-  - Blocks partials: GET /blocks/<block_code>/partial (used inside layouts).                                                                                                                                                                  
-  - Block config saves (columns/filters) re-used from blocks.                                                                                                                                                                                 
-  - Layout block settings: POST /layouts/<username>/<slug>/blocks/<id>/settings.                                                                                                                                                              
-                                                                                                                                                                                                                                              
-  Data Model                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                              
-  - LayoutBlock gains settings: JSONField(default=dict) for per-instance settings/bindings.                                                                                                                                                   
-  - Keep x/y/w/h, position, title, note, preferred_* fields (v1 parity).                                                                                                                                                                      
-                                                                                                                                                                                                                                              
-  Theming & UX                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                              
-  - Bootstrap 5.3 light/dark via data-bs-theme (persist in localStorage + cookie).                                                                                                                                                            
-  - Consistent controls, compact spacing; accessible labels and keyboard support.                                                                                                                                                             
-                                                                                                                                                                                                                                              
-  Error & Empty States                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                              
-  - Standardized alert cards for block errors and empty datasets.                                                                                                                                                                             
-  - Inline notices on HTMX errors; retry affordances.                                                                                                                                                                                         
-                                                                                                                                                                                                                                              
-  Performance                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                              
-  - Lazy-loading of blocks; prefer server-side pagination for heavy tables.                                                                                                                                                                   
-  - Cache small choice lists; measure per-block render times.                                                                                                                                                                                 
-                                                                                                                                                                                                                                              
-  v1 Parity Checklist                                                                                                                                                                                                                         
-                                                                                                                                                                                                                                              
-  - Layout list/create/edit/detail/delete screens.                                                                                                                                                                                            
-  - Drag grid with persisted x/y/w/h; add/remove blocks.                                                                                                                                                                                      
-  - Per-block title/note; preferred sizes; categories; private/public.                                                                                                                                                                        
-  - Layout-level filter config screen; shared filter rendering using components/filter_fields.html.                                                                                                                                           
-  - Manage and pick saved filters; defaults honored.                                                     
+All the below-mentioned libraries are already installed. If anything is not mentioned, please mention it in the chat. Do not load libraries/CDNs in the code. 
+
+Models:
+1. Layout (already exists)
+2. LayoutBlock (already exists)
+3. LayoutFilterConfig (already exists)
+
+Pages:
+layouts/ → Layout List (list of user’s layouts; create new)
+  - It should inherit the base.html template
+  - A simple table view showing all layouts owned by the user a(Private first, then public)
+  - Each row should have: "View", "Edit", "Delete" actions corresponding to the layout.
+  - On top of the page, add a button to create a "New Layout"
+
+layouts/create/ → Layout Create (form to create new layout).
+  - It should inherit the base.html template
+  - Form with Layout model fields. Use crispy forms 
+  - If the user is admin/staff, allow the user to set the layout as public/private. For all other users, default to private only.
+  - On successful creation, redirect to the Layout Edit page.
+
+layouts/<str:username>/<slug:slug>/edit
+  - It should inherit the base.html template
+   - This page is for editing all aspects of the layout (metadata + design)
+   - Section 1: Layout Metadata Form
+     - Form with Layout model fields. Use crispy forms
+   - Section 2: A dropdown of available blocks (Format: App > Block Name) to add to the layout.
+   - Section 3: Layout Design
+     - HTMX-driven grid of blocks with drag/drop/resize/delete functionality. Use Gridstack.js for the grid.
+     - Each block should simply be a reflection of the actual block (use HTMX to load the block partials). Nothing less, nothing more. Place the "Delete Button" just above the block settings row.
+     - By default, keep a 15px gap between blocks (rows and columns)
+     - Each user should have the possibility to set default settings/filters per block and must be saved in LayoutBlock model. These can be different from the block defaults. Even when a user adds the same block twice, they can have different settings. 
+     - The saving must be AJAX (no save button). 
+
+layouts/<str:username>/<slug:slug> → Layout Detail (HTMX-driven grid of blocks with sidebar offcanvas for filters).
+  - It should inherit the base.html template
+  - Section 1:
+    - Left: Layout title
+    - Right: "Edit" and "Delete" button.
+      - For public layouts, only admin/staff users can see the "Edit" and "Delete" buttons.
+      - For private layouts, only the owner can see the "Edit" and "Delete" buttons.
+      - For "Delete", show a confirmation modal before proceeding.
+      - On clicking "Edit", redirect to the Layout Edit page.
+      
+  - Section 2: 
+    - Left: Layout Filters accordion (driven by layout’s filter schema). See "Layout Filters" section below for details.
+    - Right: Layout Filter dropdown + Manage + Reset buttons.
+      - Layout Filter dropdown: shows saved filter configs (private first, then public). Highlight the active one. Show badges for active filters.
+      - Manage: redirects to the Layout Filter Config Manage page (see "Layout Filters" section below for details).
+      - Reset: resets to default filter config.
+
+  - Section 3:
+    - The blocks itself. It should be placed as described in edit-layout page
+
+Layout Filters
+    - layouts/<str:username>/<slug:slug>/filters/manage → Layout Filter Config Manage (list/create/edit/delete saved filter configs).
+    - Copy the same logic/template as blocks/manage-filters/<slug:slug> except that it should be for LayoutFilterConfig model.
+    - "Filter Layouts" feature is not required for layouts
+    - The filter fields for layouts should be dynamically generated based on the block filters.
