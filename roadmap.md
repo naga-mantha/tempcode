@@ -4,20 +4,6 @@ This roadmap lists upcoming features in plain language so everyone can see whatâ
 
 ## Release Plan by Area (MMYY)
 
-Layouts
-- Ability for admins to create public/private layouts - 0110
-- Ability for users to create/edit/delete private layouts - 0110
-- Drag and drop any block into a private layout; set sizes and positions - 0110
-- Set default settings (column/filter configurations) for blocks on a layout - 0110
-- Add custom title/notes per block on a layout - 0110
-- Layout filters (dynamically generated from blocks on a layout) that apply to all blocks on the page - 0110
-- Set default layout filters for a layout - 0110
-- Refresh only specific block data when settings (column/filter configuration) change - 1025
-- Ability to duplicate a layout - 1125
-- Ability to share a page with specific users - 1225
-- Ability to download layouts to PDF - 1225
-- Ability to set a specific layout as a homepage - 1225
-
 Table Block
 - Ability to create private table views (column configuration)- 0110
 - Ability to create private filters (filter configuration)- 0110

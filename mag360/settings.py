@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     'apps.production',
     'apps.purchase',
     'apps.planning',
-    'apps.layout',
     'apps.workflow',
     'apps.permissions',
     'django_extensions',
@@ -87,7 +86,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'apps.common.context_processors.sidebar_layouts',
                 'apps.common.context_processors.branding',
             ],
         },
@@ -164,7 +162,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # (Removed) V2 policy mask flag; serializers always mask unreadable fields.
 
 # MAG360 SETTINGS
-LOGIN_REDIRECT_URL = "layout:layout_list"
+LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "home"
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
