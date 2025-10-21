@@ -40,7 +40,7 @@ class ProductionOrderTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.blocks.helpers.column_config import get_user_column_config
+        from apps.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)
@@ -144,7 +144,7 @@ class ProductionOrderOperationTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.blocks.helpers.column_config import get_user_column_config
+        from apps.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)

@@ -298,7 +298,7 @@ class PivotBlock(BaseBlock, FilterResolutionMixin):
         # Support date bucketing for dimensions
         model = self.get_model()
         try:
-            from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+            from apps.blocks.services.column_config import get_model_fields_for_column_config
             try:
                 max_depth = int(getattr(self, "get_column_config_max_depth")())
             except Exception:

@@ -16,8 +16,8 @@ from apps.permissions.checks import (
     can_write_field as can_write_field_generic,
     filter_viewable_queryset as filter_viewable_queryset_generic,
 )
-from apps.blocks.helpers.field_rules import get_field_display_rules
-from apps.blocks.helpers.column_config import get_user_column_config
+from apps.blocks.services.field_rules import get_field_display_rules
+from apps.blocks.services.column_config import get_user_column_config
 from django.db import models
 from django.core.exceptions import FieldDoesNotExist
 from django.contrib.admin.utils import label_for_field
@@ -147,7 +147,7 @@ class TableBlock(BaseBlock, FilterResolutionMixin):
         # Build a map of all manageable fields to their labels to match the
         # Manage Columns page (Verbose Name)
         try:
-            from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+            from apps.blocks.services.column_config import get_model_fields_for_column_config
             try:
                 max_depth = int(getattr(self, "get_column_config_max_depth")())
             except Exception:

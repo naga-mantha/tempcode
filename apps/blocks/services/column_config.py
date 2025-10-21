@@ -2,7 +2,7 @@ from apps.blocks.models.block_column_config import BlockColumnConfig
 from apps.permissions.checks import can_read_field
 from apps.workflow.permissions import can_read_field_state  # noqa: F401 (reserved for future use)
 from django.db import models
-from apps.blocks.helpers.field_rules import get_field_display_rules
+from .field_rules import get_field_display_rules
 
 def get_user_column_config(user, block):
     # Prefer user's private default; else a public default; else first private; else first public
