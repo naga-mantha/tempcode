@@ -1,5 +1,7 @@
-from __future__ import annotations
+# Below functions are used in purchase/production and other apps.
+# Even though it doesnt show that they are being used.
 
+from __future__ import annotations
 from datetime import date, datetime
 from django.utils import timezone
 
