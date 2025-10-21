@@ -74,10 +74,19 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'mag360.urls'
 
+_extra_template_dirs = [BASE_DIR / "apps" / "common" / "templates"]
+
+django_bi_template_root = BASE_DIR / "apps" / "django_bi"
+_extra_template_dirs.extend(
+    path
+    for path in django_bi_template_root.glob("*/templates")
+    if path.is_dir()
+)
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR/'common/templates'],
+        'DIRS': _extra_template_dirs,
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
