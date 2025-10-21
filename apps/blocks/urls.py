@@ -4,8 +4,6 @@ from apps.blocks.views import chart as chart_views
 from apps.blocks.views import pivot as pivot_views
 from apps.blocks.views.pivot_config import PivotConfigView
 from apps.blocks.views.pivot_filter_config import PivotFilterConfigView
-from apps.blocks.views.repeater_config import RepeaterConfigView
-from apps.blocks.views import repeater as repeater_views
 from apps.blocks.views.inline_edit import InlineEditView
 from apps.blocks.views.column_config import ColumnConfigView
 from apps.blocks.views.filter_config import FilterConfigView, ChartFilterConfigView
@@ -52,17 +50,6 @@ urlpatterns = [
         "pivot/<str:block_name>/filters/",
         PivotFilterConfigView.as_view(),
         name="pivot_filter_config",
-    ),
-    # Repeater settings
-    path(
-        "repeater/<str:block_name>/settings/",
-        RepeaterConfigView.as_view(),
-        name="repeater_config_view",
-    ),
-    path(
-        "repeater/<str:block_name>/",
-        repeater_views.render_repeater_block,
-        name="render_repeater_block",
     ),
     # Filter layout (per-user)
     path(
