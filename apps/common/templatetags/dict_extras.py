@@ -1,21 +1,15 @@
-from django import template
-import json
-from django.utils.safestring import mark_safe
+"""Deprecated compatibility shim for Django BI template filters."""
+from __future__ import annotations
 
-register = template.Library()
+import warnings
 
-@register.filter
-def get_item(d, key):
-    try:
-        return d.get(key)
-    except Exception:
-        return None
+from apps.django_bi.templatetags.dict_extras import register  # noqa: F401
 
+warnings.warn(
+    "apps.common.templatetags.dict_extras is deprecated; "
+    "use apps.django_bi.templatetags.dict_extras instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-@register.filter
-def tojson(value):
-    """Serialize a Python object to JSON for embedding in templates."""
-    try:
-        return mark_safe(json.dumps(value))
-    except Exception:
-        return mark_safe("null")
+__all__ = ["register"]
