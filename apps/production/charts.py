@@ -32,7 +32,7 @@ class _StatusFilterMixin:
                 "multiple": True,
                 "choices": status_choices,
                 "choices_url": reverse(
-                    "block_filter_choices", args=[self.block_name, "status"]
+                    "blocks:block_filter_choices", args=[self.block_name, "status"]
                 ),
                 "model": ProductionOrder,
                 "field": "status",
