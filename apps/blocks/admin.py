@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import *
+
+from .models import (
+    Block,
+    BlockColumnConfig,
+    BlockFilterConfig,
+    FieldDisplayRule,
+    PivotConfig,
+)
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
 
 @admin.register(Block)
@@ -30,22 +37,8 @@ class PivotConfigAdmin(admin.ModelAdmin):
     search_fields = ("name",)
     list_filter = ("visibility",)
 
-@admin.register(RepeaterConfig)
-class RepeaterConfigAdmin(admin.ModelAdmin):
-    list_display = ("block", "user", "name")
-    search_fields = ("name",)
-
 # Template models (admin-defined defaults)
-from apps.blocks.models.config_templates import (
-    RepeaterConfigTemplate,
-    BlockFilterLayoutTemplate,
-)
-
-@admin.register(RepeaterConfigTemplate)
-class RepeaterConfigTemplateAdmin(admin.ModelAdmin):
-    list_display = ("block", "name", "is_default", "site_key")
-    list_filter = ("is_default",)
-    search_fields = ("name", "site_key")
+from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 
 @admin.register(BlockFilterLayoutTemplate)
 class BlockFilterLayoutTemplateAdmin(admin.ModelAdmin):
