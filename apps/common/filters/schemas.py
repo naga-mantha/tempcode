@@ -32,7 +32,7 @@ def supplier_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or supplier_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "supplier"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "supplier"]),
         # value_path is used to compute allowed values from the filtered queryset
         # for interdependent narrowing of options.
         "value_path": supplier_code_path,
@@ -65,7 +65,7 @@ def item_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or item_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "item"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "item"]),
         "value_path": item_code_path,
         "tom_select_options": {
             "placeholder": "Search items...",
@@ -95,7 +95,7 @@ def item_group_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or item_group_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "item_group"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "item_group"]),
         "value_path": item_group_code_path,
         "tom_select_options": {
             "placeholder": "Search item groups...",
@@ -122,7 +122,9 @@ def item_group_type_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or item_group_type_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "item_group_type"]),
+        "choices_url": reverse(
+            "blocks:block_filter_choices", args=[block_name, "item_group_type"]
+        ),
         "value_path": item_group_type_code_path,
         "tom_select_options": {
             "placeholder": "Search item group types...",
@@ -149,7 +151,7 @@ def program_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or program_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "program"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "program"]),
         "value_path": program_code_path,
         "tom_select_options": {
             "placeholder": "Search programs...",
@@ -176,7 +178,7 @@ def item_type_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or item_type_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "item_type"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "item_type"]),
         "value_path": item_type_code_path,
         "tom_select_options": {
             "placeholder": "Search item types...",
@@ -204,7 +206,9 @@ def mrp_reschedule_direction_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "mrp_direction"]),
+        "choices_url": reverse(
+            "blocks:block_filter_choices", args=[block_name, "mrp_direction"]
+        ),
         "value_path": direction_path,
         "tom_select_options": {
             "placeholder": "Select direction...",
@@ -234,7 +238,7 @@ def purchase_order_category_filter(
         "type": "multiselect",
         "multiple": True,
         "choices": choices_func or po_category_choices,
-        "choices_url": reverse("block_filter_choices", args=[block_name, "category"]),
+        "choices_url": reverse("blocks:block_filter_choices", args=[block_name, "category"]),
         "value_path": po_category_code_path,
         "tom_select_options": {
             "placeholder": "Search categories...",

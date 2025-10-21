@@ -93,7 +93,9 @@ class ProductionOrderTableBlock(TableBlock):
                 "label": "Order #",
                 "type": "select",
                 "choices": order_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "production_order"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "production_order"]
+                ),
                 "handler": lambda qs, val: qs.filter(production_order=val) if val else qs,
                 "tom_select_options": {
                     "placeholder": "Search production orders...",
@@ -104,7 +106,9 @@ class ProductionOrderTableBlock(TableBlock):
                 "type": "multiselect",
                 "multiple": True,
                 "choices": item_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "item"]
+                ),
                 "tom_select_options": {
                     "placeholder": "Search items...",
                     "plugins": ["remove_button"],
@@ -202,7 +206,9 @@ class ProductionGenericPivot(PivotBlock):
                 "label": "Item",
                 "type": "select",
                 "choices": item_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "item"]
+                ),
                 # Filter by item code (string), not by PK
                 "handler": lambda qs, val: qs.filter(item__code=str(val)) if val else qs,
             },
