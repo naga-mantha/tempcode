@@ -69,7 +69,7 @@ class PivotConfigView(LoginRequiredMixin, FormView):
         except Exception:
             model = None
         dim_choices, measure_choices = [], []
-        from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+        from apps.blocks.services.column_config import get_model_fields_for_column_config
         meta = get_model_fields_for_column_config(model, self.user) if model else []
         # Fallback: if nothing is visible under strict permissions, build using unrestricted meta
         if not meta and model is not None:

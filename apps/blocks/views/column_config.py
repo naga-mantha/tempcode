@@ -6,7 +6,7 @@ from django.views.generic import FormView
 
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_column_config import BlockColumnConfig
-from apps.blocks.helpers.column_config import get_model_fields_for_column_config
+from apps.blocks.services.column_config import get_model_fields_for_column_config
 from apps.blocks.registry import block_registry
 
 
