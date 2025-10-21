@@ -41,7 +41,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 INSTALLED_APPS = [
     'apps.common',
     'apps.accounts',
-    'apps.django_bi.apps.DjangoBiConfig',
+    'apps.django_bi',
     'apps.production',
     'apps.purchase',
     'apps.planning',
