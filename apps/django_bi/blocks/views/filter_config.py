@@ -41,7 +41,7 @@ class FilterConfigForm(forms.Form):
 class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
     template_name = "blocks/table/filter_config_view.html"
     form_class = FilterConfigForm
-    filter_config_url_name = "table_filter_config"
+    filter_config_url_name = "blocks:table_filter_config"
 
     def dispatch(self, request, block_name, *args, **kwargs):
         self.block_name = block_name
@@ -228,4 +228,4 @@ class FilterConfigView(LoginRequiredMixin, FilterResolutionMixin, FormView):
 
 class ChartFilterConfigView(FilterConfigView):
     template_name = "blocks/chart/filter_config_view.html"
-    filter_config_url_name = "chart_filter_config"
+    filter_config_url_name = "blocks:chart_filter_config"

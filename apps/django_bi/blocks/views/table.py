@@ -45,5 +45,5 @@ def filter_delete_view(request, block_name, config_id):
     if request.method == "POST":
         cfg.delete()
         messages.success(request, "Filter deleted.")
-        return redirect("table_filter_config", block_name=block_name)
+        return redirect("blocks:table_filter_config", block_name=block_name)
     raise Http404()

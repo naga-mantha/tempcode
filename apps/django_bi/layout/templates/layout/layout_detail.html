@@ -7,10 +7,10 @@
       <h1 class="mb-0">{{ layout.name }}</h1>
       <div class="d-flex align-items-center gap-2">
         {% if can_edit %}
-          <a href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}" class="btn btn-success btn-sm">Edit</a>
+          <a href="{% url 'layout:layout_edit' username=layout.user.username slug=layout.slug %}" class="btn btn-success btn-sm">Edit</a>
         {% endif %}
         {% if can_delete %}
-          <a href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}" class="btn btn-danger btn-sm">Delete</a>
+          <a href="{% url 'layout:layout_delete' username=layout.user.username slug=layout.slug %}" class="btn btn-danger btn-sm">Delete</a>
         {% endif %}
       </div>
     </div>
@@ -43,8 +43,8 @@
             </optgroup>
           {% endfor %}
         </select>
-        <a class="btn btn-link p-0 ms-2" href="{% url 'layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
-        <a class="btn btn-link p-0 ms-2" href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Reset</a>
+        <a class="btn btn-link p-0 ms-2" href="{% url 'layout:layout_filter_config' username=layout.user.username slug=layout.slug %}">Manage Filters</a>
+        <a class="btn btn-link p-0 ms-2" href="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}">Reset</a>
       </div>
     </div>
 

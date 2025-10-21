@@ -22,14 +22,14 @@
           {% for layout in group.list %}
             <tr>
               <td>
-                <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
+                <a href="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
               </td>
               <td class="text-muted">{{ layout.description }}</td>
               <td>
-                <a class="btn btn-link btn-sm p-0" href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit</a>
+                <a class="btn btn-link btn-sm p-0" href="{% url 'layout:layout_edit' username=layout.user.username slug=layout.slug %}">Edit</a>
               </td>
               <td>
-                <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
+                <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'layout:layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
               </td>
             </tr>
           {% empty %}
@@ -60,19 +60,19 @@
           {% for layout in group.list %}
             <tr>
               <td>
-                <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
+                <a href="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}">{{ layout.name }}</a>
               </td>
               <td class="text-muted">{{ layout.description }}</td>
               <td>
                 {% if request.user.is_staff %}
-                  <a class="btn btn-link btn-sm p-0" href="{% url 'layout_edit' username=layout.user.username slug=layout.slug %}">Edit</a>
+                  <a class="btn btn-link btn-sm p-0" href="{% url 'layout:layout_edit' username=layout.user.username slug=layout.slug %}">Edit</a>
                 {% else %}
                   <span class="text-muted small">—</span>
                 {% endif %}
               </td>
               <td>
                 {% if request.user.is_staff %}
-                  <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
+                  <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'layout:layout_delete' username=layout.user.username slug=layout.slug %}">Delete</a>
                 {% else %}
                   <span class="text-muted small">—</span>
                 {% endif %}

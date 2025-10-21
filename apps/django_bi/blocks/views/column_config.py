@@ -124,10 +124,10 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             if config_id:
                 cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
                 if not cfg:
-                    return redirect("column_config_view", block_name=self.block.code)
+                    return redirect("blocks:column_config_view", block_name=self.block.code)
                 if not self.request.user.is_staff and (cfg.visibility != BlockColumnConfig.VISIBILITY_PRIVATE or cfg.user_id != self.user.id):
                     # Non-admins cannot edit public or others' privates
-                    return redirect("column_config_view", block_name=self.block.code)
+                    return redirect("blocks:column_config_view", block_name=self.block.code)
                 # Admins may edit any; update fields and (optionally) visibility
                 cfg.fields = field_list
                 if self.request.user.is_staff and visibility in dict(BlockColumnConfig.VISIBILITY_CHOICES):
@@ -142,7 +142,7 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             # Allow delete if owner of a private config, or admin deleting a public config
             cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
             if not cfg:
-                return redirect("column_config_view", block_name=self.block.code)
+                return redirect("blocks:column_config_view", block_name=self.block.code)
             can_delete = (
                 (cfg.visibility == BlockColumnConfig.VISIBILITY_PRIVATE and cfg.user_id == self.user.id)
                 or (self.request.user.is_staff and cfg.visibility == BlockColumnConfig.VISIBILITY_PUBLIC)
@@ -152,7 +152,7 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
         elif action == "set_default" and config_id:
             cfg = BlockColumnConfig.objects.filter(id=config_id, block=self.block).first()
             if not cfg:
-                return redirect("column_config_view", block_name=self.block.code)
+                return redirect("blocks:column_config_view", block_name=self.block.code)
             # Admin can set default on any PUBLIC config (global fallback), or on their own private
             if self.request.user.is_staff and cfg.visibility == BlockColumnConfig.VISIBILITY_PUBLIC:
                 # Demote other public defaults for this block
@@ -162,4 +162,4 @@ class ColumnConfigView(LoginRequiredMixin, FormView):
             elif cfg.user_id == self.user.id and cfg.visibility == BlockColumnConfig.VISIBILITY_PRIVATE:
                 cfg.is_default = True
                 cfg.save()
-        return redirect("column_config_view", block_name=self.block.code)
+        return redirect("blocks:column_config_view", block_name=self.block.code)
