@@ -20,8 +20,8 @@
         </optgroup>
       {% endfor %}
     </select>
-    <a class="btn btn-link p-0" href="{% url 'pivot_config_view' block_name %}">Manage Settings</a>
-    <a class="btn btn-link p-0 ms-2" href="{% url 'render_pivot_block' block_name %}">Pivot Link</a>
+    <a class="btn btn-link p-0" href="{% url 'blocks:pivot_config_view' block_name %}">Manage Settings</a>
+    <a class="btn btn-link p-0 ms-2" href="{% url 'blocks:render_pivot_block' block_name %}">Pivot Link</a>
   </div>
   <div class="d-flex align-items-center">
     <label class="me-2">Saved Filters:</label>

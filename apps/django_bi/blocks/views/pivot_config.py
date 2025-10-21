@@ -253,7 +253,7 @@ class PivotConfigView(LoginRequiredMixin, FormView):
                 cfg = get_object_or_404(PivotConfig, id=target_id, block=self.block)
                 # Non-admins can only edit their own private configs
                 if (not self.request.user.is_staff) and (cfg.user_id != self.user.id or cfg.visibility != PivotConfig.VISIBILITY_PRIVATE):
-                    return redirect("pivot_config_view", block_name=code)
+                    return redirect("blocks:pivot_config_view", block_name=code)
                 cfg.name = name or cfg.name
                 cfg.schema = schema
                 if self.request.user.is_staff and visibility in dict(PivotConfig.VISIBILITY_CHOICES):
@@ -282,4 +282,4 @@ class PivotConfigView(LoginRequiredMixin, FormView):
             if cfg:
                 cfg.is_default = True
                 cfg.save()
-        return redirect("pivot_config_view", block_name=code)
+        return redirect("blocks:pivot_config_view", block_name=code)
