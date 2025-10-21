@@ -157,7 +157,7 @@
       const field = cell.getField();
       const value = cell.getValue();
       if (id == null) { return; }
-      fetch("{% url 'inline_edit' block_name %}", {
+      fetch("{% url 'blocks:inline_edit' block_name %}", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({id, field, value}),
