@@ -1,26 +1,24 @@
-from apps.django_bi.layout.models import Layout
+"""Context processors that remain in the common app."""
+from __future__ import annotations
+
+import warnings
+
 from django.conf import settings
 
 
-def sidebar_layouts(request):
-    """Provide layout lists for the global sidebar.
-
-    - Private layouts: current user's private, ordered by category then name
-    - Public layouts: all public, ordered by category then name
-    """
-    if not getattr(request, "user", None) or not request.user.is_authenticated:
-        return {
-            "private_layouts": [],
-            "public_layouts": [],
-        }
-    private_qs = Layout.objects.filter(user=request.user, visibility=Layout.VISIBILITY_PRIVATE).order_by(
-        "category", "name"
+def sidebar_layouts(*args, **kwargs):
+    """Deprecated shim that forwards to the Django BI implementation."""
+    warnings.warn(
+        "apps.common.context_processors.sidebar_layouts is deprecated; "
+        "use apps.django_bi.utils.context_processors.sidebar_layouts instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    public_qs = Layout.objects.filter(visibility=Layout.VISIBILITY_PUBLIC).order_by("category", "name")
-    return {
-        "private_layouts": list(private_qs),
-        "public_layouts": list(public_qs),
-    }
+    from apps.django_bi.utils.context_processors import (
+        sidebar_layouts as _sidebar_layouts,
+    )
+
+    return _sidebar_layouts(*args, **kwargs)
 
 
 def branding(request):

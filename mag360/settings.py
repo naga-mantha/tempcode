@@ -84,7 +84,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'apps.common.context_processors.sidebar_layouts',
+                'apps.django_bi.utils.context_processors.sidebar_layouts',
                 'apps.common.context_processors.branding',
             ],
         },
