@@ -1,6 +1,6 @@
 from apps.blocks.registry import block_registry
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 from apps.layout.models import Layout
 from django.http import Http404
 from django.shortcuts import get_object_or_404

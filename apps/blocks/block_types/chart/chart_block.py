@@ -11,7 +11,7 @@ from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 from apps.permissions.checks import (
     filter_viewable_queryset as filter_viewable_queryset_generic,
     can_read_field as can_read_field_generic,

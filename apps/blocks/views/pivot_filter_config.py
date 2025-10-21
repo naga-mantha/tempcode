@@ -8,7 +8,7 @@ from django.views.generic import FormView
 from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.registry import block_registry
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 
 
