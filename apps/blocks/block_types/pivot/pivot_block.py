@@ -3,7 +3,7 @@ from apps.blocks.models.block import Block
 from apps.blocks.models.block_filter_config import BlockFilterConfig
 from apps.blocks.models.config_templates import BlockFilterLayoutTemplate
 from apps.blocks.models.block_filter_layout import BlockFilterLayout
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 from apps.blocks.models.pivot_config import PivotConfig
 from apps.blocks.services.filtering import apply_filter_registry
 from django.contrib.admin.utils import label_for_field

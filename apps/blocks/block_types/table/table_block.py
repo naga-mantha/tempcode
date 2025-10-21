@@ -22,7 +22,7 @@ from django.db import models
 from django.core.exceptions import FieldDoesNotExist
 from django.contrib.admin.utils import label_for_field
 import json
-from .filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 import uuid
 
 

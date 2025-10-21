@@ -5,7 +5,7 @@ import inspect
 from typing import Optional, Iterable, Set
 
 from apps.blocks.registry import block_registry
-from apps.blocks.block_types.table.filter_utils import FilterResolutionMixin
+from apps.blocks.services.blocks_filter_utils import FilterResolutionMixin
 
 
 class FilterChoicesView(LoginRequiredMixin, View):
