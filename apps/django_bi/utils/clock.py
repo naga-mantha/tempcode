@@ -1,5 +1,4 @@
-# Below functions are used in purchase/production and other apps.
-# Even though it doesnt show that they are being used.
+"""Timezone-aware clock helpers shared across BI and other apps."""
 
 from __future__ import annotations
 from datetime import date, datetime
