@@ -1,9 +1,18 @@
 """Context processors supporting Django BI layouts."""
 from __future__ import annotations
 
+from django.conf import settings
+
 from apps.django_bi.layout.models import Layout
 
-__all__ = ["sidebar_layouts"]
+__all__ = ["branding", "sidebar_layouts"]
+
+
+def branding(request):
+    """Expose company branding values to templates."""
+    return {
+        "company_full_name": getattr(settings, "COMPANY_FULL_NAME", "Mecaer America Inc."),
+    }
 
 
 def sidebar_layouts(request):
