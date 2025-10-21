@@ -10,6 +10,8 @@ from apps.django_bi.blocks.views.filter_config import FilterConfigView, ChartFil
 from apps.django_bi.blocks.views.filter_choices import FilterChoicesView
 from apps.django_bi.blocks.views.filter_layout import FilterLayoutView, AdminFilterLayoutView
 
+app_name = "blocks"
+
 urlpatterns = [
     path("table/<str:block_name>/", table_views.render_table_block, name="render_table_block"),
     path("table/<str:block_name>/edit/", InlineEditView.as_view(), name="inline_edit"),

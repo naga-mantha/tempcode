@@ -2,6 +2,8 @@ from django.urls import path
 
 from apps.django_bi.layout import views
 
+app_name = "layout"
+
 urlpatterns = [
     path("layout_list", views.LayoutListView.as_view(), name="layout_list"),
     path("layout_create", views.LayoutCreateView.as_view(), name="layout_create"),
