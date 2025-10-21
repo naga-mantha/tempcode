@@ -41,13 +41,10 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 INSTALLED_APPS = [
     'apps.common',
     'apps.accounts',
-    'apps.blocks',
+    'apps.django_bi',
     'apps.production',
     'apps.purchase',
     'apps.planning',
-    'apps.layout',
-    'apps.workflow',
-    'apps.permissions',
     'django_extensions',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -72,7 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.permissions.middleware.PermissionCacheMiddleware',
+    'apps.django_bi.permissions.middleware.PermissionCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'mag360.urls'

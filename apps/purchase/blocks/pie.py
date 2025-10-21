@@ -1,7 +1,7 @@
 from django.db.models import Count
 
-from apps.blocks.block_types.chart.chart_block import DonutChartBlock
-from apps.blocks.services.filtering import apply_filter_registry
+from apps.django_bi.blocks.block_types.chart.chart_block import DonutChartBlock
+from apps.django_bi.blocks.services.filtering import apply_filter_registry
 from apps.common.models import PurchaseOrderLine
 from apps.common.utils.clock import today
 from apps.common.filters.schemas import (

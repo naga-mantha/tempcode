@@ -1,1 +1,0 @@
-from apps.workflow.views.transition import *

@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('common', '0001_initial'),
-        ('workflow', '0001_initial'),
+        ('django_bi', '0011_workflow_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -19,12 +19,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='calendar',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='calendar',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='calendarday',
@@ -34,12 +34,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='calendarday',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='calendarday',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='calendarshift',
@@ -49,12 +49,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='calendarshift',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='calendarshift',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='exchangerate',
@@ -69,12 +69,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='item',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='item',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='item',
@@ -107,12 +107,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='labor',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='labor',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='calendarshift',
@@ -127,12 +127,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='laborvacation',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='laborvacation',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='machine',
@@ -142,12 +142,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machine',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='machine',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='machinedowntime',
@@ -157,12 +157,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinedowntime',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='machinedowntime',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='plannedproductionorder',
@@ -207,12 +207,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='productionorder',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='productionorder',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='productionmrpmessage',
@@ -242,12 +242,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='productionorderoperation',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='productionorderoperation',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='productionorderschedule',
@@ -267,12 +267,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='productionorderschedule',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='productionorderschedule',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddConstraint(
             model_name='program',
@@ -301,12 +301,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='purchaseorder',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='purchaseorder',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='purchaseordercategory',
@@ -336,12 +336,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='purchaseorderline',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='purchaseorderline',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='purchasemrpmessage',
@@ -375,12 +375,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='receiptline',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='receiptline',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='salesorder',
@@ -390,12 +390,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='salesorder',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='salesorder',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='salesordercategory',
@@ -425,12 +425,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='shifttemplate',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='shifttemplate',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='calendarshift',
@@ -465,12 +465,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='task',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='task',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='productionorderoperation',
@@ -485,12 +485,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='uom',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='uom',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='purchaseorderline',
@@ -510,12 +510,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='workcenter',
             name='workflow',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.workflow'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.workflow'),
         ),
         migrations.AddField(
             model_name='workcenter',
             name='workflow_state',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='workflow.state'),
+            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.PROTECT, to='django_bi.state'),
         ),
         migrations.AddField(
             model_name='productionorderoperation',

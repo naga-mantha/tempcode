@@ -1,4 +1,4 @@
-from apps.layout.models import Layout
+from apps.django_bi.layout.models import Layout
 from django.conf import settings
 
 

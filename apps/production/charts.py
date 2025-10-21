@@ -1,7 +1,7 @@
 from django.db.models import Count
 from django.urls import reverse
 
-from apps.blocks.block_types.chart.chart_block import (
+from apps.django_bi.blocks.block_types.chart.chart_block import (
     BarChartBlock,
     DonutChartBlock,
     LineChartBlock,
