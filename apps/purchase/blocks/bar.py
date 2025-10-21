@@ -1,5 +1,5 @@
-from apps.blocks.block_types.chart.chart_block import BarChartBlock
-from apps.blocks.services.filtering import apply_filter_registry
+from apps.django_bi.blocks.block_types.chart.chart_block import BarChartBlock
+from apps.django_bi.blocks.services.filtering import apply_filter_registry
 from apps.common.models import PurchaseOrderLine
 from apps.common.filters.schemas import (
     purchase_order_category_filter,

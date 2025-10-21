@@ -1,5 +1,5 @@
-from apps.blocks.block_types.chart.dial_block import DialChartBlock
-from apps.blocks.services.filtering import apply_filter_registry
+from apps.django_bi.blocks.block_types.chart.dial_block import DialChartBlock
+from apps.django_bi.blocks.services.filtering import apply_filter_registry
 from apps.common.models.receipts import ReceiptLine, PurchaseSettings
 from apps.common.filters.schemas import (
     supplier_filter,

@@ -8,7 +8,7 @@ class ProductionConfig(AppConfig):
 
     def ready(self):
         # Explicitly register blocks when the app is ready
-        from apps.blocks.registry import block_registry
+        from apps.django_bi.blocks.registry import block_registry
         from apps.production.blocks_registry import register as register_blocks
 
         register_blocks(block_registry)

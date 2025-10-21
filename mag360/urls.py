@@ -28,14 +28,14 @@ urlpatterns = [
     path(r'comments/', include('django_comments_xtd.urls')),
     path('', include('apps.common.urls')),
     path('', include('apps.production.urls')),
-    path('workflow/', include('apps.workflow.urls')),
+    path('workflow/', include('apps.django_bi.workflow.urls')),
     # Versioned mount for current Blocks implementation
-    path('blocks/v1/', include('apps.blocks.urls')),
+    path('blocks/v1/', include('apps.django_bi.blocks.urls')),
     # Temporary compatibility redirect: /blocks/* -> /blocks/v1/*
     # Remove this once v2 is mounted at /blocks/
     re_path(r'^blocks/(?P<rest>.*)$', RedirectView.as_view(url='/blocks/v1/%(rest)s', permanent=False)),
     # Versioned mount for current Layouts implementation
-    path('layouts/v1/', include('apps.layout.urls')),
+    path('layouts/v1/', include('apps.django_bi.layout.urls')),
     # Temporary compatibility redirect: /layouts/* -> /layouts/v1/*
     # Remove this once v2 is mounted at /layouts/
     re_path(r'^layouts/(?P<rest>.*)$', RedirectView.as_view(url='/layouts/v1/%(rest)s', permanent=False)),
