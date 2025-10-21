@@ -17,8 +17,6 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from django.urls import include
-from django.urls import re_path
-from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -29,14 +27,6 @@ urlpatterns = [
     path('', include('apps.common.urls')),
     path('', include('apps.production.urls')),
     path('workflow/', include('apps.django_bi.workflow.urls', namespace='workflow')),
-    # Versioned mount for current Blocks implementation
-    path('blocks/v1/', include('apps.django_bi.blocks.urls', namespace='blocks')),
-    # Temporary compatibility redirect: /blocks/* -> /blocks/v1/*
-    # Remove this once v2 is mounted at /blocks/
-    re_path(r'^blocks/(?P<rest>.*)$', RedirectView.as_view(url='/blocks/v1/%(rest)s', permanent=False)),
-    # Versioned mount for current Layouts implementation
-    path('layouts/v1/', include('apps.django_bi.layout.urls', namespace='layout')),
-    # Temporary compatibility redirect: /layouts/* -> /layouts/v1/*
-    # Remove this once v2 is mounted at /layouts/
-    re_path(r'^layouts/(?P<rest>.*)$', RedirectView.as_view(url='/layouts/v1/%(rest)s', permanent=False)),
+    path('blocks/', include('apps.django_bi.blocks.urls', namespace='blocks')),
+    path('layouts/', include('apps.django_bi.layout.urls', namespace='layout')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
