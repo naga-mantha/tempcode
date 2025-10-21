@@ -37,7 +37,7 @@ class LayoutDeleteView(LoginRequiredMixin, DeleteView):
     model = Layout
     slug_field = "slug"
     slug_url_kwarg = "slug"
-    success_url = reverse_lazy("layout_list")
+    success_url = reverse_lazy("layout:layout_list")
     template_name = "layout/layout_confirm_delete.html"
 
     def get_queryset(self):
@@ -114,7 +114,7 @@ class LayoutCreateView(LoginRequiredMixin, TemplateView):
                 ctx = self.get_context_data()
                 ctx["form"] = form
                 return self.render_to_response(ctx)
-            return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
+            return redirect("layout:layout_detail", username=layout.user.username, slug=layout.slug)
         ctx = self.get_context_data()
         ctx["form"] = form
         return self.render_to_response(ctx)
@@ -145,7 +145,7 @@ class LayoutRenameView(LoginRequiredMixin, LayoutAccessMixin, View):
             if is_ajax:
                 return JsonResponse({"ok": False, "error": "Please provide a name."}, status=400)
             messages.error(request, "Please provide a name.")
-            return redirect("layout_detail", username=layout.user.username, slug=layout.slug)
+            return redirect("layout:layout_detail", username=layout.user.username, slug=layout.slug)
         layout.name = new_name
         layout.description = new_desc
         layout.category = new_cat
@@ -156,11 +156,11 @@ class LayoutRenameView(LoginRequiredMixin, LayoutAccessMixin, View):
                 "ok": True,
                 "name": layout.name,
                 "slug": layout.slug,
-                "edit_url": reverse("layout_edit", kwargs={"username": layout.user.username, "slug": layout.slug}),
-                "detail_url": reverse("layout_detail", kwargs={"username": layout.user.username, "slug": layout.slug}),
+                "edit_url": reverse("layout:layout_edit", kwargs={"username": layout.user.username, "slug": layout.slug}),
+                "detail_url": reverse("layout:layout_detail", kwargs={"username": layout.user.username, "slug": layout.slug}),
             })
         messages.success(request, "Layout renamed.")
-        return redirect("layout_edit", username=layout.user.username, slug=layout.slug)
+        return redirect("layout:layout_edit", username=layout.user.username, slug=layout.slug)
 
 
 class LayoutDetailView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMixin, TemplateView):
@@ -371,9 +371,9 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
             try:
                 impl = block_registry.get(block_obj.code) if block_obj else None
                 if isinstance(impl, TableBlock):
-                    manage_url = reverse("table_filter_config", kwargs={"block_name": block_obj.code})
+                    manage_url = reverse("blocks:table_filter_config", kwargs={"block_name": block_obj.code})
                 elif isinstance(impl, ChartBlock):
-                    manage_url = reverse("chart_filter_config", kwargs={"block_name": block_obj.code})
+                    manage_url = reverse("blocks:chart_filter_config", kwargs={"block_name": block_obj.code})
             except Exception:
                 manage_url = None
             # Attach for template usage
@@ -382,7 +382,7 @@ class LayoutEditView(LoginRequiredMixin, LayoutAccessMixin, LayoutFilterSchemaMi
             manage_cols_url = None
             try:
                 if isinstance(impl, TableBlock):
-                    manage_cols_url = reverse("column_config_view", kwargs={"block_name": block_obj.code})
+                    manage_cols_url = reverse("blocks:column_config_view", kwargs={"block_name": block_obj.code})
             except Exception:
                 manage_cols_url = None
             setattr(form, "manage_columns_url", manage_cols_url)
@@ -486,7 +486,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
         if action == "create":
             if not name:
                 messages.error(self.request, "Please provide a name.")
-                return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
+                return redirect("layout:layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
             values = self._collect_filters(self.request.POST, self.filter_schema, base={}, prefix="filters.", allow_flat=False)
             existing = LayoutFilterConfig.objects.filter(
                 layout=self.layout, user=self.request.user, name=name
@@ -530,7 +530,7 @@ class LayoutFilterConfigView(LoginRequiredMixin, LayoutFilterSchemaMixin, FormVi
             elif cfg.user_id == self.request.user.id and cfg.visibility == LayoutFilterConfig.VISIBILITY_PRIVATE:
                 cfg.is_default = True
                 cfg.save()
-        return redirect("layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
+        return redirect("layout:layout_filter_config", username=self.layout.user.username, slug=self.layout.slug)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

@@ -159,4 +159,4 @@ class PivotFilterConfigView(LoginRequiredMixin, FormView, FilterResolutionMixin)
                 cfg.is_default = True
                 cfg.save()
         code = getattr(self.block_instance, "block_name", None) or self.block.code
-        return redirect("pivot_filter_config", block_name=code)
+        return redirect("blocks:pivot_filter_config", block_name=code)

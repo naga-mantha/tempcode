@@ -5,13 +5,13 @@
   <div class="main-container-fluid">
     <h1 class="page-title">Edit Layout: {{ layout.name }}</h1>
     <p>
-      <a href="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
+      <a href="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}">Back to layout</a>
     </p>
 
     <div class="card mb-4">
       <div class="card-body">
         <h5 class="card-title">Layout Details</h5>
-        <form id="layout-details-form" method="post" action="{% url 'layout_rename' username=layout.user.username slug=layout.slug %}">
+        <form id="layout-details-form" method="post" action="{% url 'layout:layout_rename' username=layout.user.username slug=layout.slug %}">
           {% csrf_token %}
           <div class="row g-3">
             <div class="col-md-6">
@@ -69,10 +69,10 @@
   document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('grid-edit');
     const detailsForm = document.getElementById('layout-details-form');
-    const gridSaveUrl = "{% url 'layout_grid_update' username=layout.user.username slug=layout.slug %}";
-    const updateUrlBase = "{% url 'layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
+    const gridSaveUrl = "{% url 'layout:layout_grid_update' username=layout.user.username slug=layout.slug %}";
+    const updateUrlBase = "{% url 'layout:layout_edit' username=layout.user.username slug=layout.slug %}".replace(/\/edit\/$/, '') + "/block/"; // append id + /update|delete/
     const deleteUrlBase = updateUrlBase;
-    const addUrl = "{% url 'layout_block_add' username=layout.user.username slug=layout.slug %}";
+    const addUrl = "{% url 'layout:layout_block_add' username=layout.user.username slug=layout.slug %}";
 
     // CSRF helper
     function getCookie(name) {
@@ -154,7 +154,7 @@
             const h1 = document.querySelector('h1.page-title');
             if (h1 && data.name) h1.textContent = 'Edit Layout: ' + data.name;
             // Update back link if provided
-            const backLink = document.querySelector('a[href*="{% url 'layout_detail' username=layout.user.username slug=layout.slug %}"]');
+            const backLink = document.querySelector('a[href*="{% url 'layout:layout_detail' username=layout.user.username slug=layout.slug %}"]');
             if (backLink && data.detail_url) backLink.setAttribute('href', data.detail_url);
             showToast('Saved', 'success');
           })

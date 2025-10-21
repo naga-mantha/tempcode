@@ -20,7 +20,7 @@
         </optgroup>
       {% endfor %}
     </select>
-    <a class="btn btn-link p-0" href="{% url 'column_config_view' block_name %}">Manage Views</a>
+    <a class="btn btn-link p-0" href="{% url 'blocks:column_config_view' block_name %}">Manage Views</a>
     <a class="btn btn-link p-0 ms-2" href="{% url 'render_table_block' block_name %}">Table Link</a>
   </div>
   <div>
@@ -36,7 +36,7 @@
         </optgroup>
       {% endfor %}
     </select>
-    <a class="btn btn-link p-0 ms-2" href="{% url 'table_filter_config' block_name %}">Manage Filters</a>
+    <a class="btn btn-link p-0 ms-2" href="{% url 'blocks:table_filter_config' block_name %}">Manage Filters</a>
     <button id="download-xlsx-{{ block_name }}-{{ instance_id }}" class="btn btn-outline-secondary btn-sm ms-3" type="button" title="Download as Excel">
       Download Excel
     </button>
@@ -76,9 +76,9 @@
     </summary>
     <div class="p-3">
       <div class="mb-2">
-        <a class="btn btn-link p-0" href="{% url 'filter_layout_view' block_name %}">Manage Filter Layout</a>
+        <a class="btn btn-link p-0" href="{% url 'blocks:filter_layout_view' block_name %}">Manage Filter Layout</a>
         {% if request.user.is_staff %}
-          <a class="btn btn-link p-0 ms-3" href="{% url 'admin_filter_layout_view' block_name %}">Manage Default Filter Layout</a>
+          <a class="btn btn-link p-0 ms-3" href="{% url 'blocks:admin_filter_layout_view' block_name %}">Manage Default Filter Layout</a>
         {% endif %}
       </div>
       {# Renders actual inputs based on your schema #}

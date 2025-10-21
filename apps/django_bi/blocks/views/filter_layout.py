@@ -107,7 +107,7 @@ class FilterLayoutView(LoginRequiredMixin, View):
         except Exception:
             parsed = {}
         obj, _ = BlockFilterLayout.objects.update_or_create(block=block, user=request.user, defaults={"layout": parsed})
-        return redirect("filter_layout_view", block_name=block_name)
+        return redirect("blocks:filter_layout_view", block_name=block_name)
 
 
 class AdminFilterLayoutView(LoginRequiredMixin, View):
@@ -175,4 +175,4 @@ class AdminFilterLayoutView(LoginRequiredMixin, View):
         except Exception:
             parsed = {}
         tpl, _ = BlockFilterLayoutTemplate.objects.update_or_create(block=block, defaults={"layout": parsed})
-        return redirect("admin_filter_layout_view", block_name=block_name)
+        return redirect("blocks:admin_filter_layout_view", block_name=block_name)

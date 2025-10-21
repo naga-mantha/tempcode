@@ -169,7 +169,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # MAG360 SETTINGS
-LOGIN_REDIRECT_URL = "layout_list"
+LOGIN_REDIRECT_URL = "layout:layout_list"
 LOGOUT_REDIRECT_URL = "home"
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 

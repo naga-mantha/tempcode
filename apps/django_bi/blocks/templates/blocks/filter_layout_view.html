@@ -21,7 +21,7 @@
   </div>
 </div>
 
-<form id="layout-form" method="post" action="{% url 'filter_layout_view' block_name %}" class="mt-3">
+<form id="layout-form" method="post" action="{% url 'blocks:filter_layout_view' block_name %}" class="mt-3">
   {% csrf_token %}
   <input type="hidden" name="layout" id="layout-json-input" value="{}">
   <div class="d-flex gap-2">

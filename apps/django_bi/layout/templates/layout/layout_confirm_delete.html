@@ -15,7 +15,7 @@
     <form method="post">
       {% csrf_token %}
       <button class="btn btn-danger" type="submit">Confirm Delete</button>
-      <a class="btn btn-secondary" href="{% url 'layout_detail' username=object.user.username slug=object.slug %}">Cancel</a>
+      <a class="btn btn-secondary" href="{% url 'layout:layout_detail' username=object.user.username slug=object.slug %}">Cancel</a>
     </form>
   </div>
 {% endblock %}
