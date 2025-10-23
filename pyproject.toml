@@ -36,6 +36,29 @@ Homepage = "https://example.com/django-bi"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-data]
+django_bi = [
+    "**/*.html",
+    "**/*.json",
+    "**/*.csv",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.js",
+    "**/*.css",
+    "**/*.scss",
+    "**/*.svg",
+    "**/*.png",
+    "**/*.txt",
+]
+apps = [
+    "**/*.html",
+    "**/*.json",
+    "**/*.csv",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.txt",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
