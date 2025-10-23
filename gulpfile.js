@@ -41,7 +41,7 @@ function move_fonts() {
         return gulp.src([
         'node_modules/bootstrap-icons/font/fonts/*',
         ], {"allowEmpty": true})
-        .pipe(gulp.dest('apps/django_bi/dist/fonts'));
+        .pipe(gulp.dest('apps/django_bi/dist/css/fonts'));
 }
 
 function img() {
