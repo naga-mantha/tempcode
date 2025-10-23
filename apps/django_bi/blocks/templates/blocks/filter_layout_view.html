@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "layout/base.html" %}
 {% load static %}
 {% block content %}
 <h2>{% if admin_mode %}Manage Default Filter Layout{% else %}Manage Filter Layout{% endif %} for {{ display_title|default:block.name|default:block_name }}</h2>
