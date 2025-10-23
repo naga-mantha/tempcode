@@ -1,6 +1,5 @@
+from django.conf import settings
 from django.db import models
-
-from apps.accounts.models.custom_user import CustomUser
 from apps.django_bi.blocks.models.block import Block
 
 
@@ -8,7 +7,7 @@ class BlockFilterLayout(models.Model):
     """Per-user filter layout for a block (single per (block,user))."""
 
     block = models.ForeignKey(Block, on_delete=models.CASCADE)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     layout = models.JSONField(default=dict)
 
     class Meta:
