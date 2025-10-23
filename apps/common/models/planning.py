@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
@@ -6,7 +7,6 @@ from apps.common.models.unit_of_measuries import UOM
 from apps.common.models.purchase_order_lines import PurchaseOrderLine
 from apps.common.models.production_orders import ProductionOrder
 from apps.common.models.business_partners import BusinessPartner
-from apps.accounts.models import CustomUser
 from apps.common.models.auto_compute_mixin import AutoComputeMixin
 
 
@@ -45,7 +45,9 @@ class BasePlannedOrder(models.Model):
     quantity = models.FloatField(blank=True, null=True, verbose_name="Planned Quantity")
     uom = models.ForeignKey(UOM, on_delete=models.PROTECT, blank=True, null=True)
 
-    buyer = models.ForeignKey(CustomUser, on_delete=models.PROTECT, blank=True, null=True)
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True
+    )
     supplier = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
 
     planned_start_date = models.DateField(blank=True, null=True, verbose_name="Planned Start Date")

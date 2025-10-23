@@ -6,9 +6,8 @@ configuration models such as ``BlockColumnConfig`` and
 specific data payload (e.g. ``fields`` or ``values``).
 """
 
+from django.conf import settings
 from django.db import models, transaction
-
-from apps.accounts.models.custom_user import CustomUser
 from apps.django_bi.blocks.models.block import Block
 
 
@@ -16,7 +15,7 @@ class BaseUserConfig(models.Model):
     """Abstract base class for user-specific block configurations."""
 
     block = models.ForeignKey(Block, on_delete=models.CASCADE)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
 

@@ -2,7 +2,7 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.utils.text import slugify
 
-from apps.accounts.models.custom_user import CustomUser
+from django.conf import settings
 from apps.django_bi.blocks.models.block import Block
 from .constants import GRID_MAX_COL_SPAN, GRID_MAX_ROW_SPAN
 
@@ -20,7 +20,9 @@ class Layout(models.Model):
     name = models.CharField(max_length=255)
     # Slug is auto-derived from name; unique per-user
     slug = models.SlugField(blank=True)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="layouts")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="layouts"
+    )
     visibility = models.CharField(
         max_length=10, choices=VISIBILITY_CHOICES, default=VISIBILITY_PRIVATE
     )
@@ -94,7 +96,7 @@ class LayoutFilterConfig(models.Model):
     """Stores filter configuration for a layout and user."""
 
     layout = models.ForeignKey(Layout, on_delete=models.CASCADE, related_name="filter_configs")
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     values = models.JSONField(default=dict)
     VISIBILITY_PRIVATE = "private"
