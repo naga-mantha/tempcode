@@ -1,9 +1,9 @@
 from django.db.models import Count
 
-from apps.django_bi.blocks.block_types.chart.chart_block import DonutChartBlock
-from apps.django_bi.blocks.services.filtering import apply_filter_registry
+from django_bi.blocks.block_types.chart.chart_block import DonutChartBlock
+from django_bi.blocks.services.filtering import apply_filter_registry
 from apps.common.models import PurchaseOrderLine
-from apps.django_bi.utils.clock import today
+from django_bi.utils.clock import today
 from apps.common.filters.schemas import (
     supplier_filter,
     purchase_order_category_filter,

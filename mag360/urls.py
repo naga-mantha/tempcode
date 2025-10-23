@@ -26,7 +26,7 @@ urlpatterns = [
     path(r'comments/', include('django_comments_xtd.urls')),
     path('', include('apps.common.urls')),
     path('', include('apps.production.urls')),
-    path('workflow/', include('apps.django_bi.workflow.urls', namespace='workflow')),
-    path('blocks/', include('apps.django_bi.blocks.urls', namespace='blocks')),
-    path('layouts/', include('apps.django_bi.layout.urls', namespace='layout')),
+    path('workflow/', include('django_bi.workflow.urls', namespace='workflow')),
+    path('blocks/', include('django_bi.blocks.urls', namespace='blocks')),
+    path('layouts/', include('django_bi.layout.urls', namespace='layout')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

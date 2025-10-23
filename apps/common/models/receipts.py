@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from apps.django_bi.workflow.models import WorkflowModelMixin
+from django_bi.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 from apps.common.models.auto_compute_mixin import AutoComputeMixin
 from apps.common.models.purchase_order_lines import PurchaseOrderLine

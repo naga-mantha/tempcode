@@ -3,7 +3,7 @@ import django
 
 django.setup()
 
-from apps.django_bi.blocks.registry import block_registry
+from django_bi.blocks.registry import block_registry
 from apps.production.charts import (
     ProductionOrdersByStatusChart,
     ProductionOrdersPerItemBarChart,

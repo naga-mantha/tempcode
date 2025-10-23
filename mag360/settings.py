@@ -41,7 +41,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 INSTALLED_APPS = [
     'apps.common',
     'apps.accounts',
-    'apps.django_bi',
+    'django_bi',
     'apps.production',
     'apps.purchase',
     'apps.planning',
@@ -69,14 +69,14 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.django_bi.permissions.middleware.PermissionCacheMiddleware',
+    'django_bi.permissions.middleware.PermissionCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'mag360.urls'
 
 _extra_template_dirs = [BASE_DIR / "apps" / "common" / "templates"]
 
-django_bi_template_root = BASE_DIR / "apps" / "django_bi"
+django_bi_template_root = BASE_DIR / "django_bi"
 _extra_template_dirs.extend(
     path
     for path in django_bi_template_root.glob("*/templates")
@@ -93,8 +93,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'apps.django_bi.utils.context_processors.sidebar_layouts',
-                'apps.django_bi.utils.context_processors.branding',
+                'django_bi.utils.context_processors.sidebar_layouts',
+                'django_bi.utils.context_processors.branding',
             ],
         },
     },
@@ -165,7 +165,7 @@ USE_TZ = True
 STATIC_URL = '/dist/'
 STATIC_ROOT = BASE_DIR / "dist"
 STATICFILES_DIRS = [
-    BASE_DIR / "apps/django_bi/dist",
+    BASE_DIR / "django_bi" / "dist",
 ]
 
 # --- MEDIA ---

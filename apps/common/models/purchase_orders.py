@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models.functions import Length
 
 from apps.common.models import BusinessPartner, PurchaseOrderCategory
-from apps.django_bi.workflow.models import WorkflowModelMixin
+from django_bi.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 from apps.common.models.auto_compute_mixin import AutoComputeMixin
 
