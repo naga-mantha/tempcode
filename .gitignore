@@ -6,6 +6,9 @@ mag360/.env
 apps/common/dist/
 apps/common/src/vendor-css/
 apps/common/src/vendor-js/
+apps/django_bi/dist/
+apps/django_bi/src/vendor-css/
+apps/django_bi/src/vendor-js/
 debug.log
 db.json
 db.sqlite3

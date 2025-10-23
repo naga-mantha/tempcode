@@ -166,6 +166,7 @@ STATIC_URL = '/dist/'
 STATIC_ROOT = BASE_DIR / "dist"
 STATICFILES_DIRS = [
     BASE_DIR / "apps/common/dist",
+    ("django_bi", BASE_DIR / "apps/django_bi/dist"),
 ]
 
 # --- MEDIA ---
