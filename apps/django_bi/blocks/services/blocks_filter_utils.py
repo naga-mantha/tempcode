@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from calendar import monthrange
-from apps.common.models import GlobalSettings
+
+from django.conf import settings
 
 
 class FilterResolutionMixin:
@@ -59,15 +60,14 @@ class FilterResolutionMixin:
                 end_month = q * 3 + 3
                 last_day = monthrange(today.year, end_month)[1]
                 return today.replace(month=end_month, day=last_day).isoformat()
-            # Fiscal year tokens from GlobalSettings
+            # Fiscal year tokens from Django settings
             if token in {
                 "__current_fiscal_year_start__",
                 "current_fiscal_year_start",
                 "fiscal_year_start",
             } or token.startswith("__fy_start__"):
-                gs = GlobalSettings.objects.first()
-                fy_month = (gs.fiscal_year_start_month if gs else 1) or 1
-                fy_day = (gs.fiscal_year_start_day if gs else 1) or 1
+                fy_month = int(getattr(settings, "BI_FISCAL_YEAR_START_MONTH", 1) or 1)
+                fy_day = int(getattr(settings, "BI_FISCAL_YEAR_START_DAY", 1) or 1)
                 start_candidate = date(today.year, fy_month, fy_day)
                 if today < start_candidate:
                     start_candidate = date(today.year - 1, fy_month, fy_day)
@@ -77,9 +77,8 @@ class FilterResolutionMixin:
                 "current_fiscal_year_end",
                 "fiscal_year_end",
             } or token.startswith("__fy_end__"):
-                gs = GlobalSettings.objects.first()
-                fy_month = (gs.fiscal_year_start_month if gs else 1) or 1
-                fy_day = (gs.fiscal_year_start_day if gs else 1) or 1
+                fy_month = int(getattr(settings, "BI_FISCAL_YEAR_START_MONTH", 1) or 1)
+                fy_day = int(getattr(settings, "BI_FISCAL_YEAR_START_DAY", 1) or 1)
                 start_candidate = date(today.year, fy_month, fy_day)
                 if today < start_candidate:
                     start_candidate = date(today.year - 1, fy_month, fy_day)
