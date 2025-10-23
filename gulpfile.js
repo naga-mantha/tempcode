@@ -21,6 +21,8 @@ function move_css() {
 
 function move_js() {
     return gulp.src([
+        'node_modules/bootstrap/dist/js/bootstrap.min.js',
+        'node_modules/@popperjs/core/dist/umd/popper.min.js',
         'node_modules/tabulator-tables/dist/js/tabulator.min.js',
         'node_modules/sortablejs/Sortable.min.js',
         'node_modules/tom-select/dist/js/tom-select.complete.min.js',
@@ -47,10 +49,10 @@ function img() {
         .pipe(gulp.dest('apps/django_bi/dist/images/'));
 }
 
-function move_alpine_js() {
-    return gulp.src('node_modules/alpinejs/dist/cdn.min.js')
-        .pipe(gulp.dest('apps/django_bi/dist/js'));
-}
+//function move_alpine_js() {
+//    return gulp.src('node_modules/alpinejs/dist/cdn.min.js')
+//        .pipe(gulp.dest('apps/django_bi/dist/js'));
+//}
 
 function js() {
         return gulp.src(['apps/django_bi/src/js/**/*.js'], {"allowEmpty": true})
@@ -73,6 +75,8 @@ function vendor_js() {
         return gulp.src('apps/django_bi/src/vendor-js/*.js', {"allowEmpty": true})
         .pipe(plumber())
         .pipe(order([
+                "apps/django_bi/src/vendor-js/popper.min.js",
+		        "apps/django_bi/src/vendor-js/bootstrap.min.js",
                 "apps/django_bi/src/vendor-js/*.js"
         ], { base: __dirname }))
         .pipe(concat('vendor.min.js'))
@@ -118,8 +122,7 @@ exports.move_css = move_css;
 exports.move_js = move_js;
 exports.move_icons = move_icons;
 exports.move_fonts = move_fonts
-exports.move_alpine_js = move_alpine_js
-exports.move = series(move_css, move_js, move_icons, move_fonts, move_alpine_js);
+exports.move = series(move_css, move_js, move_icons, move_fonts);
 exports.production = production;
 
 exports.img = img;
