@@ -1,0 +1,3 @@
+recursive-include django_bi/migrations *.py
+recursive-include apps/accounts/migrations *.py
+recursive-include apps/common/migrations *.py
