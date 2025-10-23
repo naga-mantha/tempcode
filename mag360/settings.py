@@ -202,7 +202,7 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # Business Intelligence / dashboard defaults
-BI_FISCAL_YEAR_START_MONTH = env.int("BI_FISCAL_YEAR_START_MONTH", default=1)
+BI_FISCAL_YEAR_START_MONTH = env.int("BI_FISCAL_YEAR_START_MONTH", default=10)
 BI_FISCAL_YEAR_START_DAY = env.int("BI_FISCAL_YEAR_START_DAY", default=1)
 
 # Django message framework (django.contrib.messages)
