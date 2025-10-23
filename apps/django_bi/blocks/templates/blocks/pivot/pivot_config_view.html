@@ -1,0 +1,236 @@
+{% extends "layout/base.html" %}
+{% block content %}
+
+<div class="main-container">
+  <h2 class="page-title">Pivot Settings for {{ block_title }}</h2>
+
+  <div class="mb-3">
+    <label for="config-select">Saved Settings:</label>
+    <select id="config-select" class="form-select d-inline-block w-auto">
+      <option value="">-- New --</option>
+      {% regroup configs by visibility as cfg_groups %}
+      {% for grp in cfg_groups %}
+        <optgroup label="{{ grp.grouper|title }}">
+          {% for c in grp.list %}
+            <option value="{{ c.id }}" data-visibility="{{ c.visibility }}" data-owner-id="{{ c.user_id }}" {% if active_config and c.id == active_config.id %}selected{% endif %}>{{ c.name }}{% if c.is_default %} (default){% endif %}</option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+    </select>
+    <a href="{% url 'blocks:pivot_config_view' block_name %}" class="btn btn-link btn-sm">Clear</a>
+    {% if active_config %}<span class="ms-2 text-muted">Editing: <strong>{{ active_config.name }}</strong></span>{% endif %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function(){
+        const sel = document.getElementById('config-select');
+        sel?.addEventListener('change', function(){
+          const url = new URL(window.location);
+          if (this.value) { url.searchParams.set('config_id', this.value); } else { url.searchParams.delete('config_id'); }
+          window.location = url.toString();
+        });
+      });
+    </script>
+  </div>
+
+  <form method="post" class="mb-4" id="pivot-config-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create">
+    {% if active_config %}
+      <input type="hidden" name="config_id" value="{{ active_config.id }}">
+    {% endif %}
+
+    <!-- Compact top row: Name | Column | Measure | Label | Aggregation -->
+    <div class="row g-3 align-items-end mb-3">
+      <div class="col-md-4">
+        <label class="form-label">Name</label>
+        <input type="text" name="name" class="form-control" value="{{ form.initial.name|default:'' }}" required>
+      </div>
+      {% if request.user.is_staff %}
+      <div class="col-md-2">
+        <label class="form-label">Visibility</label>
+        <select name="visibility" class="form-select">
+          <option value="private" {% if form.initial.visibility == 'private' %}selected{% endif %}>Private</option>
+          <option value="public" {% if form.initial.visibility == 'public' %}selected{% endif %}>Public</option>
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-md-4">
+        <label class="form-label">Column</label>
+        <select name="col" id="col-select" class="form-select">
+          {% for val,label in form.col.field.choices %}
+            <option value="{{ val }}" {% if form.initial.col == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <div id="col-bucket-wrapper" class="mt-2" style="display:none;">
+          <label class="form-label">Column Bucket</label>
+          <select name="col_bucket" id="col-bucket" class="form-select">
+            <option value="">-- None --</option>
+            <option value="day" {% if col_bucket == 'day' %}selected{% endif %}>Day</option>
+            <option value="month" {% if col_bucket == 'month' %}selected{% endif %}>Month</option>
+            <option value="quarter" {% if col_bucket == 'quarter' %}selected{% endif %}>Quarter</option>
+            <option value="year" {% if col_bucket == 'year' %}selected{% endif %}>Year</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Measure</label>
+        <select name="measure_field" class="form-select">
+          {% for val,label in form.measure_field.field.choices %}
+            <option value="{{ val }}" {% if form.initial.measure_field == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Label</label>
+        <input type="text" name="measure_label" class="form-control" value="{{ form.initial.measure_label|default:'' }}" placeholder="e.g., Total Quantity">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Aggregation</label>
+        <select name="measure_agg" class="form-select">
+          {% for val,label in form.measure_agg.field.choices %}
+            <option value="{{ val }}" {% if form.initial.measure_agg == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Rows (sortable, check to include; order is respected) -->
+    <div class="mb-3">
+      <label class="form-label">Rows</label>
+      <ul id="rows-list" class="list-group">
+        {% for val,label in form.rows.field.choices %}
+          <li class="list-group-item d-flex align-items-center justify-content-between" data-name="{{ val }}">
+            <div class="d-flex align-items-center">
+              <input type="checkbox" class="form-check-input me-2" name="rows" value="{{ val }}"
+                     {% if form.initial.rows and val in form.initial.rows %}checked{% endif %}>
+              <span>{{ label }}</span>
+            </div>
+            {% if val in temporal_fields %}
+              <div class="ms-2">
+                <select class="form-select form-select-sm row-bucket-select" name="row_bucket__{{ val }}" data-source="{{ val }}">
+                  <option value="">No bucket</option>
+                  <option value="day">Day</option>
+                  <option value="month">Month</option>
+                  <option value="quarter">Quarter</option>
+                  <option value="year">Year</option>
+                </select>
+              </div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <small class="text-muted">Drag to reorder; checked items become row grouping in order.</small>
+    </div>
+
+    <div class="mt-2">
+      <button type="submit" class="btn btn-primary">Save Settings</button>
+    </div>
+  </form>
+
+  <h3>Saved Pivot Settings</h3>
+  <table class="table mt-2">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Default</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for config in configs %}
+      <tr>
+        <td>{{ config.name }}</td>
+
+        <td>{% if config.is_default %}✔{% endif %}</td>
+        <td>
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
+          </form>
+          {% if configs|length > 1 %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not configs %}
+      <tr><td colspan="3" class="text-muted">No saved settings yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const list = document.getElementById('rows-list');
+    if (!list) return;
+    Sortable.create(list, { animation: 150 });
+    // Reorder the list to match initial selection order on load
+    try {
+      const initial = {{ form.initial.rows|default:'[]'|safe }} || [];
+      // Move selected items to top in the order of 'initial'
+      if (Array.isArray(initial) && initial.length) {
+        // Iterate reverse and prepend to keep order
+        initial.slice().reverse().forEach(name => {
+          const el = list.querySelector(`[data-name="${CSS.escape(name)}"]`);
+          if (el) list.prepend(el);
+        });
+      }
+    } catch (e) {}
+
+    // Column bucket show/hide based on whether selected col is temporal
+    const TEMPORAL_FIELDS = new Set({{ temporal_fields|default:'[]'|safe }});
+    const colSel = document.getElementById('col-select');
+    const colBucketWrap = document.getElementById('col-bucket-wrapper');
+    const colBucket = document.getElementById('col-bucket');
+    function updateColBucketVisibility(){
+      const val = colSel?.value || '';
+      const show = TEMPORAL_FIELDS.has(val) && !!val;
+      colBucketWrap.style.display = show ? '' : 'none';
+      if (!show) { colBucket.value = ''; }
+    }
+    colSel?.addEventListener('change', updateColBucketVisibility);
+    updateColBucketVisibility();
+
+    // Initialize row bucket selects from server-provided values
+    const ROW_BUCKETS = {{ row_bucket_map|default:'{}'|safe }};
+    document.querySelectorAll('.row-bucket-select').forEach(sel => {
+      const src = sel.getAttribute('data-source');
+      const val = ROW_BUCKETS[src] || '';
+      if (val) sel.value = val;
+    });
+  });
+  // Disable editing when viewing a public (non-owned) config
+  (function applyEditability(){
+    const isStaff = {{ request.user.is_staff|yesno:"true,false" }};
+    const currentUserId = {{ request.user.id }};
+    const sel = document.getElementById('config-select');
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    const isNew = !sel.value;
+    const vis = (opt?.getAttribute('data-visibility') || '').toLowerCase();
+    const ownerId = parseInt(opt?.getAttribute('data-owner-id') || '0');
+    const editable = isStaff || isNew || (vis === 'private' && ownerId === currentUserId);
+    const form = document.getElementById('pivot-config-form');
+    if (!form) return;
+    const controls = form.querySelectorAll('input, select, button');
+    controls.forEach(el => {
+      if (el.name === 'action' || el.name === 'config_id' || el.name === 'csrfmiddlewaretoken') return;
+      if (el.tagName.toLowerCase() === 'button') {
+        if (el.type === 'submit') el.disabled = !editable;
+        return;
+      }
+      el.disabled = !editable;
+    });
+  })();
+</script>
+{% endblock %}

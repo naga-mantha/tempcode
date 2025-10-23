@@ -41,13 +41,10 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 INSTALLED_APPS = [
     'apps.common',
     'apps.accounts',
-    'apps.blocks',
+    'apps.django_bi',
     'apps.production',
     'apps.purchase',
     'apps.planning',
-    'apps.layout',
-    'apps.workflow',
-    'apps.permissions',
     'django_extensions',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -72,23 +69,32 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.permissions.middleware.PermissionCacheMiddleware',
+    'apps.django_bi.permissions.middleware.PermissionCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'mag360.urls'
 
+_extra_template_dirs = [BASE_DIR / "apps" / "common" / "templates"]
+
+django_bi_template_root = BASE_DIR / "apps" / "django_bi"
+_extra_template_dirs.extend(
+    path
+    for path in django_bi_template_root.glob("*/templates")
+    if path.is_dir()
+)
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR/'common/templates'],
+        'DIRS': _extra_template_dirs,
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'apps.common.context_processors.sidebar_layouts',
-                'apps.common.context_processors.branding',
+                'apps.django_bi.utils.context_processors.sidebar_layouts',
+                'apps.django_bi.utils.context_processors.branding',
             ],
         },
     },
@@ -100,16 +106,26 @@ WSGI_APPLICATION = 'mag360.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DATABASE_NAME'),
-        'USER': env('DATABASE_USER'),
-        'PASSWORD': env('DATABASE_PASS'),
-        'HOST': env('DATABASE_HOST'),
-        'PORT': env('DATABASE_PORT'),
+DATABASE_ENGINE = env("DATABASE_ENGINE", default="django.db.backends.postgresql")
+
+if DATABASE_ENGINE == "django.db.backends.sqlite3":
+    DATABASES = {
+        "default": {
+            "ENGINE": DATABASE_ENGINE,
+            "NAME": env("DATABASE_NAME", default=str(BASE_DIR / "db.sqlite3")),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": DATABASE_ENGINE,
+            "NAME": env("DATABASE_NAME"),
+            "USER": env("DATABASE_USER"),
+            "PASSWORD": env("DATABASE_PASS"),
+            "HOST": env("DATABASE_HOST"),
+            "PORT": env("DATABASE_PORT"),
+        }
+    }
 
 
 # Password validation
@@ -149,7 +165,7 @@ USE_TZ = True
 STATIC_URL = '/dist/'
 STATIC_ROOT = BASE_DIR / "dist"
 STATICFILES_DIRS = [
-    BASE_DIR / "apps/common/dist",
+    BASE_DIR / "apps/django_bi/dist",
 ]
 
 # --- MEDIA ---
@@ -162,7 +178,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # MAG360 SETTINGS
-LOGIN_REDIRECT_URL = "layout_list"
+LOGIN_REDIRECT_URL = "layout:layout_list"
 LOGOUT_REDIRECT_URL = "home"
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
@@ -184,6 +200,10 @@ COMMENTS_XTD_LIST_ORDER = (
 # CRISPY FORMS
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
+
+# Business Intelligence / dashboard defaults
+BI_FISCAL_YEAR_START_MONTH = env.int("BI_FISCAL_YEAR_START_MONTH", default=10)
+BI_FISCAL_YEAR_START_DAY = env.int("BI_FISCAL_YEAR_START_DAY", default=1)
 
 # Django message framework (django.contrib.messages)
 MESSAGE_TAGS = {

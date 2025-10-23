@@ -1,0 +1,163 @@
+{% extends "layout/base.html" %}
+{% block content %}
+<h2>Manage Column Configurations for {{ block_title }}</h2>
+
+<!-- Dropdown to load/edit existing configs -->
+<div class="mb-3">
+  <label for="config-select">Select View:</label>
+  <select id="config-select" class="form-select d-inline-block w-auto">
+    <option value="">-- New Configuration --</option>
+    {% regroup configs by visibility as cfg_groups %}
+    {% for grp in cfg_groups %}
+      <optgroup label="{{ grp.grouper|title }}">
+        {% for config in grp.list %}
+          <option value="{{ config.id }}" data-fields="{{ config.fields|join:',' }}" data-visibility="{{ config.visibility }}" data-owner-id="{{ config.user_id }}">{{ config.name }}</option>
+        {% endfor %}
+      </optgroup>
+    {% endfor %}
+  </select>
+</div>
+
+<!-- Field selection with drag/drop -->
+<form id="config-form" method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="create">
+  <input type="hidden" name="config_id" id="config-id-input" value="">
+
+  <div class="mb-3">
+    <label for="view-name">View Name:</label>
+    <input type="text" name="name" id="view-name" required class="form-control d-inline-block w-auto">
+    {% if request.user.is_staff %}
+    <label class="ms-3">Visibility:</label>
+    <select name="visibility" class="form-select d-inline-block w-auto">
+      <option value="private">Private</option>
+      <option value="public">Public</option>
+    </select>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save View</button>
+  </div>
+
+  <ul id="field-list" class="list-group">
+    {% for field in fields_metadata %}
+      <li class="list-group-item d-flex align-items-center" data-name="{{ field.name }}">
+        <input type="checkbox" class="form-check-input me-2" {% if field.mandatory %}checked disabled{% endif %}
+               name="fields" value="{{ field.name }}">
+        {% if field.mandatory %}<input type="hidden" name="fields" value="{{ field.name }}">{% endif %}
+        {{ field.label }} ({{field.model}})
+
+        {% if field.mandatory %}<span class="badge bg-warning text-dark ms-auto">Mandatory</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</form>
+
+<!-- Existing configs table -->
+<h3 class="mt-5">Saved Views</h3>
+<table class="table mt-2">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Fields</th>
+      <th>Default</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for config in configs %}
+    <tr>
+      <td>{{ config.name }}{% if config.visibility == 'public' %} <span class="badge bg-secondary">Public</span>{% endif %}</td>
+      <td>{{ config.fields|join:"<br>"|safe }}</td>
+      <td>{% if config.is_default %}✔{% endif %}</td>
+      <td>
+        {% if request.user.is_staff and config.visibility == 'public' or config.visibility == 'private' and config.user_id == request.user.id %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_default">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Set Default</button>
+          </form>
+          {% if request.user.is_staff and config.visibility == 'public' %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
+          {% elif config.visibility == 'private' and config.user_id == request.user.id and configs|length > 1 %}
+          <form method="post" style="display:inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="config_id" value="{{ config.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">Delete</button>
+          </form>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">No actions</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Sortable.js (drag-drop support) -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+  const sortable = Sortable.create(document.getElementById("field-list"), {
+    animation: 150
+  });
+
+  const configSelect = document.getElementById("config-select");
+  const checkboxes = document.querySelectorAll("#field-list input[type=checkbox]");
+  const viewNameInput = document.getElementById("view-name");
+  const saveBtn = document.querySelector('#config-form button[type="submit"]');
+  const isStaff = {{ request.user.is_staff|yesno:"true,false" }};
+  const currentUserId = {{ request.user.id }};
+
+  configSelect?.addEventListener("change", function () {
+    const selectedOption = this.options[this.selectedIndex];
+    const viewName = selectedOption.textContent;
+    const selectedFields = selectedOption.dataset.fields?.split(",") || [];
+    const idInput = document.getElementById('config-id-input');
+    const visSelect = document.querySelector('select[name="visibility"]');
+    const visibility = (selectedOption.getAttribute('data-visibility') || '').toLowerCase();
+    const ownerId = parseInt(selectedOption.getAttribute('data-owner-id') || '0');
+
+    viewNameInput.value = viewName === "-- New Configuration --" ? "" : viewName;
+    idInput.value = this.value || '';
+    if (visSelect) {
+      const vis = selectedOption.getAttribute('data-visibility') || 'private';
+      visSelect.value = vis;
+    }
+
+    // First, reflect selection on checkboxes regardless of editability
+    checkboxes.forEach(chk => {
+      const isMandatory = !!chk.closest('li')?.querySelector('.badge');
+      const shouldBeChecked = selectedFields.includes(chk.value.trim()) || isMandatory;
+      chk.checked = shouldBeChecked;
+    });
+
+    // Determine editability: admins always editable; new config editable;
+    // non-admin editable only when own private
+    const editable = isStaff || !this.value || (visibility === 'private' && ownerId === currentUserId);
+    saveBtn.disabled = !editable;
+    // Toggle checkbox enabled state (keep mandatory ones disabled)
+    checkboxes.forEach(chk => {
+      if (chk.closest('li')?.querySelector('.badge')) return; // mandatory ones remain as-is
+      chk.disabled = !editable;
+    });
+    // Toggle drag/drop
+    try { sortable.option('disabled', !editable); } catch (e) {}
+
+    // Sort field list based on the selectedFields order
+    const list = document.getElementById("field-list");
+    selectedFields.reverse().forEach(fieldName => {
+      const el = list.querySelector(`[data-name="${CSS.escape(fieldName.trim())}"]`);
+      if (el) list.prepend(el);
+    });
+  });
+  // Initialize editability state on load
+  try { configSelect && configSelect.dispatchEvent(new Event('change')); } catch (e) {}
+</script>
+{% endblock %}

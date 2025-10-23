@@ -1,7 +1,7 @@
 from django.db.models import Count
 from django.urls import reverse
 
-from apps.blocks.block_types.chart.chart_block import (
+from apps.django_bi.blocks.block_types.chart.chart_block import (
     BarChartBlock,
     DonutChartBlock,
     LineChartBlock,
@@ -32,7 +32,7 @@ class _StatusFilterMixin:
                 "multiple": True,
                 "choices": status_choices,
                 "choices_url": reverse(
-                    "block_filter_choices", args=[self.block_name, "status"]
+                    "blocks:block_filter_choices", args=[self.block_name, "status"]
                 ),
                 "model": ProductionOrder,
                 "field": "status",

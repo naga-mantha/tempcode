@@ -1,14 +1,17 @@
+from django.conf import settings
 from django.db import models
-from apps.common.models import BusinessPartner, PurchaseOrderCategory
 from django.db.models.functions import Length
-from apps.accounts.models import CustomUser
-from apps.workflow.models import WorkflowModelMixin
+
+from apps.common.models import BusinessPartner, PurchaseOrderCategory
+from apps.django_bi.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 from apps.common.models.auto_compute_mixin import AutoComputeMixin
 
 class PurchaseOrder(AutoComputeMixin, WorkflowModelMixin):
     order = models.CharField(max_length=10, verbose_name="Purchase Order")
-    buyer = models.ForeignKey(CustomUser, on_delete=models.PROTECT, blank=True, null=True)
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True
+    )
     supplier = models.ForeignKey(BusinessPartner, on_delete=models.PROTECT, blank=True, null=True)
     category = models.ForeignKey('PurchaseOrderCategory', null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)

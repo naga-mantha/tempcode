@@ -1,5 +1,5 @@
 from django.db import models
-from apps.workflow.models import WorkflowModelMixin
+from apps.django_bi.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 from apps.common.models import Calendar, WorkCenter
 

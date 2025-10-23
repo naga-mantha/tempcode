@@ -1,7 +1,7 @@
-from apps.blocks.block_types.table.table_block import TableBlock
-from apps.blocks.block_types.pivot.pivot_block import PivotBlock
+from apps.django_bi.blocks.block_types.table.table_block import TableBlock
+from apps.django_bi.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation, Item, BusinessPartner
-from apps.blocks.services.filtering import apply_filter_registry
+from apps.django_bi.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.urls import reverse
@@ -40,7 +40,7 @@ class ProductionOrderTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.blocks.services.column_config import get_user_column_config
+        from apps.django_bi.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)
@@ -93,7 +93,9 @@ class ProductionOrderTableBlock(TableBlock):
                 "label": "Order #",
                 "type": "select",
                 "choices": order_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "production_order"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "production_order"]
+                ),
                 "handler": lambda qs, val: qs.filter(production_order=val) if val else qs,
                 "tom_select_options": {
                     "placeholder": "Search production orders...",
@@ -104,7 +106,9 @@ class ProductionOrderTableBlock(TableBlock):
                 "type": "multiselect",
                 "multiple": True,
                 "choices": item_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "item"]
+                ),
                 "tom_select_options": {
                     "placeholder": "Search items...",
                     "plugins": ["remove_button"],
@@ -144,7 +148,7 @@ class ProductionOrderOperationTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.blocks.services.column_config import get_user_column_config
+        from apps.django_bi.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)
@@ -202,7 +206,9 @@ class ProductionGenericPivot(PivotBlock):
                 "label": "Item",
                 "type": "select",
                 "choices": item_choices,
-                "choices_url": reverse("block_filter_choices", args=[self.block_name, "item"]),
+                "choices_url": reverse(
+                    "blocks:block_filter_choices", args=[self.block_name, "item"]
+                ),
                 # Filter by item code (string), not by PK
                 "handler": lambda qs, val: qs.filter(item__code=str(val)) if val else qs,
             },

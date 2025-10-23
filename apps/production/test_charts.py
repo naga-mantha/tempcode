@@ -3,6 +3,7 @@ import django
 
 django.setup()
 
+from apps.django_bi.blocks.registry import block_registry
 from apps.production.charts import (
     ProductionOrdersByStatusChart,
     ProductionOrdersPerItemBarChart,
@@ -52,4 +53,18 @@ class ProductionChartsTests(TestCase):
         data = self.line_chart.get_chart_data(self.user, {})
         self.assertEqual(data["x"], ["ITM1", "ITM2"])
         self.assertEqual(data["y"], [2, 1])
+
+    def test_charts_registered_in_block_registry(self):
+        self.assertIsInstance(
+            block_registry.get("prod_orders_by_status"),
+            ProductionOrdersByStatusChart,
+        )
+        self.assertIsInstance(
+            block_registry.get("prod_orders_per_item_bar"),
+            ProductionOrdersPerItemBarChart,
+        )
+        self.assertIsInstance(
+            block_registry.get("prod_orders_per_item_line"),
+            ProductionOrdersPerItemLineChart,
+        )
 
