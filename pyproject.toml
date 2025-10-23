@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-bi-integration"
+version = "0.1.0"
+description = "Reusable Django BI dashboards packaged with the MAG360 sample project."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Django BI Maintainers" }
+]
+dependencies = [
+    "Django>=5.2,<6",
+    "django-crispy-forms",
+    "django-comments-xtd",
+    "django-contrib-comments",
+    "django-environ",
+    "django-extensions",
+    "pandas",
+    "django-pandas",
+    "python-dateutil",
+    "numpy",
+    "plotly",
+    "openpyxl",
+    "requests",
+    "crispy-bootstrap5",
+    "django-widget-tweaks",
+    "psycopg2"
+]
+
+[project.urls]
+Homepage = "https://example.com/django-bi"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "django_bi*",
+    "mag360*",
+    "apps*"
+]
+exclude = [
+    "tests*",
+    "docs*"
+]
