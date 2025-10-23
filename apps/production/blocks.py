@@ -1,7 +1,7 @@
-from apps.django_bi.blocks.block_types.table.table_block import TableBlock
-from apps.django_bi.blocks.block_types.pivot.pivot_block import PivotBlock
+from django_bi.blocks.block_types.table.table_block import TableBlock
+from django_bi.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.common.models import ProductionOrder, ProductionOrderOperation, Item, BusinessPartner
-from apps.django_bi.blocks.services.filtering import apply_filter_registry
+from django_bi.blocks.services.filtering import apply_filter_registry
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.urls import reverse
@@ -40,7 +40,7 @@ class ProductionOrderTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.django_bi.blocks.services.column_config import get_user_column_config
+        from django_bi.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)
@@ -148,7 +148,7 @@ class ProductionOrderOperationTableBlock(TableBlock):
 
 
     def get_column_defs(self, user, column_config=None):
-        from apps.django_bi.blocks.services.column_config import get_user_column_config
+        from django_bi.blocks.services.column_config import get_user_column_config
         from django.contrib.admin.utils import label_for_field
 
         fields = column_config.fields if column_config else get_user_column_config(user, self.block)

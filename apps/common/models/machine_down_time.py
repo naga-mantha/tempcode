@@ -1,5 +1,5 @@
 from django.db import models
-from apps.django_bi.workflow.models import WorkflowModelMixin
+from django_bi.workflow.models import WorkflowModelMixin
 from apps.common.models import Machine
 from django_pandas.managers import DataFrameManager
 

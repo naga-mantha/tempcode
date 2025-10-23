@@ -1,4 +1,4 @@
-from apps.django_bi.blocks.block_types.table.table_block import TableBlock
+from django_bi.blocks.block_types.table.table_block import TableBlock
 from apps.common.models import PlannedPurchaseOrder
 
 class PlannedPurchaseOrdersTable(TableBlock):

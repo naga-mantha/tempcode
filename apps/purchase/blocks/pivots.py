@@ -1,4 +1,4 @@
-from apps.django_bi.blocks.block_types.pivot.pivot_block import PivotBlock
+from django_bi.blocks.block_types.pivot.pivot_block import PivotBlock
 from apps.common.models import PurchaseOrderLine
 
 

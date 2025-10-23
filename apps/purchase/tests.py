@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from apps.django_bi.blocks.registry import block_registry
+from django_bi.blocks.registry import block_registry
 
 
 class PurchaseBlockRegistryTests(TestCase):

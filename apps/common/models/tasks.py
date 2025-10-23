@@ -1,6 +1,6 @@
 from django.db import models
 from apps.common.models import Machine
-from apps.django_bi.workflow.models import WorkflowModelMixin
+from django_bi.workflow.models import WorkflowModelMixin
 from django_pandas.managers import DataFrameManager
 
 class Task(WorkflowModelMixin):

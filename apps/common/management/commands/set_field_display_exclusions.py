@@ -4,7 +4,7 @@ from pathlib import Path
 from django.apps import apps as django_apps
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.django_bi.blocks.models.field_display_rule import FieldDisplayRule
+from django_bi.blocks.models.field_display_rule import FieldDisplayRule
 
 
 # Default mapping embedded in the script. Adjust as needed.
