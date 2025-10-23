@@ -1,70 +1,102 @@
 # Django BI Integration
 
-This project packages the `django_bi` reusable Django application along with a
-sample MAG360 project configuration. Use it as a reference for adding the
-analytics dashboards to your own site.
+Django BI Integration bundles the reusable `django_bi` dashboards with a sample
+MAG360 project configuration. Use it as a reference for wiring the analytics
+suite into your own Django site or as a foundation for building an internal
+business intelligence portal.
+
+## Features
+
+- **Reusable dashboards** – ready-to-use workflow, block, and layout views.
+- **Configurable branding** – brand the navigation and dashboard chrome with
+your company name.
+- **Modern tooling** – includes both Python and Node.js dependencies required to
+build the bundled assets.
 
 ## Requirements
 
-* Python 3.12+
-* Django 5.2
-* Node.js (for building the front-end assets shipped with `django_bi`)
+- Python 3.12+
+- Django 5.2
+- Node.js 18+
+- npm 9+
 
-Create and activate a virtual environment, then install the dependencies:
+## Installation
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+1. Clone the repository and change into the project directory:
 
-Install the JavaScript packages that power the dashboard widgets:
+   ```bash
+   git clone https://github.com/example/django-bi-integration.git
+   cd django-bi-integration
+   ```
 
-```bash
-npm install
-```
+2. Create and activate a virtual environment, then install the Python
+   dependencies:
 
-## Example environment variables
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-The MAG360 settings rely on `django-environ` to load configuration from a
-`.env` file. Copy the snippet below to `.env` in the project root and adjust the
-values for your environment:
+3. Install the JavaScript packages that power the dashboard widgets:
 
-```dotenv
-SECRET_KEY=change-me
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-SITE_ID=1
+   ```bash
+   npm install
+   ```
 
-DATABASE_ENGINE=django.db.backends.sqlite3
-DATABASE_NAME=db.sqlite3
-# PostgreSQL example:
-# DATABASE_ENGINE=django.db.backends.postgresql
-# DATABASE_NAME=mag360
-# DATABASE_USER=mag360
-# DATABASE_PASS=super-secret
-# DATABASE_HOST=127.0.0.1
-# DATABASE_PORT=5432
+4. Create a `.env` file using the template below and adjust the values for your
+   environment:
 
-COMPANY_FULL_NAME=Acme Industries
-BI_FISCAL_YEAR_START_MONTH=10
-BI_FISCAL_YEAR_START_DAY=1
-ADMINS="Support <support@example.com>"
-EMAIL_HOST=localhost
-DEFAULT_FROM_EMAIL=no-reply@example.com
-```
+   ```dotenv
+   SECRET_KEY=change-me
+   DEBUG=True
+   ALLOWED_HOSTS=localhost,127.0.0.1
+   SITE_ID=1
 
-## Example Django settings
+   DATABASE_ENGINE=django.db.backends.sqlite3
+   DATABASE_NAME=db.sqlite3
+   # DATABASE_ENGINE=django.db.backends.postgresql
+   # DATABASE_NAME=mag360
+   # DATABASE_USER=mag360
+   # DATABASE_PASS=super-secret
+   # DATABASE_HOST=127.0.0.1
+   # DATABASE_PORT=5432
 
-Add the application, middleware, templates, and static configuration to your
-`settings.py` (or adapt the snippet for another settings module):
+   COMPANY_FULL_NAME=Acme Industries
+   BI_FISCAL_YEAR_START_MONTH=10
+   BI_FISCAL_YEAR_START_DAY=1
+   ADMINS="Support <support@example.com>"
+   EMAIL_HOST=localhost
+   DEFAULT_FROM_EMAIL=no-reply@example.com
+   ```
+
+5. Apply the database migrations and compile the front-end assets:
+
+   ```bash
+   python manage.py migrate
+   npm run build
+   ```
+
+6. Start the Django development server:
+
+   ```bash
+   python manage.py runserver
+   ```
+
+The dashboards are now available at <http://127.0.0.1:8000/>.
+
+## Usage examples
+
+### Adding the app to an existing project
+
+Add the required apps and middleware to your Django settings module:
 
 ```python
 INSTALLED_APPS = [
     # Project apps…
     "django_bi",
-    "django_comments",          # Required for comments support
-    "django_comments_xtd",      # Extended comment threading
+    "django_comments",
+    "django_comments_xtd",
     "crispy_forms",
     "crispy_bootstrap5",
     "widget_tweaks",
@@ -94,11 +126,7 @@ PERMISSIONS_STAFF_BYPASS = False
 COMPANY_FULL_NAME = "Acme Industries"
 ```
 
-## URL inclusion
-
-Wire the dashboards into your project-level URL configuration. The snippet
-below shows how MAG360 exposes the workflow, block, and layout views provided by
-`django_bi`:
+Wire the dashboards into your project-level URL configuration:
 
 ```python
 from django.urls import include, path
@@ -111,35 +139,32 @@ urlpatterns = [
 ]
 ```
 
-If your project already uses the same prefixes, adjust them to avoid clashes
-while keeping the namespaces intact.
+### Generating new dashboards
 
-## Database migrations
+1. Create or update models inside `apps.*` or `django_bi`.
+2. Generate migrations for the updated models:
 
-Run the Django migrations after configuring your settings and URLs. The
-commands below create the database tables for `django_bi` and the accompanying
-MAG360 applications:
+   ```bash
+   python manage.py makemigrations apps.accounts apps.production django_bi
+   ```
 
-```bash
-python manage.py migrate
-```
+3. Apply the migrations and reload the server:
 
-If you make changes to any of the models in `apps.*` or `django_bi`, create new
-migration files and apply them:
+   ```bash
+   python manage.py migrate
+   python manage.py runserver
+   ```
 
-```bash
-python manage.py makemigrations apps.accounts apps.production django_bi
-python manage.py migrate
-```
+Your changes will be reflected in the dashboards after the server restarts.
 
-## Running the project locally
+## Contributing
 
-Compile the front-end assets (when needed) and start the Django development
-server:
+1. Fork the repository and create a new branch for your feature or fix.
+2. Make your changes along with tests or documentation updates.
+3. Run the test suite and ensure `npm run build` completes without errors.
+4. Submit a pull request describing your changes.
 
-```bash
-npm run build
-python manage.py runserver
-```
+## License
 
-The dashboard should now be accessible at `http://127.0.0.1:8000/`.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+details.
